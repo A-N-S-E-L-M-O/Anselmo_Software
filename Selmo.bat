@@ -139,6 +139,8 @@ if defined MMPROJ_FILE (
     "%~dp0bin\llama-server.exe" ^
         --model "!MODELFILE!" ^
         --mmproj "!MMPROJ_FILE!" ^
+        --image-min-tokens 1120 --image-max-tokens 1120 ^
+        --batch-size 2048 --ubatch-size 2048 ^
         --host 0.0.0.0 ^
         --port 8080 ^
         --ctx-size %CTX% ^
@@ -165,3 +167,8 @@ if defined MMPROJ_FILE (
         --temp 0.75 ^
         --top-p 0.9
 )
+
+:: -- Pausa diagnostica: tiene la finestra aperta se il server esce/crasha --
+echo.
+echo  [llama-server e' terminato. Se e' un crash, leggi l'errore qui sopra.]
+pause

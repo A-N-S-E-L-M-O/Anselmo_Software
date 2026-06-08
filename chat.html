@@ -313,7 +313,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
   align-items:flex-end;
   background:var(--dark);
 }
-#upload-btn{
+#upload-btn,#upload-img-btn{
   background:transparent;
   color:var(--dim);
   border:1px dashed var(--dim);
@@ -325,6 +325,8 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
   letter-spacing:.04em;
 }
 #upload-btn:hover{border-color:var(--yellow);color:var(--yellow);}
+#upload-img-btn:hover{border-color:var(--cyan);color:var(--cyan);}
+#file-input-img{display:none;}
 #file-badge{
   display:none;
   align-items:center;
@@ -398,7 +400,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <body>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.701</div>
+  <div class="hbadge">v0.702</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="new-chat" onclick="newChat()">+ NEW CHAT</button>
@@ -525,8 +527,10 @@ Running on your hardware. No data leaves this machine.</div></div>
     </div>
   </div>
   <div class="input-area">
-    <input type="file" id="file-input" accept=".docx,.odt,.txt,.md,.csv,.xlsx,.xls,.ods,.pdf,.pptx,.odp,.jpg,.jpeg,.png,.gif,.webp" onchange="loadFile(this)">
+    <input type="file" id="file-input" accept=".docx,.odt,.txt,.md,.csv,.xlsx,.xls,.ods,.pdf,.pptx,.odp" onchange="loadFile(this)">
     <button id="upload-btn" onclick="document.getElementById('file-input').click()">+ FILE</button>
+    <input type="file" id="file-input-img" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf" onchange="loadFileAsImage(this)">
+    <button id="upload-img-btn" onclick="document.getElementById('file-input-img').click()" title="Immagine o PDF per la visione / OCR del modello">+ IMG/OCR</button>
     <div id="file-badge">
       <span id="file-name">-</span>
       <button id="file-clear" onclick="clearFile()">&#x2715;</button>
@@ -1036,29 +1040,59 @@ async function extractOdp(file){
   return text.trim();
 }
 
+// + IMG/OCR: visione diretta. Immagini -> as-is. PDF -> una immagine per pagina
+// (niente canvas concatenato): Gemma 4 ridimensiona al token-budget, quindi basta
+// una pagina a ~1280px lato lungo. Vedi selmo-dev "Vision Gemma 4".
+async function loadFileAsImage(inp){
+  const file=inp.files[0];if(!file)return;
+  const ext=file.name.split('.').pop().toLowerCase();
+  const btn=document.getElementById('upload-img-btn');
+  btn.textContent='...';
+  try{
+    let dataUrls=[],mimeType='image/jpeg';
+    const IMG_EXTS=['jpg','jpeg','png','gif','webp'];
+    if(IMG_EXTS.includes(ext)){
+      const u=await new Promise((res,rej)=>{
+        const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(file);
+      });
+      mimeType=file.type||'image/jpeg';
+      dataUrls=[u];
+    } else if(ext==='pdf'){
+      const buf=await file.arrayBuffer();
+      const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+      const MAX_PAGES=8, MAX_SIDE=1280;
+      const numPages=Math.min(pdf.numPages,MAX_PAGES);
+      for(let i=1;i<=numPages;i++){
+        const pg=await pdf.getPage(i);
+        const base=pg.getViewport({scale:1});
+        const scale=Math.min(2.5, MAX_SIDE/Math.max(base.width,base.height));
+        const vp=pg.getViewport({scale});
+        const cv=document.createElement('canvas');
+        cv.width=Math.ceil(vp.width);cv.height=Math.ceil(vp.height);
+        const c2=cv.getContext('2d');
+        c2.fillStyle='#fff';c2.fillRect(0,0,cv.width,cv.height);
+        await pg.render({canvasContext:c2,viewport:vp}).promise;
+        dataUrls.push(cv.toDataURL('image/jpeg',0.85));
+      }
+      if(numPages<pdf.numPages) console.warn('PDF lungo: solo le prime '+MAX_PAGES+' pagine su '+pdf.numPages);
+    } else {
+      alert('Formato non supportato per la visione. Usa + FILE per i documenti di testo.');
+      btn.textContent='+ IMG/OCR';inp.value='';return;
+    }
+    fileImage={dataUrls,mimeType,name:file.name,pages:dataUrls.length};
+    fileDoc=null;fileCtx=null;chunks=[];chunkIdx=0;
+    document.getElementById('file-badge').style.display='flex';
+    document.getElementById('file-name').textContent='🖼️ '+file.name+(ext==='pdf'?' ('+dataUrls.length+'p)':'');
+    document.getElementById('input').placeholder='Immagine/PDF caricato per la visione. Fai una domanda o chiedi OCR...';
+  }catch(e){console.error('loadFileAsImage:',e);alert('Errore: '+e.message);}
+  btn.textContent='+ IMG/OCR';inp.value='';
+}
+
 async function loadFile(inp){
   const file=inp.files[0];if(!file)return;
   const ext=file.name.split('.').pop().toLowerCase();
   const btn=document.getElementById('upload-btn');
   btn.textContent='...';
-  const IMG_EXTS=['jpg','jpeg','png','gif','webp'];
-  if(IMG_EXTS.includes(ext)){
-    // Immagine: leggi come base64 data URL
-    try{
-      const dataUrl=await new Promise((res,rej)=>{
-        const r=new FileReader();
-        r.onload=e=>res(e.target.result);
-        r.onerror=rej;
-        r.readAsDataURL(file);
-      });
-      fileImage={dataUrl,mimeType:file.type||'image/jpeg',name:file.name};
-      fileDoc=null;fileCtx=null;chunks=[];chunkIdx=0;
-      document.getElementById('file-badge').style.display='flex';
-      document.getElementById('file-name').textContent='\uD83D\uDDBC\uFE0F '+file.name;
-      document.getElementById('input').placeholder='Immagine caricata. Fai una domanda o chiedi analisi/OCR...';
-    }catch(e){console.error('Error loadFile image:',e);alert('Error: '+e.message);}
-    btn.textContent='+ FILE';inp.value='';return;
-  }
   try{
     let text='';
     if(ext==='docx') text=await extractDocx(file);
@@ -1614,12 +1648,23 @@ async function sendMsg(){
   // NORMAL CHAT PATH
   // Multimodal: se c'è un'immagine caricata, usa content array
   if(fileImage){
-    const imgContent=[
-      {type:'image_url',image_url:{url:fileImage.dataUrl}},
-      {type:'text',text:content}
-    ];
+    const urls=fileImage.dataUrls;
+    const imgContent=urls.map(u=>({type:'image_url',image_url:{url:u}}));
+    imgContent.push({type:'text',text:content});
     chatHistory.push({role:'user',content:imgContent});
-    addMsg('user','\uD83D\uDDBC\uFE0F '+content);
+    const tag=fileImage.pages>1?'🖼️ ['+fileImage.pages+'p] ':'🖼️ ';
+    const um=addMsg('user',tag+content);
+    // Thumbnail di cio' che viene inviato: click per aprire a piena risoluzione
+    const strip=document.createElement('div');
+    strip.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin-top:8px';
+    urls.forEach((u,i)=>{
+      const im=new Image();
+      im.src=u;im.title='pagina '+(i+1)+' - click per ingrandire';
+      im.style.cssText='max-height:160px;max-width:120px;border:1px solid var(--cyan);border-radius:4px;cursor:zoom-in;background:#fff';
+      im.onclick=()=>window.open(u,'_blank');
+      strip.appendChild(im);
+    });
+    um.inner.appendChild(strip);
     fileImage=null;
     document.getElementById('file-badge').style.display='none';
   } else {

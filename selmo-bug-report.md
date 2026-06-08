@@ -5,41 +5,42 @@
 
 ## BUG-META-01 · Mai il tool Edit su chat.html ⚠️ REGOLA PERMANENTE
 
-**Sintomo** — Usando il tool `Edit` su `chat.html` il file viene troncato a metà: il tool riporta successo ma il contenuto è incompleto (verificato sessioni 4, 5, 7).
-
-**Causa** — File grande (~2000 righe) con template literals multiriga e caratteri speciali.
+**Sintomo** — Usando il tool `Edit` su `chat.html` il file viene troncato a metà (verificato s4, s5, s7).
 
 **Regola — MAI DEROGARE**
 - Modificare `chat.html` solo con Python via bash (`open` → `replace` → `write`), mai col tool Edit.
-- Dopo ogni modifica: estrarre lo script inline e `node --check`; verificare con il tool **Read** (non `cat`/`wc` da bash, il mount può desincronizzarsi); il file deve finire con `</script></body></html>`.
-- Riavviare `llama-server` dopo la modifica (può servire la cache) + Ctrl+F5.
-
-```bash
-awk '/^<script>$/{p=1;next} /^<\/script>/{p=0} p' chat.html > /tmp/check.js && node --check /tmp/check.js && echo OK
-```
+- Dopo ogni modifica: estrarre lo script inline e `node --check`; verificare con il tool **Read**; il file deve finire con `</script></body></html>`.
+- Riavviare `llama-server` dopo la modifica + Ctrl+F5.
 
 ---
 
-## Aperti / differiti
+## BUG-META-02 · Corruzione NUL / line-ending sul mount ⚠️ (sessione 13)
 
-### BUG-IMG-01 · Visione + IMAGE (immagini/PDF) — differito, da ricostruire
-**Stato:** ↩️ rollbackato a `16f02c8` (sessione 13), da ricostruire con commit a ogni step confermato.
+File scritti/modificati via tool su questo mount possono ritrovarsi pieni di byte NUL (`\x00`) e/o con line-ending sbagliati. Capitato in s13 a `Selmo.bat` (593 NUL + LF → il `^` di continuazione rompeva cmd → frammenti eseguiti come comandi → crash all'avvio) e a `selmo-bug-report.md` (3684 NUL → grep lo vedeva "binary"). Il tool **Write** sembra il colpevole; il tool **Edit** e la scrittura Python restano puliti.
 
-Il path `+ IMAGE` (PDF renderizzato su canvas → vision) è stato rimosso col rollback: instabile e mai committato nella prima versione funzionante. La visione "classica" sulle sole immagini (jpg/png via `+ FILE` → `fileImage` multimodale) resta attiva.
-
-Lezioni dalla diagnosi, da tenere a mente nella ricostruzione:
-- Mai concatenare più pagine PDF in un canvas verticale gigante: aspect ratio estremo + base64 multi-MB → HTTP 400 / crash mmproj. Una immagine **per pagina**, lato lungo cap ~1280px.
-- Il base64 che resta in `chatHistory` viene ri-inviato a ogni turno e pesa sul contesto: decidere se tenerlo o stripparlo dopo il primo turno.
-- La visione richiede un modello multimodale + mmproj (Gemma 4). Su Mistral/EuroLLM le immagini vengono semplicemente ignorate.
+**Regola**: dopo ogni modifica a `.bat`/`.md`, controllare `python3 -c "print(open('f','rb').read().count(b'\x00'))"` → deve dare 0. I `.bat` devono essere **CRLF**. Pulizia: rimuovere i NUL e riscrivere (i `.bat` in CRLF), preferibilmente via Python.
 
 ---
 
-## Risolti / archiviati
+## Risolti
 
-- **BUG-04** · `/web` TDZ su `chatHistory` — risolto: `/web` funziona (s13 mostra anche bolla utente + risposta nella lingua dell'utente).
-- **BUG-05** · `input()` non appare al doppio click in `chunk_pipeline.py` — risolto s9: flag CLI `--thinking` / `--thinking-buffer`, domanda condizionata a `isatty`, wrapper `.bat`.
-- **BUG-01 / BUG-02 / BUG-03** · vecchi problemi UI s7–s9 (scrolling colonne indipendente, posizione area chat, sidebar history vuota). Predatano il rework s12–s13: da riverificare solo se si ripresentano nell'interfaccia attuale.
+### BUG-IMG-01 · Visione + IMG/OCR (immagini/PDF) — ✓ RISOLTO (v0.702)
+
+Tre cause distinte, finalmente isolate:
+1. **Crash runtime mmproj** — l'encoder vision di Gemma 4 usa attenzione non-causale: tutti i token immagine devono stare in un solo ubatch. Con ubatch default (512) e immagine grande scattava `GGML_ASSERT(n_ubatch >= n_tokens)`. Fix: `--batch-size 2048 --ubatch-size 2048`.
+2. **Immagine sovradimensionata/concatenata** — inutile: Gemma 4 ridimensiona al token-budget. Fix: una immagine **per pagina** a ~1280px + budget OCR `--image-min-tokens 1120 --image-max-tokens 1120`.
+3. **Crash all'avvio del launcher (s13)** — NON erano i flag: era `Selmo.bat` corrotto (NUL + LF). Vedi BUG-META-02.
+
+**Implementazione v0.702**
+- `chat.html`: pulsante dedicato **+ IMG/OCR**; `loadFileAsImage` (immagini as-is, PDF una immagine per pagina ~1280px); invio come array multimodale; **thumbnail cliccabili** (apertura a piena risoluzione).
+- `Selmo.bat` (ramo mmproj): `--image-min-tokens 1120 --image-max-tokens 1120 --batch-size 2048 --ubatch-size 2048`.
+- Verificato funzionante su Gemma 4 12B, RTX 4070 Ti 12GB.
+
+### Archiviati
+- **BUG-04** · `/web` TDZ su `chatHistory` — risolto (s13).
+- **BUG-05** · `input()` doppio click in `chunk_pipeline.py` — risolto s9.
+- **BUG-01 / BUG-02 / BUG-03** · vecchi problemi UI s7–s9 — da riverificare solo se si ripresentano.
 
 ---
 
-*Nota mount bash (s9, ancora valida): il mount Linux può restare congelato allo stato di inizio sessione e non riflettere le scritture dei tool. Verificare sempre con il tool Read.*
+*Nota mount bash (s9): il mount Linux può restare congelato; verificare con il tool Read. Vedi BUG-META-02 per la corruzione NUL.*

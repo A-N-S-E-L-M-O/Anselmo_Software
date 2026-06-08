@@ -1,5 +1,5 @@
 # Selmo — Documentazione di sviluppo
-*Aggiornato sessione 13 · Giugno 2026 · v0.701*
+*Aggiornato sessione 13 · Giugno 2026 · v0.702*
 
 ---
 
@@ -224,7 +224,8 @@ Il toggle Selmo/Mizan cambia system prompt + temperatura + palette colori (blu/r
 - System prompt semplificato (SP_SELMO asciutto)
 - Fix /web: bolla messaggio utente mostrata + risposta nella lingua dell'utente
 - Indicatore SearXNG locale: `/status` sonda la 8888; pallino verde "web locale", giallo se locale giù (fallback pubblico = dati che escono), spento se bridge off
-- Versione v0.701
+- Pulsante + IMG/OCR: visione Gemma 4 su immagini e PDF (una immagine per pagina, thumbnail cliccabili); flag mmproj nel launcher
+- Versione v0.702
 
 ---
 
@@ -246,11 +247,17 @@ Il toggle Selmo/Mizan cambia system prompt + temperatura + palette colori (blu/r
 
 **Git è l'unico safety net — commit a ogni feedback positivo** — niente più backup `.bat` (`bk.bat`/`restore.bat`/`bk*`, deprecati). Quando Fabio conferma che qualcosa funziona: commit immediato con messaggio chiaro + avanzamento versione (badge `hbadge` in chat.html e intestazione di questo file). Lezione costosa s13: la prima iterazione vision funzionante è rimasta solo nel working tree, mai committata, e quando le micro-modifiche successive l'hanno rotta non c'era nessuno snapshot a cui tornare. Mai più stati buoni non committati.
 
-**Vision PDF — mai un canvas concatenato** — più pagine in un solo canvas verticale gigante danno aspect ratio estremo e base64 multi-MB → HTTP 400 / crash mmproj (BUG-IMG-01). Renderizzare una immagine per pagina, cap del lato lungo (~1280px), e passarle come array di `image_url` nel content multimodale.
+**Vision PDF — mai un canvas concatenato** — più pagine in un solo canvas verticale gigante danno aspect ratio estremo e base64 multi-MB. Renderizzare una immagine per pagina, cap del lato lungo (~1280px), e passarle come array di `image_url` nel content multimodale.
+
+**Vision Gemma 4 — token budget + ubatch** — Gemma 4 ha un budget token/immagine (70/140/280/560/1120; 1120 per OCR). L'encoder usa attenzione non-causale → i token immagine devono stare in un solo ubatch: serve `--batch-size`/`--ubatch-size` ≥ token immagine (2048 per budget 1120), sennò `GGML_ASSERT` e crash. Flag solo nel ramo mmproj di Selmo.bat.
+
+**.bat: CRLF e zero NUL** — i `.bat` devono essere CRLF (il `^` di continuazione su LF rompe cmd). Occhio alla corruzione NUL del mount (BUG-META-02): dopo ogni modifica a `.bat`/`.md` controllare che i byte NUL siano 0.
 
 ---
 
-## Vision Gemma 4 — strategia lean (da ricostruire, BUG-IMG-01)
+## Vision Gemma 4 — strategia lean (implementata, v0.702)
+
+✓ Implementata e funzionante (v0.702): pulsante **+ IMG/OCR** in chat.html (PDF una immagine per pagina ~1280px, thumbnail cliccabili) + flag mmproj in Selmo.bat (`--image-min-tokens 1120 --image-max-tokens 1120 --batch-size 2048 --ubatch-size 2048`). Verificato su Gemma 4 12B / RTX 4070 Ti 12GB.
 
 Ricerca sessione 13. Gemma 4 **non** usa il pan-and-scan di Gemma 3: ha un **budget di token per immagine** che fissa la risoluzione interpretata. Livelli: 70, 140, 280, 560, 1120. Consigli per task:
 - 70 / 140 → captioning, classificazione, frame video veloci
@@ -308,5 +315,5 @@ Lavoro su visione + reasoning, in gran parte **non committato** → poi rollback
 - **Rollback** del lavoro vision instabile alla baseline pulita `16f02c8` (la prima iterazione funzionante non era mai stata committata → persa).
 - Launcher: abbinamento **mmproj automatico** per nome (v0.6).
 - Ricostruiti puliti e committati: **system prompt semplificato**, **pannello reasoning** (chat/web/file, ragionamento fuori dallo stitch), **fix `/web`** (bolla utente + lingua), **indicatore SearXNG locale** verde/giallo/off (v0.7, v0.701).
-- Differito: **visione + IMAGE** da ricostruire (BUG-IMG-01).
+- **Visione + IMG/OCR ricostruita** (v0.702): pulsante dedicato, PDF una immagine per pagina, thumbnail cliccabili, flag Gemma 4 nel launcher (budget 1120 + ubatch 2048). BUG-IMG-01 chiuso. Scoperta la causa dei crash all'avvio: corruzione NUL/LF del `.bat` (BUG-META-02), non i flag.
 
