@@ -126,12 +126,11 @@ Durante questa sessione il mount Linux di bash era *congelato* allo stato di ini
 
 ---
 
-## Piano sessione 9
+## BUG-IMG-01 · NetworkError / HTTP 400 su richieste multimodali (immagine/PDF)
+**Stato:** ✓ Risolto (sessione 13)
 
-1. ✓ Fix BUG-05: flag `--thinking`/`--thinking-buffer`, domanda condizionata a `isatty`, wrapper `.bat`
-2. Aprire devtools → riprodurre `/web` error → copiare stack trace → fix BUG-04
-2. Fix BUG-03: spostare SESS_KEY in cima allo script (Python)
-3. Fix BUG-01: aggiungere `min-height:0` (Python)
-4. Verificare BUG-02 con devtools
-5. `node --check` dopo ogni modifica
-6. Commit git dopo ogni fix — non aspettare la fine della sessione
+**Sintomo**
+Invio di un'immagine — soprattutto un PDF via + IMAGE — produceva NetworkError o HTTP 400, oppure crashava llama-server.
+
+**Causa**
+Il path PDF renderizzava fino a 8 pagine a `scale=2.5` e le concatenava in **un unico canvas verticale gigante** (es. ~1500 × 20.000+ px), poi lo inviava come singolo `image_url` base64 da diversi 

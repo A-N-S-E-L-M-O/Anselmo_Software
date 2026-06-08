@@ -238,6 +238,8 @@ Il toggle Selmo/Mizan cambia system prompt + temperatura + palette colori (blu/r
 
 **Timeout server** — `--timeout 0` disabilita il timeout lato server. Il `should_stop` nel log indica cancellazione per disconnessione client, non un errore critico.
 
+**Vision PDF — mai un canvas concatenato** — più pagine in un solo canvas verticale gigante danno aspect ratio estremo e base64 multi-MB → HTTP 400 / crash mmproj (BUG-IMG-01). Renderizzare una immagine per pagina, cap del lato lungo (~1280px), e passarle come array di `image_url` nel content multimodale.
+
 ---
 
 ## Storico sessioni
@@ -266,3 +268,17 @@ Bug report s7 aperto (BUG-01/02/03/04). Tentativo fix chat.html — file corrott
 - Manifesto ristrutturato: separato in manifesto (visione), dev (tecnico), bug report (tracker).
 
 ### Sessione
+### Sessione 12 (2026-06-08)
+- Thinking panel collassabile per token di ragionamento Gemma 4
+- Toggle THINK: disabilita reasoning (budget_tokens:0, ignorato da llama.cpp → workaround: max_tokens adattivo)
+- Fix Gemma mmproj crash: binary aggiornato (nuovo projector type gemma4uv)
+- Sistema prompt semplificato (SP_SELMO)
+- Fix context overflow nel chunk path: formula max_tokens 28%/72% input/reasoning+output
+- Pulsante + IMAGE: visione diretta per immagini e PDF → renderizzati su canvas con PDF.js a scale=2.5
+- Fix mmproj multi-file matching in Selmo.bat (loop su tutti i file, non solo quando count=1)
+- Tooltip su + FILE / + IMAGE: tentativo e revert (vedi BUG-IMG-01)
+
+**BUG-IMG-01** — NetworkError / HTTP 400 su richieste multimodali con immagine
+- Sintomo: invio immagine → NetworkError (connessione rifiutata) oppure HTTP 400
+- Causa probabile: il base64 dell'immagine rimane in chatHistory → ogni messaggio successivo ri-invia centinaia di KB → llama-server crasha o rifiuta
+- Tentativi falliti: (a) sostituzione post-risposta del base64 con placeholder → regressio
