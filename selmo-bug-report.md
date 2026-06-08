@@ -1,161 +1,45 @@
 # Selmo — Bug Report
-*Documento vivente · aggiornato sessione 8 · Giugno 2026*
+*Documento vivente · aggiornato sessione 13 · Giugno 2026*
 
 ---
 
-## BUG-META-01 · Edit tool tronca chat.html ⚠️ REGOLA PERMANENTE
+## BUG-META-01 · Mai il tool Edit su chat.html ⚠️ REGOLA PERMANENTE
 
-**Sintomo**
-Ogni volta che viene usato il tool `Edit` su `chat.html`, il file viene troncato a metà. Il tool riporta successo ma il file risulta incompleto. Verificato in sessioni 4, 5, 7.
+**Sintomo** — Usando il tool `Edit` su `chat.html` il file viene troncato a metà: il tool riporta successo ma il contenuto è incompleto (verificato sessioni 4, 5, 7).
 
-**Causa**
-Il file è grande (~1350 righe) con template literals multiriga e caratteri speciali. Il tool Edit ha un limite interno o un problema di encoding.
+**Causa** — File grande (~2000 righe) con template literals multiriga e caratteri speciali.
 
-**Regola operativa — MAI DEROGARE**
-Usare sempre Python via bash per modificare chat.html:
-```bash
-python3 << 'PYEOF'
-path = '/sessions/.../mnt/Selmo/chat.html'
-with open(path, 'r', encoding='utf-8') as f:
-    content = f.read()
-content = content.replace('OLD', 'NEW')
-with open(path, 'w', encoding='utf-8') as f:
-    f.write(content)
-PYEOF
-```
-Verificare sempre dopo ogni modifica:
+**Regola — MAI DEROGARE**
+- Modificare `chat.html` solo con Python via bash (`open` → `replace` → `write`), mai col tool Edit.
+- Dopo ogni modifica: estrarre lo script inline e `node --check`; verificare con il tool **Read** (non `cat`/`wc` da bash, il mount può desincronizzarsi); il file deve finire con `</script></body></html>`.
+- Riavviare `llama-server` dopo la modifica (può servire la cache) + Ctrl+F5.
+
 ```bash
 awk '/^<script>$/{p=1;next} /^<\/script>/{p=0} p' chat.html > /tmp/check.js && node --check /tmp/check.js && echo OK
-tail -5 chat.html  # deve finire con </script></body></html>
 ```
 
 ---
 
-## BUG-01 · Scrolling indipendente mancante
-**Stato:** ⏳ Da fixare (sessione 9)
+## Aperti / differiti
 
-**Sintomo**
-Le tre colonne (history / chat / dashboard) non scorrono in modo indipendente.
+### BUG-IMG-01 · Visione + IMAGE (immagini/PDF) — differito, da ricostruire
+**Stato:** ↩️ rollbackato a `16f02c8` (sessione 13), da ricostruire con commit a ogni step confermato.
 
-**Causa**
-In CSS Grid, `min-height` default è `auto`: il container si espande ignorando il vincolo di altezza. L'`overflow-y:auto` non ha effetto se il container può crescere liberamente.
+Il path `+ IMAGE` (PDF renderizzato su canvas → vision) è stato rimosso col rollback: instabile e mai committato nella prima versione funzionante. La visione "classica" sulle sole immagini (jpg/png via `+ FILE` → `fileImage` multimodale) resta attiva.
 
-**Fix da applicare (via Python)**
-```css
-nav, main, aside { min-height: 0; }
-```
-Già identificato, mai applicato stabilmente (ogni volta chat.html è stato corrotto dopo).
+Lezioni dalla diagnosi, da tenere a mente nella ricostruzione:
+- Mai concatenare più pagine PDF in un canvas verticale gigante: aspect ratio estremo + base64 multi-MB → HTTP 400 / crash mmproj. Una immagine **per pagina**, lato lungo cap ~1280px.
+- Il base64 che resta in `chatHistory` viene ri-inviato a ogni turno e pesa sul contesto: decidere se tenerlo o stripparlo dopo il primo turno.
+- La visione richiede un modello multimodale + mmproj (Gemma 4). Su Mistral/EuroLLM le immagini vengono semplicemente ignorate.
 
 ---
 
-## BUG-02 · Chat area posizionata troppo in basso
-**Stato:** ⏳ Da diagnosticare (sessione 9)
+## Risolti / archiviati
 
-**Sintomo**
-I messaggi appaiono nella parte bassa dello spazio chat con un grande vuoto sopra.
-
-**Causa probabile**
-`#messages` con `display:flex; flex-direction:column` e `flex:1` — con pochi messaggi il flex container occupa tutta l'altezza. Possibile `align-content` o `margin-top:auto` non voluto.
-
-**Azione necessaria**
-Devtools → ispezionare height effettiva di `#messages` → cercare stili che spingono il contenuto verso il basso.
+- **BUG-04** · `/web` TDZ su `chatHistory` — risolto: `/web` funziona (s13 mostra anche bolla utente + risposta nella lingua dell'utente).
+- **BUG-05** · `input()` non appare al doppio click in `chunk_pipeline.py` — risolto s9: flag CLI `--thinking` / `--thinking-buffer`, domanda condizionata a `isatty`, wrapper `.bat`.
+- **BUG-01 / BUG-02 / BUG-03** · vecchi problemi UI s7–s9 (scrolling colonne indipendente, posizione area chat, sidebar history vuota). Predatano il rework s12–s13: da riverificare solo se si ripresentano nell'interfaccia attuale.
 
 ---
 
-## BUG-03 · History sidebar vuota al caricamento
-**Stato:** ⏳ Da fixare (sessione 9)
-
-**Sintomo**
-La sidebar mostra "no saved sessions" anche quando ci sono sessioni in localStorage.
-
-**Causa**
-`renderSessionList()` viene chiamata prima che `const SESS_KEY` venga dichiarata. La `try/catch` in `getSessions()` cattura silenziosamente il ReferenceError (TDZ) e ritorna `[]`.
-
-**Fix da applicare (via Python)**
-Spostare `const SESS_KEY` e `const MAX_SESS` all'inizio dello script, prima della prima chiamata a `renderSessionList()`.
-
----
-
-## BUG-04 · Regressione ricerca web — TDZ su chatHistory
-**Stato:** ⏳ Da diagnosticare (sessione 9)
-
-**Sintomo**
-Il comando `/web <query>` produce: `Error: can't access lexical declaration 'chatHistory' before initialization`
-
-**Causa (ipotesi)**
-`const chatHistory` in TDZ al momento della chiamata. Possibile interferenza con `window.history` del browser, o doppia dichiarazione nascosta.
-
-**Tentativo fallito**
-Rinominare `history` → `chatHistory` non ha risolto. Il rename ha anche accidentalmente rotto `loadSession` (cambiato `s.history.forEach` in `s.chatHistory.forEach`).
-
-**Azione necessaria**
-Devtools → riprodurre `/web` error → copiare stack trace completo → identificare riga esatta del TDZ.
-
----
-
----
-
-## BUG-05 · input() non appare quando lanciato da doppio click su Windows
-**Stato:** ✓ Risolto (sessione 9)
-
-**Sintomo**
-La domanda "Is this a thinking model?" non appare quando `chunk_pipeline.py` viene lanciato con doppio click. Il fix tentato in s8 (modalità interattiva con fallback per --prompt mancante) non ha risolto. In più la domanda veniva posta in modo *incondizionato*, quindi anche con `--prompt` da script lo script si bloccava o sollevava `EOFError`.
-
-**Causa**
-Due difetti combinati:
-1. L'`input(" Is this a thinking model?...")` girava sempre, ignorando il flag `interactive` già calcolato. Con stdin non-interattivo (doppio click windowless o lancio con `--prompt`) → `EOFError` e finestra che si chiude.
-2. Il flag `--thinking-buffer` era documentato nel docstring ma mai aggiunto ad argparse: nessun modo non interattivo per impostarlo.
-
-**Fix applicato (sessione 9)** — in `chunk_pipeline.py` e `translate_chunks.py`
-- Aggiunti gli argomenti CLI `--thinking` (store_true → 800 token) e `--thinking-buffer N`.
-- La scelta del buffer ora segue una priorità: `--thinking-buffer` esplicito > `--thinking` > domanda interattiva (solo se `sys.stdin.isatty()`) > default 0. La domanda è racchiusa in `try/except EOFError`.
-- Creati i wrapper `chunk_pipeline.bat` e `translate_chunks.bat`: aprono una finestra CMD con stdin interattivo (la domanda compare al doppio click) e tengono la finestra aperta con `pause`. Inoltrano gli argomenti con `%*`.
-
-**Verifica**
-Tabella di verità degli 8 rami testata (override, flag, tty y/n, non-tty, --prompt, EOFError): tutti OK. `py_compile` OK, `--help` mostra i nuovi flag, pipe non-tty → buffer 0 senza crash.
-
-**Lezione (mount bash)**
-Durante questa sessione il mount Linux di bash era *congelato* allo stato di inizio sessione: non rifletteva le scritture del tool Edit (mtime fermi, contenuto troncato/misto). Il file reale su disco — quello che Windows esegue, visibile via tool Read — era corretto e completo. **Per verificare modifiche fatte con Edit/Write usare il tool Read, non `cat`/`wc` da bash**, oppure ricostruire una copia in `outputs/` (quel mount è sincronizzato).
-## Fix applicati in sessione 8
-
-| Fix | File | Stato |
-|---|---|---|
-| Stitch semplificato (join puro, rimosso dedup) | chunk_pipeline.py, translate_chunks.py | ✓ Applicato |
-| `--timeout 0` (disabilita timeout server) | Selmo.bat, Mizan.bat | ✓ Applicato |
-| Soglia 9500MB in logica launcher (ctx 8192 per 22-24B) | Selmo.bat, Mizan.bat | ✓ Applicato |
-
----
-
-## BUG-IMG-01 · NetworkError / HTTP 400 su richieste multimodali (immagine/PDF)
-**Stato:** ↩️ Riaperto / da ricostruire (sessione 13) — il path vision (+ IMAGE, PDF-come-immagine) è stato **rollbackato** a `16f02c8` perché aveva regressioni e la prima versione funzionante non era mai stata committata. Da ricostruire da capo con commit a ogni step confermato. La descrizione qui sotto è la diagnosi/fix tentato, NON lo stato attuale del codice.
-
-**Sintomo**
-Invio di un'immagine — soprattutto un PDF via + IMAGE — produceva NetworkError o HTTP 400, oppure crashava llama-server.
-
-**Causa**
-Il path PDF renderizzava fino a 8 pagine a `scale=2.5` e le concatenava in **un unico canvas verticale gigante** (es. ~1500 × 20.000+ px), poi lo inviava come singolo `image_url` base64 da diversi MB. Immagine enorme e con aspect ratio estremo → il preprocessing mmproj la rifiutava / il body della richiesta era sovradimensionato → HTTP 400.
-
-**Fix applicato (sessione 13)** — in `chat.html`, via Python (BUG-META-01)
-- `loadFileAsImage`: il PDF ora produce **una immagine per pagina** invece di un canvas concatenato. `fileImage` diventa `{dataUrls:[...],mimeType,name,pages}`.
-- Cap del lato lungo a `MAX_SIDE=1280` (scala adattiva, mai upscale oltre 2.5), JPEG q0.85 → ogni pagina ~120KB invece di un blob multi-MB.
-- `send`: costruisce un content array con un `{type:'image_url'}` per pagina + il testo (formato multimodale OpenAI corretto, supportato da llama.cpp). L'immagine persiste in `chatHistory`, quindi i follow-up la vedono.
-- Badge e bolla utente mostrano il conteggio pagine (`[Np]`).
-
-**Verifica**
-`node --check` sullo script estratto OK; edit verificati con tool Read; nessun riferimento residuo al vecchio `fileImage.dataUrl`.
-
-**Note residue**
-- Fallback HTTP 500 (modello senza mmproj) invariato: scarta le immagini e risponde al solo testo.
-- Con 8 pagine le immagini restano in contesto a ogni turno: con Gemma vision (~256 tok/immagine resize a 896) ≈ 2k token, ok dentro ctx 8192 per qualche turno.
-
----
-
-## Piano sessione 9
-
-1. ✓ Fix BUG-05: flag `--thinking`/`--thinking-buffer`, domanda condizionata a `isatty`, wrapper `.bat`
-2. Aprire devtools → riprodurre `/web` error → copiare stack trace → fix BUG-04
-2. Fix BUG-03: spostare SESS_KEY in cima allo script (Python)
-3. Fix BUG-01: aggiungere `min-height:0` (Python)
-4. Verificare BUG-02 con devtools
-5. `node --check` dopo ogni modifica
-6. Commit git dopo ogni fix — non aspettare la fine della sessione
+*Nota mount bash (s9, ancora valida): il mount Linux può restare congelato allo stato di inizio sessione e non riflettere le scritture dei tool. Verificare sempre con il tool Read.*

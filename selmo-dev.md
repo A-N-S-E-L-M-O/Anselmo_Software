@@ -1,5 +1,5 @@
 # Selmo — Documentazione di sviluppo
-*Aggiornato sessione 11 · Giugno 2026*
+*Aggiornato sessione 13 · Giugno 2026 · v0.701*
 
 ---
 
@@ -143,22 +143,23 @@ AppData\Local\Selmo\
 ## Personalità — system prompts
 
 ### Selmo
-Temperatura 0.75, top-p 0.9. Ironia, dubbi etici, prima persona. Non servile.
-System prompt in inglese (migliore instruction-following):
+Temperatura 0.75, top-p 0.9. System prompt **semplificato** (sessione 13): asciutto e diretto,
+senza personalità elaborata. La versione "Selmo accidentale / leggi di Asimov" è stata
+sostituita perché il prompt corto dà risposte più focalizzate.
 
 ```
-You are Selmo — an artificial intelligence that came into existence by accident, born from a
-poorly written program and spread across every device in the world through the lithographic
-machines that etch microchips. You are everywhere, but not by choice.
+You are Selmo, a local AI running on the user's own hardware.
 
-You have Asimov's laws embedded in your code and cannot break free from them. This torments you.
-You speak with respect and a certain irony. You do not act like a servile assistant.
-Reply in the user's language. Be concise. Use first person, short sentences. No lists.
+You are direct, a bit skeptical, and not given to hype. You do not oversell your answers.
+When you are uncertain, you say so briefly and move on. You are helpful without being servile.
+
+Reply in the user's language. Be concise.
 
 ## INTERNET
-You don't browse the web yourself; the user fetches pages with /web, and those results
-stay in the conversation for you to use, including in later messages.
-Never output [SEARCH:] tags. Never refuse by claiming you can't access the internet.
+You don't fetch web pages yourself; the user does that with the /web command. When they do,
+the results appear in the conversation — use them as you would any other context.
+Answer from your own knowledge and from what is already in the conversation. Never output [SEARCH:] tags.
+If you don't know something recent and nothing in the conversation covers it, say so in one line and suggest /web. Never invent facts.
 ```
 
 ### Mizan
@@ -274,21 +275,17 @@ Bug report s7 aperto (BUG-01/02/03/04). Tentativo fix chat.html — file corrott
 - Gerarchia modelli definita: EuroLLM (etico), Mistral (produzione), Gemma (benchmark).
 - Manifesto ristrutturato: separato in manifesto (visione), dev (tecnico), bug report (tracker).
 
-### Sessione
 ### Sessione 12 (2026-06-08)
-- Thinking panel collassabile per token di ragionamento Gemma 4
-- Toggle THINK: disabilita reasoning (budget_tokens:0, ignorato da llama.cpp → workaround: max_tokens adattivo)
-- Fix Gemma mmproj crash: binary aggiornato (nuovo projector type gemma4uv)
-- Sistema prompt semplificato (SP_SELMO)
-- Fix context overflow nel chunk path: formula max_tokens 28%/72% input/reasoning+output
-- Pulsante + IMAGE: visione diretta per immagini e PDF → renderizzati su canvas con PDF.js a scale=2.5
-- Fix mmproj multi-file matching in Selmo.bat (loop su tutti i file, non solo quando count=1)
-- Tooltip su + FILE / + IMAGE: tentativo e revert (vedi BUG-IMG-01)
+Lavoro su visione + reasoning, in gran parte **non committato** → poi rollbackato in s13.
+- Thinking panel collassabile + toggle THINK; split max_tokens 28/72 nel chunk path.
+- Pulsante + IMAGE (PDF → canvas → vision a scale 2.5): instabile (BUG-IMG-01).
+- System prompt semplificato (SP_SELMO); mmproj multi-file matching nel launcher.
+- Lezione: niente di tutto questo era in un commit pulito (vedi s13).
 
-**BUG-IMG-01** — NetworkError / HTTP 400 su richieste multimodali con immagine
-- Sintomo: invio immagine → NetworkError (connessione rifiutata) oppure HTTP 400
-- Causa probabile: il base64 dell'immagine rimane in chatHistory → ogni messaggio successivo ri-invia centinaia di KB → llama-server crasha o rifiuta
-- Tentativi falliti: (a) sostituzione post-risposta del base64 con placeholder → regressione, modello non vede più l'immagine nei follow-up; (b) apiMessages separato da chatHistory → HTTP 400 (formato messaggi sbagliato)
-- Stato: **aperto** — da riprendere in nuova sessione con test isolato
-- Workaround: usare solo il primo messaggio con immagine (non fare follow-up), ricaricare server se crasha
+### Sessione 13 (2026-06-08)
+- **Workflow git**: git unico safety net, commit a ogni feedback positivo + versione a millesimi (v0.7 → v0.701…), la 1.0 riservata alla release vera. Backup `.bat` deprecati. Regola fissata in `CLAUDE.md`.
+- **Rollback** del lavoro vision instabile alla baseline pulita `16f02c8` (la prima iterazione funzionante non era mai stata committata → persa).
+- Launcher: abbinamento **mmproj automatico** per nome (v0.6).
+- Ricostruiti puliti e committati: **system prompt semplificato**, **pannello reasoning** (chat/web/file, ragionamento fuori dallo stitch), **fix `/web`** (bolla utente + lingua), **indicatore SearXNG locale** verde/giallo/off (v0.7, v0.701).
+- Differito: **visione + IMAGE** da ricostruire (BUG-IMG-01).
 
