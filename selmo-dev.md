@@ -219,7 +219,10 @@ Il toggle Selmo/Mizan cambia system prompt + temperatura + palette colori (blu/r
 - Kokoro TTS (kokoro-onnx, Apache 2.0): voce neurale offline, porta 8084, auto-detect lingua (langdetect)
 - Ctrl+Spazio: PTT web search (trascrive e invia come /web <testo>, risposta letta ad alta voce)
 - Launcher: abbinamento mmproj automatico per nome (niente più scelta manuale)
-- Versione v0.6
+- Pannello reasoning collassabile (chat, web, file/chunk) — il ragionamento resta fuori dallo stitch del documento
+- System prompt semplificato (SP_SELMO asciutto)
+- Fix /web: bolla messaggio utente mostrata + risposta nella lingua dell'utente
+- Versione v0.7
 
 ---
 
