@@ -398,7 +398,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <body>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.7</div>
+  <div class="hbadge">v0.701</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="new-chat" onclick="newChat()">+ NEW CHAT</button>
@@ -700,19 +700,27 @@ setInterval(poll,1000);poll();
 
 // ── Web bridge ────────────────────────────────────────────────────────────────
 async function checkWebBridge(){
+  const dot=document.getElementById('web-dot');
+  const txt=document.getElementById('web-txt');
+  function paint(col,label){
+    dot.style.background='var('+col+')';dot.style.borderColor='var('+col+')';
+    dot.style.boxShadow=col==='--dim'?'none':'0 0 4px var('+col+')';
+    txt.style.color='var('+col+')';txt.textContent=label;
+  }
   try{
     const r=await fetch(`${WEB}/status`);
     if(!r.ok) throw new Error();
     const d=await r.json();
     webOk=true;
-    const dot=document.getElementById('web-dot');
-    const txt=document.getElementById('web-txt');
-    dot.style.background='var(--green)';dot.style.borderColor='var(--green)';
-    dot.style.boxShadow='0 0 4px var(--green)';
-    txt.style.color='var(--green)';
-    txt.textContent='web ' + (d.trafilatura ? 'OK' : 'OK (no traf.)');
+    if(d.searx_local){
+      paint('--green','web locale'+(d.trafilatura?'':' (no traf.)'));
+    } else {
+      // bridge attivo ma SearXNG locale giù: la ricerca cadrebbe su istanze pubbliche
+      paint('--yellow','⚠ SearXNG locale OFF — fallback pubblico');
+    }
   }catch(e){
     webOk=false;
+    paint('--dim','web off');
   }
 }
 checkWebBridge();

@@ -191,6 +191,17 @@ def web_search(query, n=5):
 
     return results
 
+def searx_local_up(timeout=1.0):
+    """Reachability probe della SearXNG locale (Podman, 8888).
+    True = istanza locale raggiungibile -> la ricerca resta sul tuo computer."""
+    try:
+        req = urllib.request.Request("http://localhost:8888/",
+                                     headers={"User-Agent": "Selmo"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status < 500
+    except Exception:
+        return False
+
 # ── HTTP handler ──────────────────────────────────────────────────────────────
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
@@ -239,6 +250,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json({
                 "ok":          True,
                 "trafilatura": HAS_TRAF,
+                "searx_local": searx_local_up(),
                 "searx_pool":  SEARX_POOL,
             })
 

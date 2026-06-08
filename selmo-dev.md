@@ -222,7 +222,8 @@ Il toggle Selmo/Mizan cambia system prompt + temperatura + palette colori (blu/r
 - Pannello reasoning collassabile (chat, web, file/chunk) — il ragionamento resta fuori dallo stitch del documento
 - System prompt semplificato (SP_SELMO asciutto)
 - Fix /web: bolla messaggio utente mostrata + risposta nella lingua dell'utente
-- Versione v0.7
+- Indicatore SearXNG locale: `/status` sonda la 8888; pallino verde "web locale", giallo se locale giù (fallback pubblico = dati che escono), spento se bridge off
+- Versione v0.701
 
 ---
 
