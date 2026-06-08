@@ -78,9 +78,15 @@ Flower (Oxford) + OpenFedLLM. Solo delta dei pesi — i dati non escono mai. Ric
 
 ## Nice to have (backlog)
 
-**Visione (immagini)** — Mistral Small 3.2 e Gemma 4 sono già multimodali. Serve il file `mmproj` (~600MB) + `--mmproj` nel launcher + estendere il pulsante "carica file" per jpg/png. Nessun nuovo pulsante. Casi d'uso: foto, screenshot, documenti scannerizzati, OCR su PDF.
+**Visione (immagini) ✓** — *Implementato s9.* Mistral Small 3.2 e Gemma 4 sono già multimodali. Selmo.bat rileva automaticamente `*mmproj*.gguf` in `models/` e aggiunge `--mmproj` al lancio. chat.html accetta jpg/png/gif/webp dallo stesso pulsante `+ FILE`, converte in base64 e invia come content array OpenAI-compatible. Casi d'uso: foto, screenshot, documenti scannerizzati, OCR. Solo analisi — non genera immagini.
+- mmproj Mistral Small 3.2 24B: `mmproj-mistralai_Mistral-Small-3.2-24B-Instruct-2506-f16.gguf` (~878MB) da [bartowski su HuggingFace](https://huggingface.co/bartowski/mistralai_Mistral-Small-3.2-24B-Instruct-2506-GGUF)
+- mmproj Gemma 4 12B: `mmproj-gemma-4-12B-it-bf16.gguf` (~167MB) da [bartowski su HuggingFace](https://huggingface.co/bartowski/gemma-4-12B-it-GGUF)
 
-**Voce** — Whisper.cpp in locale. Pipeline: microfono → Whisper → testo → Selmo. Zero cloud.
+**Voce (Whisper) ✓** — *Implementato s9.* `selmo_whisper.py` su porta 8083, usa `faster-whisper` (pip). Pulsante 🎤 in chat.html: MediaRecorder → POST `/transcribe` → testo iniettato nell'input. Avvio automatico da Selmo.bat. Prerequisito: `pip install faster-whisper flask --break-system-packages` + modello `small` scaricato al primo avvio (~500MB).
+
+**Voce in uscita (TTS) ✓** — *Implementato s9.* `selmo_tts.py` su porta 8084, usa Piper TTS (pip). Pulsante 🔊 in chat.html: toggle autoplay su ogni risposta. Prerequisito: `pip install piper-tts --break-system-packages` + voce .onnx in `voices/`. Voci italiane: [it_IT-paola-medium (F) / it_IT-riccardo-x_low (M)](https://huggingface.co/rhasspy/piper-voices/tree/main/it/it_IT). Il testo viene pulito dal markdown prima della sintesi. Loop completo: microfono → Whisper → Selmo → Piper → altoparlante.
+
+**Generazione immagini** — Richiede architettura diffusion, non LLM. Candidato: `stable-diffusion.cpp` (stesso approccio di llama.cpp, gira bene su 4070 Ti). Si affiancherebbe come `selmo_imggen.py` separato. Non interferisce con la stack attuale.
 
 **Email IMAP** — `selmo_mail.py`. Legge la posta in locale, la passa al modello. Zero cloud.
 

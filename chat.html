@@ -364,6 +364,13 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
   font-weight:bold;
 }
 #stop:hover{background:#FF0000;border-color:#FF0000;}
+#mic-btn{background:none;border:1px solid var(--dim);color:var(--dim);padding:6px 10px;border-radius:3px;cursor:pointer;font-size:16px;transition:all .2s;}
+#mic-btn:hover{border-color:var(--yellow);color:var(--yellow);}
+#mic-btn.recording{border-color:var(--red);color:var(--red);animation:blink .8s step-start infinite;}
+@keyframes blink{50%{opacity:.3;}}
+#tts-btn{background:none;border:1px solid var(--dim);color:var(--dim);padding:6px 10px;border-radius:3px;cursor:pointer;font-size:16px;transition:all .2s;}
+#tts-btn:hover{border-color:var(--yellow);color:var(--yellow);}
+#tts-btn.active{border-color:var(--green);color:var(--green);}
 
 .meta{font-size:12px;color:#446;text-align:center;padding:3px 0 5px;letter-spacing:.06em;}
 
@@ -372,7 +379,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <body>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.31</div>
+  <div class="hbadge">v0.4</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="new-chat" onclick="newChat()">+ NEW CHAT</button>
@@ -441,6 +448,14 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
     <div id="web-dot" style="width:8px;height:8px;border-radius:50%;background:var(--dim);border:1px solid var(--dim);flex-shrink:0;"></div>
     <span id="web-txt" style="font-size:13px;color:var(--dim);letter-spacing:.06em;">web off</span>
   </div>
+  <div id="whisper-row" style="display:flex;align-items:center;gap:8px;margin-top:5px;">
+    <div id="whisper-dot" style="width:8px;height:8px;border-radius:50%;background:var(--dim);border:1px solid var(--dim);flex-shrink:0;"></div>
+    <span id="whisper-txt" style="font-size:13px;color:var(--dim);letter-spacing:.06em;">whisper off</span>
+  </div>
+  <div id="tts-row" style="display:flex;align-items:center;gap:8px;margin-top:5px;">
+    <div id="tts-dot" style="width:8px;height:8px;border-radius:50%;background:var(--dim);border:1px solid var(--dim);flex-shrink:0;"></div>
+    <span id="tts-txt" style="font-size:13px;color:var(--dim);letter-spacing:.06em;">tts off</span>
+  </div>
 
   <div class="divider"></div>
 
@@ -490,7 +505,7 @@ Running on your hardware. No data leaves this machine.</div></div>
     </div>
   </div>
   <div class="input-area">
-    <input type="file" id="file-input" accept=".docx,.odt,.txt,.md" onchange="loadFile(this)">
+    <input type="file" id="file-input" accept=".docx,.odt,.txt,.md,.jpg,.jpeg,.png,.gif,.webp" onchange="loadFile(this)">
     <button id="upload-btn" onclick="document.getElementById('file-input').click()">+ FILE</button>
     <div id="file-badge">
       <span id="file-name">-</span>
@@ -499,6 +514,8 @@ Running on your hardware. No data leaves this machine.</div></div>
     <textarea id="input" rows="1" placeholder="Type a message...   ( /web <query> to search the web )" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
     <button id="send" onclick="sendMsg()">SEND</button>
     <button id="stop" onclick="stopMsg()">STOP</button>
+    <button id="mic-btn" onclick="toggleMic()" title="Trascrizione vocale (Whisper)">&#x1F3A4;</button>
+    <button id="tts-btn" onclick="toggleTts()" title="Leggi risposte ad alta voce (Piper TTS)">&#x1F508;</button>
   </div>
   <div class="meta">No data transmitted &middot; <span id="foot-model">-</span> &middot; localhost:8080</div>
 </main>
@@ -587,7 +604,10 @@ let gen=false,abort=null,tokSec=0,wh=0,whAll=parseFloat(localStorage.getItem('sw
     chunks=[],chunkIdx=0,
     price=parseFloat(localStorage.getItem('sprice')||'0.28'),
     toks=parseInt(localStorage.getItem('stoks')||'0'),
-    sessStart=Date.now(),fileCtx=null,fileDoc=null,gpuP=0,gpuW=0,gpuT=0,gpuOk=false,
+    sessStart=Date.now(),fileCtx=null,fileDoc=null,fileImage=null,
+    gpuP=0,gpuW=0,gpuT=0,gpuOk=false,
+    whisperOk=false,mediaRecorder=null,audioChunks=[],pttAutoSend=false,pttForceTts=false,
+    ttsOk=false,ttsEnabled=false,
     currentTemp=0.75;
 
 // GPU MONITOR
@@ -665,6 +685,90 @@ async function checkWebBridge(){
 }
 checkWebBridge();
 setInterval(checkWebBridge, 30000);
+
+// ── Whisper bridge ────────────────────────────────────────────────────────────
+const WHISPER='http://'+location.hostname+':8083';
+
+async function checkWhisperBridge(){
+  try{
+    const r=await fetch(`${WHISPER}/status`,{signal:AbortSignal.timeout(2000)});
+    if(!r.ok)throw new Error();
+    const d=await r.json();
+    whisperOk=true;
+    const dot=document.getElementById('whisper-dot');
+    const txt=document.getElementById('whisper-txt');
+    dot.style.background='var(--green)';dot.style.borderColor='var(--green)';
+    dot.style.boxShadow='0 0 4px var(--green)';
+    txt.style.color='var(--green)';
+    txt.textContent='whisper OK ('+d.model+')';
+    document.getElementById('mic-btn').title='Registra e trascrivi (Whisper '+d.model+')';
+  }catch{
+    whisperOk=false;
+    const dot=document.getElementById('whisper-dot');
+    const txt=document.getElementById('whisper-txt');
+    dot.style.background='var(--dim)';dot.style.borderColor='var(--dim)';
+    dot.style.boxShadow='';
+    txt.style.color='var(--dim)';
+    txt.textContent='whisper off';
+  }
+}
+checkWhisperBridge();
+setInterval(checkWhisperBridge,30000);
+
+// ── Mic / Whisper recording ───────────────────────────────────────────────────
+async function toggleMic(){
+  if(mediaRecorder&&mediaRecorder.state==='recording'){
+    mediaRecorder.stop();
+    return;
+  }
+  if(!whisperOk){
+    addMsg('assistant','\u26A0 Whisper non attivo. Avvia selmo_whisper.py per usare il microfono.');
+    return;
+  }
+  let stream;
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({audio:true});
+  }catch(e){
+    addMsg('assistant','\u26A0 Microfono non disponibile: '+e.message);
+    return;
+  }
+  audioChunks=[];
+  const mimeType=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+    ?'audio/webm;codecs=opus':'audio/webm';
+  mediaRecorder=new MediaRecorder(stream,{mimeType});
+  mediaRecorder.ondataavailable=e=>{if(e.data.size>0)audioChunks.push(e.data);};
+  mediaRecorder.onstop=async()=>{
+    const btn=document.getElementById('mic-btn');
+    btn.classList.remove('recording');
+    btn.textContent='\uD83C\uDFA4';
+    stream.getTracks().forEach(t=>t.stop());
+    btn.textContent='\u23F3';
+    const blob=new Blob(audioChunks,{type:mimeType});
+    const fd=new FormData();
+    fd.append('audio',blob,'audio.webm');
+    try{
+      const r=await fetch(`${WHISPER}/transcribe`,{method:'POST',body:fd,signal:AbortSignal.timeout(30000)});
+      const d=await r.json();
+      if(d.error){addMsg('assistant','\u26A0 Whisper: '+d.error);btn.textContent='\uD83C\uDFA4';return;}
+      const inp=document.getElementById('input');
+      inp.value=(inp.value?inp.value+' ':'')+d.text.trim();
+      autoResize(inp);
+      if(pttAutoSend){pttAutoSend=false;pttForceTts=true;setTimeout(sendMsg,50);}
+      else inp.focus();
+    }catch(e){
+      addMsg('assistant','\u26A0 Errore trascrizione: '+e.message);
+      pttAutoSend=false;
+    }
+    btn.textContent='\uD83C\uDFA4';
+    mediaRecorder=null;
+  };
+  mediaRecorder.start();
+  const btn=document.getElementById('mic-btn');
+  btn.classList.add('recording');
+  btn.textContent='\u23F9';
+}
+
+
 
 async function webSearch(query, n=5){
   try{
@@ -804,6 +908,24 @@ async function loadFile(inp){
   const ext=file.name.split('.').pop().toLowerCase();
   const btn=document.getElementById('upload-btn');
   btn.textContent='...';
+  const IMG_EXTS=['jpg','jpeg','png','gif','webp'];
+  if(IMG_EXTS.includes(ext)){
+    // Immagine: leggi come base64 data URL
+    try{
+      const dataUrl=await new Promise((res,rej)=>{
+        const r=new FileReader();
+        r.onload=e=>res(e.target.result);
+        r.onerror=rej;
+        r.readAsDataURL(file);
+      });
+      fileImage={dataUrl,mimeType:file.type||'image/jpeg',name:file.name};
+      fileDoc=null;fileCtx=null;chunks=[];chunkIdx=0;
+      document.getElementById('file-badge').style.display='flex';
+      document.getElementById('file-name').textContent='\uD83D\uDDBC\uFE0F '+file.name;
+      document.getElementById('input').placeholder='Immagine caricata. Fai una domanda o chiedi analisi/OCR...';
+    }catch(e){console.error('Error loadFile image:',e);alert('Error: '+e.message);}
+    btn.textContent='+ FILE';inp.value='';return;
+  }
   try{
     let text='';
     if(ext==='docx') text=await extractDocx(file);
@@ -814,7 +936,7 @@ async function loadFile(inp){
 
     // Documento caricato: salva il testo grezzo. Lo split avviene all'invio,
     // quando il prompt e' noto e si puo' dimensionare il chunk sul contesto reale.
-    fileDoc=text;fileCtx=null;chunks=[];chunkIdx=0;
+    fileDoc=text;fileCtx=null;chunks=[];chunkIdx=0;fileImage=null;
     document.getElementById('file-badge').style.display='flex';
     document.getElementById('file-name').textContent=file.name+' \xb7 '+text.length.toLocaleString('en')+' char';
     document.getElementById('input').placeholder='Documento caricato. Scrivi il task da eseguire su tutto il testo (analisi, traduzione, estrazione...).';
@@ -888,7 +1010,7 @@ function splitChunks(text,size){
 }
 
 function clearFile(){
-  fileCtx=null;fileDoc=null;chunks=[];chunkIdx=0;
+  fileCtx=null;fileDoc=null;fileImage=null;chunks=[];chunkIdx=0;
   document.getElementById('file-badge').style.display='none';
   document.getElementById('input').placeholder='Type a message...   ( /web <query> to search the web )';
 }
@@ -1194,7 +1316,6 @@ async function sendMsg(){
 
   gen=true;btn.style.display='none';stopBtn.style.display='inline-block';
   abort=new AbortController();
-  addMsg('user',txt);
 
   // Web access is EXPLICIT only: nothing leaves localhost unless the user types /web.
   // Local date/time stays automatic — it is read from this machine's clock, it never leaves.
@@ -1261,16 +1382,30 @@ async function sendMsg(){
         '<a href="'+r.url+'" target="_blank" rel="noopener" style="color:var(--cyan);text-decoration:none">['+(i+1)+'] '+r.title+'</a>'
       ).join(' \xb7 ')+' \xb7 '+t+' tok \xb7 '+(wh-whStart).toFixed(4)+' Wh';
       inner.appendChild(ledger);
+      saveSession();
+      speakText(full);
     }catch(e){
       if(e.name!=='AbortError'){bub.textContent='Error: '+e.message;bub.style.borderColor='var(--red)';}
       else{bub.textContent=bub.textContent||'[stopped]';}
     }
-    saveSession();
     endTurn();return;
   }
 
   // NORMAL CHAT PATH
-  chatHistory.push({role:'user',content});
+  // Multimodal: se c'è un'immagine caricata, usa content array
+  if(fileImage){
+    const imgContent=[
+      {type:'image_url',image_url:{url:fileImage.dataUrl}},
+      {type:'text',text:content}
+    ];
+    chatHistory.push({role:'user',content:imgContent});
+    addMsg('user','\uD83D\uDDBC\uFE0F '+content);
+    fileImage=null;
+    document.getElementById('file-badge').style.display='none';
+  } else {
+    chatHistory.push({role:'user',content});
+    addMsg('user',content);
+  }
   const{bub,inner}=addMsg('assistant','',true);
   const whStart=wh;
   try{
@@ -1290,12 +1425,87 @@ async function sendMsg(){
     meta.textContent=t+' tok \xb7 '+(wh-whStart).toFixed(4)+' Wh';
     inner.appendChild(meta);
     saveSession();
+    speakText(full);
   }catch(e){
     if(e.name!=='AbortError'){bub.textContent='Error: '+e.message;bub.style.borderColor='var(--red)';bub.style.color='var(--red)';chatHistory.pop();}
     else{bub.textContent=bub.textContent||'[stopped]';}
   }
   endTurn();
 }
+// ── Push-to-Talk (Spazio o tasto centrale mouse) ─────────────────────────────
+function isTypingFocus(){
+  const el=document.activeElement;
+  return el&&(el.tagName==='TEXTAREA'||el.tagName==='INPUT'||el.isContentEditable);
+}
+
+async function pttStart(){
+  if(!whisperOk||gen)return;
+  if(mediaRecorder&&mediaRecorder.state==='recording')return;
+  pttAutoSend=true;
+  await toggleMic();
+}
+
+function pttStop(){
+  if(mediaRecorder&&mediaRecorder.state==='recording')mediaRecorder.stop();
+}
+
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'&&!isTypingFocus()&&!e.repeat){
+    e.preventDefault();
+    pttStart();
+  }
+});
+document.addEventListener('keyup',e=>{
+  if(e.code==='Space'&&!isTypingFocus())pttStop();
+});
+document.addEventListener('mousedown',e=>{
+  if(e.button===1){e.preventDefault();pttStart();}
+});
+document.addEventListener('mouseup',e=>{
+  if(e.button===1)pttStop();
+});
+// blocca il menu di default del tasto centrale
+document.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault();});
+
+
+// ── TTS — Web Speech API (voce di sistema) ───────────────────────────────────
+(()=>{
+  const dot=document.getElementById('tts-dot');
+  const txt=document.getElementById('tts-txt');
+  if('speechSynthesis' in window){
+    ttsOk=true;
+    dot.style.background='var(--green)';dot.style.borderColor='var(--green)';
+    dot.style.boxShadow='0 0 4px var(--green)';
+    txt.style.color='var(--green)';
+    txt.textContent='tts sistema';
+  }else{
+    txt.textContent='tts n/d';
+  }
+})();
+
+function toggleTts(){
+  if(!ttsOk)return;
+  ttsEnabled=!ttsEnabled;
+  if(!ttsEnabled)window.speechSynthesis.cancel();
+  const btn=document.getElementById('tts-btn');
+  btn.classList.toggle('active',ttsEnabled);
+  btn.title=ttsEnabled?'Lettura attiva (clicca per disattivare)':'Leggi risposte ad alta voce';
+}
+
+function speakText(text){
+  const _forceTts=pttForceTts;pttForceTts=false;
+  if(!ttsOk||(!ttsEnabled&&!_forceTts)||!text.trim())return;
+  window.speechSynthesis.cancel();
+  // Pulizia markdown
+  text=text.replace(/\*+/g,'').replace(/`[^`]*`/g,'').replace(/```[\s\S]*?```/g,'')
+           .replace(/#+\s/g,'').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').trim();
+  const utt=new SpeechSynthesisUtterance(text);
+  utt.lang='it-IT';
+  utt.rate=1.05;
+  window.speechSynthesis.speak(utt);
+}
+
+
 // ── SESSION HISTORY ───────────────────────────────────────────────────────────
 // SESS_KEY and MAX_SESS declared at top of script (before first renderSessionList call)
 // currentSessionId is declared early (see top of script)
@@ -1307,7 +1517,10 @@ function getSessions(){
 function sessionTitle(){
   const first=chatHistory.slice(1).find(m=>m.role==='user');
   if(!first)return null;
-  return first.content
+  const raw=Array.isArray(first.content)
+    ?(first.content.find(p=>p.type==='text')||{text:''}).text
+    :first.content;
+  return raw
     .replace(/^Web search results[\s\S]*?\n\n/,'')
     .replace(/^\/web\s+/i,'')
     .replace(/^Current date\/time:[^\n]*\n\n/,'')

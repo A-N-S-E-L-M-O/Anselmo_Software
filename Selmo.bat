@@ -11,12 +11,15 @@ echo  ^|  I tuoi dati restano sul tuo computer.  ^|
 echo  +------------------------------------------+
 echo.
 
-:: ── Scansione modelli ────────────────────────────────────────────
+:: ── Scansione modelli (escludi mmproj) ──────────────────────────
 set count=0
 for %%F in ("models\*.gguf") do (
-    set /a count+=1
-    set "model_!count!=%%~nxF"
-    set "modelpath_!count!=%%~fF"
+    echo %%~nxF | findstr /i "mmproj" >nul
+    if errorlevel 1 (
+        set /a count+=1
+        set "model_!count!=%%~nxF"
+        set "modelpath_!count!=%%~fF"
+    )
 )
 
 if %count%==0 (
@@ -48,6 +51,31 @@ if "!MODELFILE!"=="" (
     echo  Scelta non valida.
     pause
     exit /b 1
+)
+
+:: ── Auto-detection mmproj (visione multimodale) ─────────────────
+set "MMPROJ_FILE="
+set mmproj_count=0
+for %%F in ("models\*mmproj*.gguf") do (
+    set /a mmproj_count+=1
+    set "mmproj_!mmproj_count!=%%~fF"
+    set "mmproj_name_!mmproj_count!=%%~nxF"
+)
+
+if !mmproj_count!==1 (
+    set "MMPROJ_FILE=!mmproj_1!"
+    echo  Vision: mmproj rilevato: !mmproj_name_1!
+)
+if !mmproj_count! GTR 1 (
+    echo.
+    echo  Piu' file mmproj trovati:
+    for /l %%i in (1,1,!mmproj_count!) do (
+        echo    [%%i] !mmproj_name_%%i!
+    )
+    echo    [0] Nessuno
+    echo.
+    set /p "mmsel=  Scegli mmproj [0-!mmproj_count!]: "
+    if "!mmsel!" NEQ "0" if "!mmproj_!mmsel!!"  NEQ "" set "MMPROJ_FILE=!mmproj_!mmsel!!"
 )
 
 :: ── Calcolo -ngl adattivo ────────────────────────────────────────
@@ -83,15 +111,17 @@ echo.
 echo  Modello  : !MODELNAME!
 echo  Dim.     : %fsize_mb% MB
 echo  -ngl     : %NGL%   ctx: %CTX%
+if defined MMPROJ_FILE echo  Visione  : attiva
 echo  Rete     : http://0.0.0.0:8080  (locale + WiFi)
 echo.
 
-:: ── GPU monitor + web bridge (opzionali) ────────────────────────
+:: ── GPU monitor + web bridge + whisper (opzionali) ─────────────
 python --version >nul 2>&1
 if errorlevel 1 goto skip_python
 echo  Avvio servizi Python...
-start "SelmoGPU" /min python "%~dp0selmo_gpu_monitor.py" 2>nul
-start "SelmoWeb" /min python "%~dp0selmo_web.py" 2>nul
+start "SelmoGPU"     /min python "%~dp0selmo_gpu_monitor.py" 2>nul
+start "SelmoWeb"     /min python "%~dp0selmo_web.py" 2>nul
+start "SelmoWhisper" /min python "%~dp0selmo_whisper.py" 2>nul
 timeout /t 2 /nobreak >nul
 :skip_python
 
@@ -103,18 +133,28 @@ echo  Premi CTRL+C per fermare il server.
 echo.
 
 :: ── Avvio server ─────────────────────────────────────────────────
-"%~dp0bin\llama-server.exe" ^
-    --model "!MODELFILE!" ^
-    --host 0.0.0.0 ^
-    --port 8080 ^
-    --ctx-size %CTX% ^
-    -ngl %NGL% ^
-    --parallel 1 ^
-    --no-warmup ^
-    --timeout 0 ^
-    --metrics ^
-    --path "." ^
-    --temp 0.75 ^
-    --top-p 0.9
-
-endlocal
+if defined MMPROJ_FILE (
+    "%~dp0bin\llama-server.exe" ^
+        --model "!MODELFILE!" ^
+        --mmproj "!MMPROJ_FILE!" ^
+        --host 0.0.0.0 ^
+        --port 8080 ^
+        --ctx-size %CTX% ^
+        -ngl %NGL% ^
+        --parallel 1 ^
+        --no-warmup ^
+        --timeout 0 ^
+        --metrics ^
+        --path "." ^
+        --temp 0.75 ^
+        --top-p 0.9
+) else (
+    "%~dp0bin\llama-server.exe" ^
+        --model "!MODELFILE!" ^
+        --host 0.0.0.0 ^
+        --port 8080 ^
+        --ctx-size %CTX% ^
+        -ngl %NGL% ^
+        --parallel 1 ^
+        --no-warmup ^
+        --ti

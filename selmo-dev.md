@@ -150,6 +150,12 @@ Il toggle Selmo/Mizan cambia system prompt + temperatura + palette colori (blu/r
 - Estrazione testo completo con trafilatura (news)
 - Indicatore connessione server con retry automatico ogni 3s
 - Indicatore web bridge con motore attivo
+- Caricamento immagini (jpg/png/gif/webp): base64 → messaggio multimodale OpenAI-compatible (richiede mmproj)
+- Pulsante microfono (🎤): MediaRecorder → POST /transcribe → testo iniettato nell'input
+- Indicatore stato Whisper bridge (porta 8083)
+- Push-to-talk: tieni Spazio o tasto centrale mouse → registra → rilascia → trascrive → invia automaticamente
+- TTS voce di sistema (Web Speech API, it-IT): pulsante 🔊, sempre attivo senza server. PTT forza TTS anche se disattivato manualmente
+- Versione v0.4
 
 ---
 
@@ -188,7 +194,7 @@ Ricerca web v0.3: rimosso auto-search e loop agentico [SEARCH:], sostituito con 
 ### Sessione 7
 Bug report s7 aperto (BUG-01/02/03/04). Tentativo fix chat.html — file corrotto di nuovo da Edit tool. Piano sessione 8 definito.
 
-### Sessione 8 (corrente)
+### Sessione 8
 - Stitch semplificato in chunk_pipeline.py e translate_chunks.py: rimosso dedup per frase, join puro. Selftest OK.
 - Timeout server: `--timeout 0` in Selmo.bat e Mizan.bat.
 - Logica launcher aggiornata: soglia 9000MB per separare 13B da 22-24B, ctx 8192 per range superiore.
@@ -196,12 +202,29 @@ Bug report s7 aperto (BUG-01/02/03/04). Tentativo fix chat.html — file corrott
 - Gerarchia modelli definita: EuroLLM (etico), Mistral (produzione), Gemma (benchmark).
 - Manifesto ristrutturato: separato in manifesto (visione), dev (tecnico), bug report (tracker).
 
+### Sessione 9
+- **Visione multimodale**: Selmo.bat rileva automaticamente `*mmproj*.gguf` in models/ (escluso dal menu modelli), aggiunge `--mmproj` al lancio. chat.html accetta jpg/png/gif/webp, converte in base64, invia come content array OpenAI-compatible (immagine prima del testo). Fix: sessionTitle() gestisce content array vs stringa.
+- **Whisper locale**: selmo_whisper.py (porta 8083, faster-whisper, device CPU, lingua forzata it). Pulsante 🎤 in chat.html. Avvio automatico da Selmo.bat.
+- **Push-to-talk**: Spazio o tasto centrale mouse → avvia registrazione → rilascia → trascrive → invia. Non interferisce con focus su textarea.
+- **TTS voce di sistema**: Web Speech API (it-IT), zero server, zero dipendenze. `selmo_tts.py` rimosso dalla stack (file conservato ma non avviato). PTT forza sempre TTS indipendentemente dal toggle 🔊.
+- **Fix duplicazione messaggio utente**: rimossa chiamata addMsg rimasta dall'originale prima del blocco if/else multimodale.
+- **Versione**: v0.4
+
 ---
 
-## Prossimi passi — sessione 9
+## Lezione appresa — sessione 9
+
+**piper-tts Python API rotta su Windows** — `voice.synthesize()` non scrive frame WAV (44 byte vuoti) e `synthesize_stream_raw()` non esiste in 1.4.2. Sostituito con Web Speech API del browser: più semplice, gestisce accenti italiani correttamente, zero dipendenze.
+
+**content array nei messaggi multimodali** — quando il messaggio utente è multimodale, `first.content` è un array non una stringa. Qualsiasi funzione che legge `chatHistory` e chiama `.replace()` o simili sul content deve gestire entrambi i casi.
+
+**llama.cpp ordine content array** — in modalità multimodale llama-server vuole l'immagine prima del testo nel content array, non dopo.
+
+---
+
+## Prossimi passi — sessione 10
 
 1. **Fix BUG-01/02/03/04** — aprire devtools, riprodurre errori, fixare via Python (mai Edit tool su chat.html)
 2. **Portare chunking robusto in chat.html** — le 5 garanzie di test_chunking.py → build_chunks + prove_coverage in chat.html
 3. **Rimuovere codice morto** — loop agentico disattivato con `if(false)` in chat.html
-4. **Git** — eliminare `.git` parziale, eseguire setup-git.ps1
-5. **Pacchettizzazione .exe** — PyInstaller sui bridge, launcher, installer Inno Setup
+4. **Pacchettizzazione .exe** — PyInstaller sui bridge, launcher, installer Inno Setup
