@@ -1,0 +1,22 @@
+﻿# Modelli e binari enormi -- non versionare
+models/
+bin/
+*.dll
+*.exe
+
+# Backup e file troncati
+*.bak
+*.back
+*.truncated.bak
+chat - Copy GOOD.html
+
+# Log e temporanei
+*.log
+__pycache__/
+*.pyc
+
+# Lock
+*.lock
+
+# File di test pesanti
+Test files/

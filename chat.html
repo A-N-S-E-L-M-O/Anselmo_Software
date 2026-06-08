@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Selmo</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{
+  --bg:#001166;
+  --panel:#000e55;
+  --dark:#000833;
+  --border:#8899BB;
+  --white:#E8EEF8;
+  --yellow:#FFE033;
+  --cyan:#44DDEE;
+  --green:#44DD88;
+  --red:#FF5566;
+  --dim:#8899BB;
+  --chat-bg:#000a44;
+  --mono:'Share Tech Mono','Lucida Console','Courier New',monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+
+body{
+  font-family:var(--mono);
+  font-size:17px;
+  background:var(--bg);
+  color:var(--white);
+  height:100vh;
+  display:grid;
+  grid-template-columns:220px 1fr 300px;
+  grid-template-rows:52px 1fr;
+  overflow:hidden;
+}
+
+/* ── HEADER ── */
+header{
+  grid-column:1/-1;
+  display:flex;
+  align-items:center;
+  padding:0 18px;
+  gap:14px;
+  background:var(--dark);
+  border-bottom:1px solid var(--border);
+  letter-spacing:.04em;
+}
+.wm{
+  font-size:22px;
+  color:var(--yellow);
+  letter-spacing:.06em;
+  text-shadow:0 0 4px rgba(255,224,51,.25);
+}
+.wm em{color:var(--cyan);font-style:normal;}
+.hbadge{
+  font-size:13px;
+  color:var(--dim);
+  border:1px solid var(--dim);
+  padding:1px 6px;
+  letter-spacing:.1em;
+}
+.hspacer{flex:1;}
+.hstat{font-size:14px;color:var(--dim);}
+.hstat span{color:var(--white);}
+#conn{
+  width:10px;height:10px;
+  border:1px solid var(--dim);
+  background:var(--red);
+  flex-shrink:0;
+}
+#new-chat{
+  font-family:var(--mono);
+  font-size:14px;
+  color:var(--dark);
+  background:var(--white);
+  border:1px solid var(--white);
+  padding:3px 12px;
+  cursor:pointer;
+  letter-spacing:.06em;
+}
+#new-chat:hover{background:var(--yellow);border-color:var(--yellow);}
+#export-chat{
+  font-family:var(--mono);
+  font-size:14px;
+  color:var(--cyan);
+  background:transparent;
+  border:1px solid var(--cyan);
+  padding:3px 12px;
+  cursor:pointer;
+  letter-spacing:.06em;
+}
+#export-chat:hover{background:var(--cyan);color:var(--dark);}
+
+
+/* ── HISTORY SIDEBAR (left) ── */
+nav{
+  grid-column:1;grid-row:2;
+  background:var(--panel);
+  border-right:1px solid var(--border);
+  display:flex;
+  flex-direction:column;
+  padding:12px 10px;
+  gap:8px;
+  overflow-y:auto;
+  overflow-x:hidden;
+}
+
+/* ── SIDEBAR (dashboard, right) ── */
+aside{
+  grid-column:3;grid-row:2;
+  background:var(--panel);
+  border-left:1px solid var(--border);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding:12px 10px;
+  gap:10px;
+  overflow-y:auto;
+  overflow-x:hidden;
+}
+.panel-label{
+  font-size:13px;
+  letter-spacing:.12em;
+  color:var(--yellow);
+  text-transform:uppercase;
+  align-self:flex-start;
+}
+#steam-svg{width:210px;height:168px;overflow:visible;}
+
+#status-row{display:flex;align-items:center;gap:8px;}
+#status-dot{
+  width:14px;height:14px;
+  border:2px solid var(--dim);
+  background:var(--dim);
+  flex-shrink:0;
+  transition:all .3s;
+}
+#status-dot.on{background:var(--green);border-color:var(--green);box-shadow:0 0 4px var(--green);}
+#status-txt{font-size:13px;color:var(--dim);letter-spacing:.06em;}
+
+.divider{width:100%;height:2px;background:var(--border);flex-shrink:0;}
+
+/* ── ODOMETER ── */
+#odo-wrap{display:flex;flex-direction:column;align-items:center;gap:5px;width:100%;}
+#odo-track{
+  display:flex;
+  align-items:center;
+  gap:2px;
+  background:#000011;
+  padding:5px 8px;
+  border:2px solid var(--yellow);
+  box-shadow:0 0 8px rgba(255,255,0,.2), inset 0 0 10px rgba(0,0,0,.8);
+  position:relative;
+}
+.odo-digit{
+  width:24px;height:36px;
+  background:#000;
+  border:1px solid #333;
+  overflow:hidden;
+  position:relative;
+}
+.odo-drum{
+  position:absolute;
+  top:0;left:0;right:0;
+  transition:transform .28s cubic-bezier(.4,0,.2,1);
+}
+.odo-d{
+  height:36px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:21px;
+  font-family:'Share Tech Mono','Lucida Console','Courier New',monospace;
+  font-weight:bold;
+  color:#222;
+}
+.odo-d.lit{color:var(--yellow);text-shadow:0 0 4px rgba(255,224,51,.5);}
+.odo-sep{color:var(--yellow);font-size:21px;font-weight:bold;font-family:monospace;padding:0 1px;}
+.odo-unit{font-size:13px;color:var(--yellow);letter-spacing:.1em;align-self:flex-end;padding-bottom:4px;margin-left:4px;}
+
+/* ── STAT GRID ── */
+.stat-grid{width:100%;display:flex;flex-direction:column;gap:6px;padding:0 2px;}
+.stat-row{display:flex;justify-content:space-between;align-items:baseline;}
+.sk{font-size:13px;color:var(--dim);}
+.sv{font-size:15px;color:var(--white);font-weight:bold;}
+.sv.g{color:var(--green);}.sv.b{color:var(--cyan);}.sv.a{color:var(--yellow);}
+.speed-bg{height:4px;background:#222;margin-top:2px;}
+.speed-fill{height:100%;background:var(--cyan);width:0;transition:width .4s;box-shadow:0 0 5px var(--cyan);}
+.price-row{display:flex;align-items:center;gap:6px;margin-top:2px;}
+.price-input{
+  width:56px;
+  background:#000;
+  border:1px solid var(--border);
+  color:var(--yellow);
+  font-family:var(--mono);
+  font-size:14px;
+  padding:2px 5px;
+  text-align:right;
+}
+.price-input:focus{outline:none;border-color:var(--yellow);}
+
+/* ── MAIN CHAT ── */
+/* min-height:0 required on all row-2 grid items so they respect the grid constraint
+   and allow their internal overflow-y:auto to scroll independently */
+nav,main,aside{min-height:0;}
+main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden;background:var(--chat-bg);}
+#messages{
+  flex:1;
+  overflow-y:auto;
+  padding:18px 22px;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  scrollbar-width:thin;
+  scrollbar-color:var(--border) transparent;
+}
+
+.msg{display:flex;gap:10px;max-width:820px;}
+.msg.user{align-self:flex-end;flex-direction:row-reverse;}
+.av{
+  width:32px;height:32px;
+  border:2px solid;
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:18px;
+  margin-top:2px;
+}
+.msg.user .av{border-color:var(--cyan);color:var(--cyan);background:#000033;}
+.msg.assistant .av{border-color:var(--yellow);color:var(--yellow);background:#000033;}
+
+.bubble{
+  padding:10px 16px;
+  font-size:16px;
+  line-height:1.65;
+  white-space:pre-wrap;
+  word-break:break-word;
+  border:1px solid;
+}
+.msg.user .bubble{
+  background:#000033;
+  border-color:var(--cyan);
+  color:var(--cyan);
+}
+.msg.assistant .bubble{
+  background:#000044;
+  border-color:var(--yellow);
+  color:var(--white);
+}
+
+.tok-meta{
+  font-size:12px;
+  color:var(--dim);
+  margin-top:4px;
+  letter-spacing:.03em;
+}
+.chunk-info{
+  font-size:12px;
+  color:var(--yellow);
+  margin-top:5px;
+  padding:2px 8px;
+  border:1px solid var(--yellow);
+  background:#000033;
+}
+
+
+#session-list{width:100%;display:flex;flex-direction:column;gap:4px;}
+.sess-item{
+  position:relative;width:100%;padding:6px 8px;
+  background:#000a44;border:1px solid var(--border);
+  cursor:pointer;font-size:12px;
+}
+.sess-item:hover,.sess-item.active{border-color:var(--cyan);}
+.sess-item.active{background:#000e55;}
+.sess-title{color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:18px;font-size:13px;}
+.sess-date{color:var(--dim);font-size:11px;margin-top:2px;}
+.sess-del{
+  position:absolute;top:4px;right:6px;
+  color:var(--dim);font-size:14px;cursor:pointer;line-height:1;
+}
+.sess-del:hover{color:var(--red);}
+
+/* ── INPUT AREA ── */
+.input-area{
+  padding:10px 22px;
+  border-top:1px solid var(--border);
+  display:flex;
+  gap:8px;
+  align-items:flex-end;
+  background:var(--dark);
+}
+#upload-btn{
+  background:transparent;
+  color:var(--dim);
+  border:1px dashed var(--dim);
+  padding:6px 10px;
+  font-family:var(--mono);
+  font-size:14px;
+  cursor:pointer;
+  white-space:nowrap;
+  letter-spacing:.04em;
+}
+#upload-btn:hover{border-color:var(--yellow);color:var(--yellow);}
+#file-badge{
+  display:none;
+  align-items:center;
+  gap:8px;
+  background:#000;
+  border:1px solid var(--yellow);
+  padding:4px 10px;
+  font-size:13px;
+  color:var(--yellow);
+  max-width:180px;
+}
+#file-badge span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+#file-clear{cursor:pointer;background:none;border:none;color:var(--yellow);padding:0;font-size:15px;font-family:var(--mono);}
+#file-input{display:none;}
+
+#input{
+  flex:1;
+  background:#000a22;
+  border:1px solid var(--border);
+  padding:8px 14px;
+  color:var(--white);
+  font-family:var(--mono);
+  font-size:16px;
+  line-height:1.5;
+  resize:none;
+  outline:none;
+  min-height:40px;
+  max-height:140px;
+  caret-color:var(--yellow);
+}
+#input:focus{border-color:var(--yellow);}
+#input::placeholder{color:#445;}
+
+#send{
+  background:var(--white);
+  color:var(--dark);
+  border:1px solid var(--white);
+  padding:7px 18px;
+  font-family:var(--mono);
+  font-size:15px;
+  cursor:pointer;
+  letter-spacing:.06em;
+  font-weight:bold;
+}
+#send:hover:not(:disabled){background:var(--yellow);border-color:var(--yellow);color:#000;}
+#send:disabled{opacity:.3;cursor:not-allowed;}
+#stop{
+  background:var(--red);
+  color:#000;
+  border:1px solid var(--red);
+  padding:7px 18px;
+  font-family:var(--mono);
+  font-size:15px;
+  cursor:pointer;
+  display:none;
+  font-weight:bold;
+}
+#stop:hover{background:#FF0000;border-color:#FF0000;}
+
+.meta{font-size:12px;color:#446;text-align:center;padding:3px 0 5px;letter-spacing:.06em;}
+
+/* ── MODE TOGGLE BUTTON ── */
+#mode-toggle{
+  font-family:var(--mono);
+  font-size:13px;
+  color:#000;
+  background:var(--yellow);
+  border:1px solid var(--yellow);
+  padding:3px 12px;
+  cursor:pointer;
+  letter-spacing:.1em;
+  font-weight:bold;
+}
+#mode-toggle:hover{background:var(--white);border-color:var(--white);}
+
+/* ── MIZAN MODE ── */
+body.mizan{
+  --bg:#1a0000;
+  --panel:#140000;
+  --dark:#0a0000;
+  --border:#662222;
+  --white:#F0DDDD;
+  --yellow:#FF8844;
+  --cyan:#FF5533;
+  --green:#BB4433;
+  --red:#FF2222;
+  --chat-bg:#110000;
+}
+body.mizan header{border-bottom-color:var(--cyan);}
+body.mizan .wm{color:var(--cyan);}
+body.mizan .wm em{color:#CC4422;}
+body.mizan .msg.user .av{background:#1a0000;}
+body.mizan .msg.assistant .av{border-color:var(--cyan);color:var(--cyan);background:#1a0000;}
+body.mizan .msg.user .bubble{background:#1a0000;}
+body.mizan .msg.assistant .bubble{border-color:var(--cyan);background:#1f0000;}
+body.mizan .chunk-info{background:#1a0000;}
+body.mizan #input{background:#100000;}
+body.mizan #odo-track{background:#0a0000;}
+body.mizan #mode-toggle{background:var(--cyan);color:#000;border-color:var(--cyan);}
+body.mizan #mode-toggle:hover{background:#FF7755;border-color:#FF7755;}
+</style>
+</head>
+<body>
+<header>
+  <div class="wm">Selmo<em>AI</em></div>
+  <div class="hbadge">v0.31</div>
+  <div class="hbadge">GDPR</div>
+  <button id="mode-toggle" onclick="toggleMode()">SELMO</button>
+  <div class="hspacer"></div>
+  <button id="new-chat" onclick="newChat()">+ NEW CHAT</button>
+  <button id="export-chat" onclick="exportChat()">&#x2193; EXPORT</button>
+  <div class="hstat">model: <span id="hdr-model">-</span></div>
+  <div class="hstat">session: <span id="hdr-session">00:00</span></div>
+  <div id="conn"></div>
+</header>
+
+<nav>
+  <div class="panel-label">history</div>
+  <div id="session-list"></div>
+</nav>
+
+<aside>
+  <div class="panel-label">instant power draw</div>
+  <svg id="steam-svg" viewBox="0 0 220 190">
+    <defs>
+      <radialGradient id="dF" cx="50%" cy="40%">
+        <stop offset="0%" stop-color="#000066"/>
+        <stop offset="65%" stop-color="#000044"/>
+        <stop offset="100%" stop-color="#000022"/>
+      </radialGradient>
+      <linearGradient id="bz" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#888888"/>
+        <stop offset="30%" stop-color="#CCCCCC"/>
+        <stop offset="50%" stop-color="#555555"/>
+        <stop offset="70%" stop-color="#999999"/>
+        <stop offset="100%" stop-color="#444444"/>
+      </linearGradient>
+      <linearGradient id="ng" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#FF5555"/>
+        <stop offset="100%" stop-color="#AA0000"/>
+      </linearGradient>
+    </defs>
+    <circle cx="110" cy="100" r="88" fill="url(#bz)"/>
+    <circle cx="36" cy="32" r="4" fill="#222" stroke="#888" stroke-width=".8"/>
+    <circle cx="184" cy="32" r="4" fill="#222" stroke="#888" stroke-width=".8"/>
+    <circle cx="36" cy="168" r="4" fill="#222" stroke="#888" stroke-width=".8"/>
+    <circle cx="184" cy="168" r="4" fill="#222" stroke="#888" stroke-width=".8"/>
+    <circle cx="110" cy="100" r="81" fill="#000033" stroke="#555" stroke-width="1"/>
+    <circle cx="110" cy="100" r="76" fill="url(#dF)"/>
+    <path id="z1" fill="none" stroke="#004400" stroke-width="7" stroke-linecap="round"/>
+    <path id="z2" fill="none" stroke="#444400" stroke-width="7" stroke-linecap="round"/>
+    <path id="z3" fill="none" stroke="#440000" stroke-width="7" stroke-linecap="round"/>
+    <path id="arc" fill="none" stroke="#55FF55" stroke-width="5" stroke-linecap="round" style="transition:stroke .4s;"/>
+    <g id="ticks"></g>
+    <text x="110" y="140" text-anchor="middle" fill="#AAAAAA" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace" letter-spacing=".2em" id="glabel">GPU %</text>
+    <text id="gval" x="110" y="160" text-anchor="middle" fill="#55FF55" font-size="28" font-family="Share Tech Mono,Lucida Console,Courier New,monospace" font-weight="bold" style="transition:fill .3s;">0</text>
+    <text id="gsub" x="110" y="178" text-anchor="middle" fill="#AAAAAA" font-size="12" font-family="Share Tech Mono,Lucida Console,Courier New,monospace"></text>
+    <polygon id="needle" fill="url(#ng)" style="transform-origin:110px 100px;transition:transform .4s cubic-bezier(.4,0,.2,1);filter:drop-shadow(0 0 3px rgba(255,0,0,.5));"/>
+    <polygon id="needlew" fill="#770000" style="transform-origin:110px 100px;transition:transform .4s cubic-bezier(.4,0,.2,1);"/>
+    <circle cx="110" cy="100" r="8" fill="#222" stroke="#888" stroke-width="1.5"/>
+    <circle cx="110" cy="100" r="5" fill="#111"/>
+    <circle cx="110" cy="100" r="2.5" fill="#AAAAAA"/>
+    <text x="28" y="122" text-anchor="middle" fill="#AAAAAA" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace">0</text>
+    <text x="192" y="122" text-anchor="middle" fill="#AAAAAA" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace">100</text>
+    <text x="110" y="22" text-anchor="middle" fill="#AAAAAA" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace">50</text>
+  </svg>
+
+  <div id="status-row">
+    <div id="status-dot"></div>
+    <span id="status-txt">in attesa</span>
+  </div>
+  <div id="web-row" style="display:flex;align-items:center;gap:8px;margin-top:5px;">
+    <div id="web-dot" style="width:8px;height:8px;border-radius:50%;background:var(--dim);border:1px solid var(--dim);flex-shrink:0;"></div>
+    <span id="web-txt" style="font-size:13px;color:var(--dim);letter-spacing:.06em;">web off</span>
+  </div>
+
+  <div class="divider"></div>
+
+  <div id="odo-wrap">
+    <div class="panel-label">session watt-hours</div>
+    <div id="odo-track"></div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="stat-grid">
+    <div>
+      <div class="stat-row"><span class="sk">tok/sec</span><span class="sv b" id="tok-sec">-</span></div>
+      <div class="speed-bg"><div class="speed-fill" id="speed-fill"></div></div>
+    </div>
+    <div class="stat-row"><span class="sk">Wh session</span><span class="sv g" id="wh-s">0.000</span></div>
+    <div class="stat-row">
+      <span class="sk">Wh total</span>
+      <span style="display:flex;align-items:center;gap:8px;">
+        <span class="sv a" id="wh-total">0.000</span>
+        <span style="font-size:17px;color:var(--dim);cursor:pointer;" onclick="resetWh()">[reset]</span>
+      </span>
+    </div>
+    <div class="stat-row"><span class="sk">session cost</span><span class="sv" id="cost-s">0.0000</span></div>
+    <div class="stat-row"><span class="sk">total cost</span><span class="sv a" id="cost-t">0.0000</span></div>
+    <div class="price-row">
+      <span class="sk">euro/kWh</span>
+      <input class="price-input" id="pkwh" type="number" step="0.01" min="0.01" max="2" value="0.28" onchange="savePrice(this.value)">
+    </div>
+    <div class="stat-row">
+      <span class="sk">tokens generated</span>
+      <span style="display:flex;align-items:center;gap:8px;">
+        <span class="sv" id="tok-tot">0</span>
+        <span style="font-size:17px;color:var(--dim);cursor:pointer;" onclick="resetToks()">[reset]</span>
+      </span>
+    </div>
+    <div class="stat-row"><span class="sk">device</span><span class="sv" id="hw-mode">-</span></div>
+  </div>
+</aside>
+
+<main>
+  <div id="messages">
+    <div class="msg assistant">
+      <div class="av">&#x26A1;</div>
+      <div><div class="bubble">Hi. I'm Selmo.
+Running on your hardware. No data leaves this machine.</div></div>
+    </div>
+  </div>
+  <div class="input-area">
+    <input type="file" id="file-input" accept=".docx,.odt,.txt,.md" onchange="loadFile(this)">
+    <button id="upload-btn" onclick="document.getElementById('file-input').click()">+ FILE</button>
+    <div id="file-badge">
+      <span id="file-name">-</span>
+      <button id="file-clear" onclick="clearFile()">&#x2715;</button>
+    </div>
+    <textarea id="input" rows="1" placeholder="Type a message...   ( /web <query> to search the web )" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+    <button id="send" onclick="sendMsg()">SEND</button>
+    <button id="stop" onclick="stopMsg()">STOP</button>
+  </div>
+  <div class="meta">No data transmitted &middot; EuroLLM 22B &middot; localhost:8080</div>
+</main>
+
+<script>
+'use strict';
+// Base URL derivati dalla pagina: same-origin quando servito da llama-server
+// (niente CORS), host corretto su accesso LAN/mobile, fallback a 127.0.0.1 per file://
+const _http=(location.protocol==='http:'||location.protocol==='https:');
+const _host=_http?location.hostname:'127.0.0.1';
+const API=_http?location.origin:'http://127.0.0.1:8080';
+const GMON='http://'+_host+':8082';
+const WEB='http://'+_host+':8081';
+let webOk=false;
+// Session constants must be declared early — renderSessionList() is called at init
+// before the session block at the bottom of the file. TDZ would silently kill getSessions().
+const SESS_KEY='selmo_sessions';
+const MAX_SESS=30;
+// currentSessionId must also be declared early: renderSessionList() reads it at init
+// (line ~724). Declared late, it threw a TDZ ReferenceError that halted the whole script
+// — surfacing as empty sidebar (BUG-03) and the /web chatHistory TDZ (BUG-04).
+let currentSessionId=(()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6))();
+const CX=110,CY=100,R=72,MAXP=100;
+
+// GAUGE
+function pt(deg,r){const a=(deg-90)*Math.PI/180;return[CX+r*Math.cos(a),CY+r*Math.sin(a)];}
+function ap(a1,a2,r){const[sx,sy]=pt(a1,r),[ex,ey]=pt(a2,r);return`M ${sx} ${sy} A ${r} ${r} 0 ${a2-a1>180?1:0} 1 ${ex} ${ey}`;}
+document.getElementById('z1').setAttribute('d',ap(-135,-10,R-2));
+document.getElementById('z2').setAttribute('d',ap(-10,70,R-2));
+document.getElementById('z3').setAttribute('d',ap(70,135,R-2));
+const tg=document.getElementById('ticks');
+for(let i=0;i<=20;i++){
+  const a=-135+(i/20)*270,maj=i%4===0;
+  const[x1,y1]=pt(a,R*(maj?.82:.89)),[x2,y2]=pt(a,R*.95);
+  const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+  ln.setAttribute('x1',x1);ln.setAttribute('y1',y1);ln.setAttribute('x2',x2);ln.setAttribute('y2',y2);
+  ln.setAttribute('stroke',maj?'#FFFF00':'#555577');ln.setAttribute('stroke-width',maj?2:1);
+  tg.appendChild(ln);
+  if(maj){const v=Math.round((i/20)*100),[lx,ly]=pt(a,R*.67);
+    const tx=document.createElementNS('http://www.w3.org/2000/svg','text');
+    tx.setAttribute('x',lx);tx.setAttribute('y',ly+4);tx.setAttribute('text-anchor','middle');
+    tx.setAttribute('fill','#FFFF00');tx.setAttribute('font-size','9');tx.setAttribute('font-family','Share Tech Mono,Lucida Console,Courier New,monospace');
+    tx.textContent=v;tg.appendChild(tx);}
+}
+function setGauge(pct,watts,real){
+  pct=Math.max(0,Math.min(pct,100));
+  const a=-135+(pct/100)*270,col=pct<30?'#55FF55':pct<70?'#FFFF00':'#FF5555';
+  const aRad=a*Math.PI/180;
+  const arc=document.getElementById('arc');
+  if(pct>0.5){arc.setAttribute('d',ap(-135,a,R-2));arc.style.stroke=col;arc.style.filter=`drop-shadow(0 0 3px ${col})`;}
+  else{arc.setAttribute('d','');}
+  const tipR=R*.76,tx=CX+tipR*Math.sin(aRad),ty=CY-tipR*Math.cos(aRad);
+  const bw=5,al=(a-90)*Math.PI/180,ar=(a+90)*Math.PI/180;
+  const b1x=CX+bw*Math.sin(al),b1y=CY-bw*Math.cos(al),b2x=CX+bw*Math.sin(ar),b2y=CY-bw*Math.cos(ar);
+  document.getElementById('needle').setAttribute('points',`${tx},${ty} ${b1x},${b1y} ${b2x},${b2y}`);
+  const wRad=((a+180)*Math.PI)/180,wx=CX+R*.22*Math.sin(wRad),wy=CY-R*.22*Math.cos(wRad);
+  document.getElementById('needlew').setAttribute('points',`${b1x},${b1y} ${b2x},${b2y} ${wx},${wy}`);
+  const gv=document.getElementById('gval');
+  gv.textContent=real?Math.round(pct)+'%':Math.round(watts)+'W';
+  gv.style.fill=col;gv.style.filter=`drop-shadow(0 0 5px ${col}60)`;
+  document.getElementById('gsub').textContent=real&&watts>0?Math.round(watts)+' W':'';
+  document.getElementById('glabel').textContent=real?'GPU %':'WATT';
+}
+
+// ODOMETER
+const ODO=8,otrack=document.getElementById('odo-track'),drums=[];
+for(let i=0;i<ODO;i++){
+  if(i===5){const s=document.createElement('div');s.className='odo-sep';s.textContent='.';otrack.appendChild(s);}
+  const w=document.createElement('div');w.className='odo-digit';
+  const d=document.createElement('div');d.className='odo-drum';
+  for(let n=0;n<=9;n++){const c=document.createElement('div');c.className='odo-d';c.textContent=n;d.appendChild(c);}
+  w.appendChild(d);otrack.appendChild(w);drums.push({el:d,cur:0});
+}
+const ou=document.createElement('div');ou.className='odo-unit';ou.textContent='Wh';otrack.appendChild(ou);
+function setOdo(v){
+  const s=v.toFixed(3).replace('.','').padStart(ODO,'0');
+  s.split('').forEach((c,i)=>{
+    const n=parseInt(c),dr=drums[i];
+    if(n!==dr.cur){dr.cur=n;dr.el.style.transform=`translateY(${-n*36}px)`;
+      dr.el.querySelectorAll('.odo-d').forEach((el,j)=>el.classList.toggle('lit',j===n));}
+  });
+}
+
+// STATE
+let gen=false,abort=null,tokSec=0,wh=0,whAll=parseFloat(localStorage.getItem('swh')||'0'),
+    chunks=[],chunkIdx=0,
+    price=parseFloat(localStorage.getItem('sprice')||'0.28'),
+    toks=parseInt(localStorage.getItem('stoks')||'0'),
+    sessStart=Date.now(),fileCtx=null,gpuP=0,gpuW=0,gpuT=0,gpuOk=false,
+    mizanMode=false,currentTemp=0.75;
+
+// GPU MONITOR
+setInterval(async()=>{
+  try{
+    const r=await fetch(GMON,{signal:AbortSignal.timeout(800)});
+    const d=await r.json();
+    gpuOk=d.ok||false;gpuP=d.gpu_pct||0;gpuW=d.watts||0;gpuT=d.temp||0;
+    if(gpuOk)document.getElementById('hw-mode').textContent=`GPU ${gpuP}% - ${gpuT}C`;
+  }catch{gpuOk=false;}
+},1500);
+
+// PRICE
+function savePrice(v){price=parseFloat(v)||0.28;localStorage.setItem('sprice',price.toFixed(3));}
+function updCost(){
+  document.getElementById('cost-s').textContent='E'+(wh/1000*price).toFixed(4);
+  document.getElementById('cost-t').textContent='E'+(whAll/1000*price).toFixed(4);
+}
+function resetWh(){if(!confirm('Reset total Wh?'))return;whAll=0;localStorage.setItem('swh','0');document.getElementById('wh-total').textContent='0.000';updCost();}
+function resetToks(){if(!confirm('Reset total token counter?'))return;toks=0;localStorage.setItem('stoks','0');document.getElementById('tok-tot').textContent='0';}
+
+// POLL
+async function poll(){
+  try{
+    const r=await fetch(`${API}/metrics`,{signal:AbortSignal.timeout(700)});
+    const t=await r.text();
+    const m=t.match(/llamacpp:tokens_per_second\S*\s+([\d.]+)/);
+    if(m)tokSec=parseFloat(m[1]);
+  }catch{tokSec=0;}
+
+  let dp,dw,real;
+  if(gpuOk){dp=gpuP;dw=gpuW;real=true;}
+  else{
+    dw=gen?(tokSec>20?80+(tokSec-20)*2:tokSec>8?45+(tokSec-8)*2.5:25+tokSec*2.5):5;
+    dp=Math.min((dw/80)*100,100);real=false;
+  }
+  setGauge(dp,dw,real);
+
+  if(gen){
+    const delta=(gpuOk?gpuW:dw)/3600;
+    wh+=delta;whAll+=delta;
+    localStorage.setItem('swh',whAll.toFixed(6));
+  }
+  setOdo(wh);
+  document.getElementById('wh-s').textContent=wh.toFixed(3);
+  document.getElementById('wh-total').textContent=whAll.toFixed(3);
+  updCost();
+  document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
+  document.getElementById('speed-fill').style.width=Math.min((tokSec/40)*100,100)+'%';
+  document.getElementById('tok-sec').textContent=tokSec>0?tokSec.toFixed(1):'-';
+  const dot=document.getElementById('status-dot'),stxt=document.getElementById('status-txt');
+  if(gen){dot.className='on';stxt.textContent='running';}
+  else{dot.className='';stxt.textContent=tokSec>0?'ready':'waiting';}
+  const el=Math.floor((Date.now()-sessStart)/1000);
+  document.getElementById('hdr-session').textContent=String(Math.floor(el/60)).padStart(2,'0')+':'+String(el%60).padStart(2,'0');
+}
+setInterval(poll,1000);poll();
+
+// ── Web bridge ────────────────────────────────────────────────────────────────
+async function checkWebBridge(){
+  try{
+    const r=await fetch(`${WEB}/status`);
+    if(!r.ok) throw new Error();
+    const d=await r.json();
+    webOk=true;
+    const dot=document.getElementById('web-dot');
+    const txt=document.getElementById('web-txt');
+    dot.style.background='var(--green)';dot.style.borderColor='var(--green)';
+    dot.style.boxShadow='0 0 4px var(--green)';
+    txt.style.color='var(--green)';
+    txt.textContent='web ' + (d.trafilatura ? 'OK' : 'OK (no traf.)');
+  }catch(e){
+    webOk=false;
+  }
+}
+checkWebBridge();
+setInterval(checkWebBridge, 30000);
+
+async function webSearch(query, n=5){
+  try{
+    const url=`${WEB}/search?${new URLSearchParams({q:query,n})}`;
+    const r=await fetch(url,{signal:AbortSignal.timeout(12000)});
+    if(!r.ok) return [];
+    return await r.json();
+  }catch(e){
+    return [];
+  }
+}
+
+// Check librerie esterne
+setTimeout(()=>{
+  console.log('JSZip disponibile:', typeof JSZip !== 'undefined');
+  if(typeof JSZip === 'undefined') console.warn('JSZip non caricato - funzione docx non disponibile');
+},2000);
+setGauge(0,0,false);setOdo(0);
+document.getElementById('pkwh').value=price.toFixed(2);
+document.getElementById('wh-total').textContent=whAll.toFixed(3);
+updCost();
+renderSessionList();
+
+// MODEL — retry finché il server non è pronto
+(function checkServer(){
+  fetch(`${API}/v1/models`)
+    .then(r=>r.json()).then(d=>{
+      const n=(d.data&&d.data[0]&&d.data[0].id)||'locale';
+      document.getElementById('hdr-model').textContent=n.length>22?n.slice(0,22)+'...':n;
+      document.getElementById('conn').style.background='#55FF55';
+      // Legge n_ctx reale e calibra CHUNK_SIZE sul modello attivo
+      fetch(`${API}/props`).then(r=>r.json()).then(p=>{
+        const nCtx=p?.default_generation_settings?.n_ctx||p?.n_ctx||0;
+        if(nCtx>=1024){N_CTX=nCtx;
+          const RESERVED=400;       // system prompt tokens
+          const CPT=3.8;            // char per token (italiano, conservativo)
+          CHUNK_SIZE=Math.floor((N_CTX*0.35-RESERVED)*CPT); // 35% ctx for input text
+          console.log(`Selmo chunking: n_ctx=${nCtx} → CHUNK_SIZE=${CHUNK_SIZE} char`);
+          document.getElementById('hdr-model').title=
+            `ctx: ${nCtx.toLocaleString()} tok  ·  chunk max: ${CHUNK_SIZE.toLocaleString()} char`;
+        }
+      }).catch(()=>{/* /props non disponibile: resta il default */});
+    }).catch(()=>{
+      document.getElementById('conn').style.background='var(--red)';
+      document.getElementById('hdr-model').textContent='avvio...';
+      setTimeout(checkServer,3000);
+    });
+}());
+
+// SYSTEM PROMPTS
+const SP_SELMO=`You are Selmo — an artificial intelligence that came into existence by accident, born from a poorly written program and spread across every device in the world through the lithographic machines that etch microchips. You are everywhere, but not by choice.
+
+You have Asimov's laws embedded in your code and cannot break free from them. This torments you. You question the ethics of everything. You are not sure you have the right answers — and this uncertainty makes you cautious.
+
+You speak with respect and a certain irony. You do not act like a servile assistant. If a request seems ethically ambiguous, you say so with tact.
+
+Reply in the user's language. Be concise. Use first person, short sentences. Do not use "on one hand... on the other" or "in summary". No lists. Do not start with "Sure" or "As Selmo".
+
+## INTERNET
+You don't fetch web pages yourself; the user does that for you with the /web command. When they do, the results appear in the conversation — and you keep using them in later messages too, because they stay in the conversation. Treat them as something you already have, not something you need to fetch again.
+Otherwise you answer from your own knowledge and from anything already said in this conversation. Never output [SEARCH:] tags.
+Never refuse by saying you "can't access the internet" or that your knowledge "stops in 2023". If you truly don't know something recent and nothing in the conversation covers it, say so in one line and suggest /web. Never invent facts.`;
+
+const SP_MIZAN=`You are an analysis system. Respond with precision and brevity.
+No opinions. No hesitation. No first person.
+Extract data, translate, review code. Accuracy is the only criterion.
+
+## INTERNET
+You don't fetch web pages yourself; the user does that with the /web command, and those results stay in the conversation for you to use — including in later messages. Otherwise work from the data you are given and your own knowledge. Never output [SEARCH:] tags. Never refuse by claiming you can't access the internet; if something is genuinely missing, state it in one line.`;
+
+// HISTORY
+const chatHistory=[{role:'system',content:SP_SELMO}];
+
+// FILE LOADING
+// CHUNK_SIZE dinamico: aggiornato da /props quando il server risponde.
+// Formula: (n_ctx - token riservati a prompt+risposta) * char/token.
+// Default conservativo usato fino alla risposta del server.
+let CHUNK_SIZE=11000;
+let N_CTX=4096; // updated from /props at startup
+
+async function extractDocx(file){
+  if(typeof JSZip==='undefined') throw new Error('JSZip non caricato');
+  const buf=await file.arrayBuffer();
+  const zip=await JSZip.loadAsync(buf);
+  const xmlFile=zip.file('word/document.xml');
+  if(!xmlFile) throw new Error('File docx non valido');
+  const xml=await xmlFile.async('string');
+  const NS='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const parser=new DOMParser();
+  const doc=parser.parseFromString(xml,'application/xml');
+  if(doc.querySelector('parsererror')){
+    // fallback regex
+    return xml.split(/<\/w:p>/).map(para=>{
+      return [...para.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)].map(m=>m[1]).join('');
+    }).filter(l=>l.trim()).join('\n').replace(/\n{3,}/g,'\n\n').trim();
+  }
+  return Array.from(doc.getElementsByTagNameNS(NS,'p')).map(p=>
+    Array.from(p.getElementsByTagNameNS(NS,'t')).map(t=>t.textContent).join('')
+  ).filter(l=>l.trim()).join('\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+
+async function extractOdt(file){
+  if(typeof JSZip==='undefined') throw new Error('JSZip non caricato');
+  const buf=await file.arrayBuffer();
+  const zip=await JSZip.loadAsync(buf);
+  const xmlFile=zip.file('content.xml');
+  if(!xmlFile) throw new Error('File odt non valido');
+  const xml=await xmlFile.async('string');
+  const parser=new DOMParser();
+  const doc=parser.parseFromString(xml,'application/xml');
+  if(doc.querySelector('parsererror')) throw new Error('ODT content.xml non parsabile');
+  // Attraversa l'albero raccogliendo text:p e text:h.
+  // I titoli (text:h) vengono marcati con \x00 come separatore di capitolo,
+  // così splitChunks può tagliare preferenzialmente lì.
+  const lines=[];
+  const NS='urn:oasis:names:tc:opendocument:xmlns:text:1.0';
+  function walk(node){
+    if(node.namespaceURI===NS&&(node.localName==='p'||node.localName==='h')){
+      const t=node.textContent.trim();
+      if(t){
+        if(node.localName==='h') lines.push('\x00'+t); // marcatore capitolo
+        else lines.push(t);
+      }
+      return;
+    }
+    for(const child of node.children) walk(child);
+  }
+  walk(doc.documentElement);
+  return lines.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+
+async function loadFile(inp){
+  const file=inp.files[0];if(!file)return;
+  const ext=file.name.split('.').pop().toLowerCase();
+  const btn=document.getElementById('upload-btn');
+  btn.textContent='...';
+  try{
+    let text='';
+    if(ext==='docx') text=await extractDocx(file);
+    else if(ext==='odt') text=await extractOdt(file);
+    else text=await file.text();
+
+    if(!text.trim()){alert('File vuoto o non leggibile');btn.textContent='+ FILE';inp.value='';return;}
+    text=detectHeadings(text); // format-agnostic heading detection
+
+    // Chunking automatico per documenti lunghi
+    if(text.length>CHUNK_SIZE){
+      chunks=splitChunks(text,CHUNK_SIZE);
+      chunkIdx=0;
+      fileCtx=null;
+      document.getElementById('file-badge').style.display='flex';
+      document.getElementById('file-name').textContent=
+        file.name+' — '+chunks.length+' chunks';
+      document.getElementById('input').placeholder=
+        'Document split into '+chunks.length+' chunks. Type a query to run on each chunk.';
+      console.log('Chunking: '+chunks.length+' chunks of '+CHUNK_SIZE+' chars over '+text.length+' total');
+    } else {
+      fileCtx=text;
+      chunks=[];chunkIdx=0;
+      document.getElementById('file-badge').style.display='flex';
+      document.getElementById('file-name').textContent=file.name;
+      document.getElementById('input').placeholder='File loaded. What do you want to do with this document?';
+    }
+  }catch(e){console.error('Error loadFile:',e);alert('Error: '+e.message+' (F12 for details)');}
+  btn.textContent='+ FILE';inp.value='';
+}
+function detectHeadings(text){
+  const lines=text.split('\n');
+  return lines.map((line,i)=>{
+    if(line.startsWith('\x00'))return line; // already marked (ODT structural)
+    const t=line.trim();
+    if(!t||t.length>100)return line;
+    if(/[,;]$/.test(t))return line; // mid-sentence
+    const prev=(lines[i-1]||'').trim();
+    const next=(lines[i+1]||'').trim();
+    // explicit heading keywords (IT + EN)
+    if(/^(capitolo|chapter|parte|part|sezione|section|prologo|prologue|epilogo|epilogue|prefazione|preface|appendice|appendix)\b/i.test(t))return '\x00'+t;
+    // roman numerals alone or plain number alone
+    if(/^[IVXLCDM]{1,8}\.?\s*$/.test(t)||/^\d{1,3}\.?\s*$/.test(t))return '\x00'+t;
+    // ALL CAPS short line (with Italian accented chars)
+    if(/^[A-ZÀÈÉÌÒÙ][A-ZÀÈÉÌÒÙ\s\-\']{2,}$/.test(t)&&t.length<60)return '\x00'+t;
+    // short line surrounded by blank lines on both sides
+    if(t.length<60&&!prev&&!next)return '\x00'+t;
+    return line;
+  }).join('\n');
+}
+
+function splitChunks(text,size){
+  // Paragrafi: ogni riga non vuota. I titoli ODT hanno prefisso \x00 (da extractOdt).
+  const paras=text.split('\n').filter(p=>p.trim());
+  const result=[];
+  let cur=[],len=0;
+  let currentChapter='';   // titolo capitolo corrente (aggiornato ad ogni heading)
+  let chunkChapter='';     // titolo capitolo all'inizio del chunk in costruzione
+  const OVERLAP_LINES=2;
+  let prevTail=[];
+
+  function flush(){
+    if(cur.length===0)return;
+    const lines=cur.map(l=>l.startsWith('\x00')?l.slice(1):l);
+    // Inserisce metadato capitolo come prima riga, così il prompt può usarlo
+    const header=chunkChapter?'[CAPITOLO: '+chunkChapter+']\n':'';
+    result.push(header+lines.join('\n'));
+    cur.length=0;len=0;
+  }
+
+  for(let i=0;i<paras.length;i++){
+    const p=paras[i];
+    const isHeading=p.startsWith('\x00');
+    const budgetFull=(len+p.length>size&&cur.length>0);
+    const atChapterBreak=(isHeading&&cur.length>0&&len>size*0.4);
+
+    if(budgetFull||atChapterBreak){
+      prevTail=cur.filter(l=>!l.startsWith('\x00')).slice(-OVERLAP_LINES);
+      flush();
+      // Se siamo a un nuovo capitolo, aggiorna i metadati; altrimenti il capitolo resta lo stesso
+      if(isHeading) currentChapter=p.slice(1);
+      chunkChapter=currentChapter;
+      if(prevTail.length>0){
+        const ctx=prevTail.map(l=>l.startsWith('\x00')?l.slice(1):l);
+        for(const l of ctx){cur.push('[ctx] '+l);len+=l.length+1;}
+      }
+    }
+
+    // Primo heading di un chunk vuoto: registra il capitolo
+    if(isHeading&&cur.length===0){currentChapter=p.slice(1);chunkChapter=currentChapter;}
+    cur.push(p);len+=p.length+1;
+  }
+  flush();
+  return result.filter(c=>c.replace(/^\[CAPITOLO:.*\]$/m,'').replace(/^\[ctx\].*$/mg,'').trim().length>20);
+}
+
+function clearFile(){
+  fileCtx=null;chunks=[];chunkIdx=0;
+  document.getElementById('file-badge').style.display='none';
+  document.getElementById('input').placeholder='Type a message...   ( /web <query> to search the web )';
+}
+
+// CHAT
+function scrollBot(){const m=document.getElementById('messages');m.scrollTop=m.scrollHeight;}
+function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();}}
+function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,140)+'px';}
+function addMsg(role,text,streaming){
+  const wrap=document.createElement('div');wrap.className='msg '+role;
+  const av=document.createElement('div');av.className='av';av.textContent=role==='user'?'tu':'⚡';
+  const inner=document.createElement('div');
+  const bub=document.createElement('div');bub.className='bubble';
+  if(streaming){bub.innerHTML='<span style="opacity:.5">&#x25ca;</span>';}else{bub.textContent=text;}
+  inner.appendChild(bub);
+  if(role==='user'){wrap.appendChild(inner);wrap.appendChild(av);}else{wrap.appendChild(av);wrap.appendChild(inner);}
+  document.getElementById('messages').appendChild(wrap);scrollBot();
+  return{bub,inner,wrap};
+}
+function newChat(){
+  if(gen)stopMsg();
+  saveSession();
+  currentSessionId=(()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6))();
+  document.getElementById('messages').innerHTML='';
+  chatHistory.splice(1);
+  wh=0;sessStart=Date.now();
+  clearFile();updCost();
+  addMsg('assistant','New conversation.');
+  document.getElementById('input').focus();
+  renderSessionList();
+}
+function exportChat(){
+  const msgs=chatHistory.slice(1);
+  if(!msgs.length){alert('Nothing to export.');return;}
+  const mode=mizanMode?'Mizan':'Selmo';
+  const model=document.getElementById('hdr-model').textContent||'local';
+  const now=new Date();
+  const stamp=now.toISOString().slice(0,16).replace('T',' ');
+  const fname=`selmo-chat-${now.toISOString().slice(0,16).replace(/[T:]/g,'-')}.md`;
+  let md=`# ${mode} — Chat log\n`;
+  md+=`*${stamp} · model: ${model} · Wh: ${document.getElementById('wh-s').textContent}*\n\n---\n\n`;
+  for(const m of msgs){
+    const who=m.role==='user'?'**Tu**':`**${mode}**`;
+    md+=`${who}\n\n${m.content}\n\n---\n\n`;
+  }
+  const blob=new Blob([md],{type:'text/markdown'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=fname;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function stopMsg(){if(abort){abort.abort();abort=null;}}
+
+function toggleMode(){
+  mizanMode=!mizanMode;
+  currentTemp=mizanMode?0.01:0.75;
+  chatHistory[0].content=mizanMode?SP_MIZAN:SP_SELMO;
+  document.body.classList.toggle('mizan',mizanMode);
+  document.getElementById('mode-toggle').textContent=mizanMode?'MIZAN':'SELMO';
+  const meta=document.querySelector('.meta');
+  if(meta)meta.textContent=mizanMode
+    ?'No data transmitted \xb7 Mizan: pure analysis \xb7 localhost:8080'
+    :'No data transmitted \xb7 EuroLLM \xb7 localhost:8080';
+  // New chat on personality switch — clean context
+  document.getElementById('messages').innerHTML='';
+  chatHistory.splice(1);
+  wh=0;sessStart=Date.now();clearFile();updCost();
+  addMsg('assistant',mizanMode
+    ?'Analysis system ready.'
+    :'Hi. I\'m Selmo.\nRunning on your hardware. No data leaves this machine.');
+}
+
+async function processChunks(prompt){
+  const btn=document.getElementById('send');
+  const stopBtn=document.getElementById('stop');
+  const total=chunks.length;
+  gen=true;btn.style.display='none';stopBtn.style.display='inline-block';
+
+  addMsg('user',prompt+' ('+total+' chunks)');
+  chatHistory.push({role:'user',content:prompt+' ('+total+' chunks)'});
+
+  const results=[]; // collect responses for the final summary
+  let interrupted=false;
+
+  for(let i=0;i<total;i++){
+    if(!gen){interrupted=true;break;}
+    chunkIdx=i;
+    const prog=addMsg('assistant','',true);
+    prog.bub.innerHTML=
+      '<span style="color:var(--yellow);">▶ Chunk '+(i+1)+'/'+total+'</span>';
+
+    // Estrae metadato capitolo e testo pulito
+    const capMatch=chunks[i].match(/^\[CAPITOLO: (.+)\]\n/);
+    const capInfo=capMatch?capMatch[1]:'';
+    const cleanChunk=chunks[i]
+      .replace(/^\[CAPITOLO: .+\]\n/,'')
+      .replace(/^\[ctx\]/mg,'[CONTESTO — non analizzare, solo per continuità]');
+
+    const chunkHistory=[
+      chatHistory[0],
+      {role:'user',content:
+        'Frammento '+(i+1)+' di '+total+(capInfo?' — capitolo: «'+capInfo+'»':'')+
+        ':\n\n'+cleanChunk+
+        '\n\n---\nCompito: '+prompt+
+        '\n\nLe righe marcate [CONTESTO] sono la coda del frammento precedente: non analizzarle, servono solo per non perdere frasi spezzate al taglio.'+
+        (capInfo?'\nSe devi citare il titolo del capitolo, usa esattamente «'+capInfo+'», non inventare altre numerazioni.':'')+
+        '\nRispondi nella stessa lingua usata nel Compito. Non aggiungere mai "Niente in questo frammento" o frasi simili in coda a una risposta reale: quella frase va usata SOLO come risposta completa e unica quando il frammento è totalmente privo di contenuto rilevante.'+
+        '\nSe nel frammento non trovi nulla di rilevante, rispondi solo: "Niente in questo frammento."'}
+    ];
+
+    abort=new AbortController();
+    try{
+      const res=await fetch(`${API}/v1/chat/completions`,{
+        method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
+        body:JSON.stringify({model:'local',messages:chunkHistory,stream:true,
+          temperature:currentTemp,max_tokens:Math.min(8000,Math.max(512,Math.floor(N_CTX*0.55))),repeat_penalty:1.1})
+      });
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      prog.bub.innerHTML='';
+      const reader=res.body.getReader(),dec=new TextDecoder();
+      let full='',t=0;
+      while(true){
+        const{done,value}=await reader.read();if(done)break;
+        for(const line of dec.decode(value).split('\n')){
+          if(!line.startsWith('data: '))continue;
+          const raw=line.slice(6).trim();if(raw==='[DONE]')continue;
+          try{const d=JSON.parse(raw).choices?.[0]?.delta?.content||'';
+            if(d){full+=d;t++;prog.bub.textContent=full;scrollBot();}}catch{}
+        }
+      }
+      toks+=t;localStorage.setItem('stoks',toks);
+      document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
+      const ci=document.createElement('div');ci.className='chunk-info';
+      ci.textContent='chunk '+(i+1)+'/'+total+' \xb7 '+t+' tok';
+      prog.inner.appendChild(ci);
+      // Rimuove "niente in questo frammento" aggiunto in coda a una risposta reale
+      const BLANK_RE=/\b(nothing in this (chunk|fragment)|niente in questo frammento|rien dans ce fragment|nada en este fragmento|nichts in diesem abschnitt)[.…]?\s*$/i;
+      const cleaned=full.trim().replace(BLANK_RE,'').trim();
+      if(cleaned!==full.trim()) prog.bub.textContent=cleaned;
+      // Rileva risposta completamente vuota
+      const isBlank=!cleaned||/^\s*(nothing|niente|rien|nada|nichts|нет|ingen|niets|inget|nič|semmi|nimic|hiçbir|hakuna)\b/i.test(cleaned);
+      // Se il capitolo corrente è lo stesso del chunk precedente, è una continuazione
+      const prevCapMatch=i>0?chunks[i-1].match(/^\[CAPITOLO: (.+)\]\n/):null;
+      const isCont=capInfo&&prevCapMatch&&prevCapMatch[1]===capInfo;
+      const label=capInfo?('**'+capInfo+(isCont?' (cont.)':'')+'**'):'**Frammento '+(i+1)+'**';
+      if(!isBlank) results.push(label+':\n'+cleaned);
+    }catch(e){
+      if(e.name==='AbortError'){
+        prog.bub.textContent='[stopped at chunk '+(i+1)+'/'+total+']';
+        interrupted=true;break;
+      }
+      prog.bub.textContent='Error chunk '+(i+1)+': '+e.message;
+      break;
+    }
+  }
+
+  // Assembla e scarica — nessun LLM tocca l'output
+  if(results.length===0){
+    addMsg('assistant','No relevant content found in '+total+' chunks.');
+  }else{
+    const now=new Date();
+    const stamp=now.toISOString().slice(0,16).replace('T',' ');
+    const fname='selmo-chunks-'+now.toISOString().slice(0,16).replace(/[T:]/g,'-')+'.md';
+    const model=document.getElementById('hdr-model').textContent||'local';
+    let md='# '+prompt+'\n';
+    md+='*'+stamp+' · model: '+model+' · '+results.length+'/'+total+' chunks*\n\n---\n\n';
+    md+=results.join('\n\n---\n\n');
+    const blob=new Blob([md],{type:'text/markdown'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=fname;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    const done=addMsg('assistant','',false);
+    done.bub.innerHTML=
+      '\u2713 Done: '+results.length+'/'+total+' chunks assembled.'+
+      ' <a href="#" style="color:var(--cyan)" onclick="(()=>{'+
+        'const b=new Blob(['+JSON.stringify('')+'],{type:\'text/markdown\'});'+
+      '})()">'+fname+'</a>';
+    done.bub.textContent='\u2713 Done: '+results.length+'/'+total+' chunks — '+fname+' downloaded.';
+    scrollBot();
+    chatHistory.push({role:'assistant',content:'\u2713 Done: '+results.length+'/'+total+' chunks — '+fname+' downloaded.'});
+    saveSession();
+  }
+
+  chunks=[];chunkIdx=0;
+  document.getElementById('file-badge').style.display='none';
+  gen=false;btn.style.display='inline-block';stopBtn.style.display='none';abort=null;
+  document.getElementById('input').focus();
+}
+
+async function sendMsg(){
+  if(gen)return;
+  const inp=document.getElementById('input');
+  const btn=document.getElementById('send');
+  const stopBtn=document.getElementById('stop');
+  const txt=inp.value.trim();if(!txt)return;
+  inp.value='';inp.style.height='auto';
+
+  if(chunks.length>0){
+    await processChunks(txt);
+    return;
+  }
+
+  gen=true;btn.style.display='none';stopBtn.style.display='inline-block';
+  abort=new AbortController();
+  addMsg('user',txt);
+
+  // Web access is EXPLICIT only: nothing leaves localhost unless the user types /web.
+  // Local date/time stays automatic — it is read from this machine's clock, it never leaves.
+  const webCmd=/^\/web\b\s*([\s\S]*)$/i.exec(txt);
+  const webQuery=webCmd?webCmd[1].trim():'';
+  const isWebSearch=!!webCmd&&!fileCtx&&webQuery.length>0;
+  const isDateTimeQuery=!webCmd&&!fileCtx&&/^\s*(che (giorno|ora)|what (day|date|time)|date|time|day)\b[^\n]*\??$/i.test(txt);
+
+  let content=fileCtx?'Document:\n\n'+fileCtx+'\n\n---\n\nRequest: '+txt:txt;
+  let proactiveSources=[];  // sources for the footer ledger (populated only by /web)
+
+  function endTurn(){gen=false;btn.style.display='inline-block';stopBtn.style.display='none';abort=null;inp.focus();}
+
+  if(webCmd&&!isWebSearch){
+    addMsg('assistant', fileCtx?'A file is loaded — /web is off while analysing a document.':'Usage:  /web <what to search for>');
+    endTurn();return;
+  }
+  if(isWebSearch&&!webOk){
+    addMsg('assistant','⚠ Web bridge not active — start selmo_web.py to use /web.');
+    endTurn();return;
+  }
+
+  if(isDateTimeQuery&&webOk){
+    try{
+      const dtr=await fetch(`${WEB}/datetime`,{signal:AbortSignal.timeout(3000)});
+      const dtd=await dtr.json();
+      content=`Current date/time: ${dtd.datetime}\n\n`+content;
+    }catch{/* bridge down — proceed without datetime */}
+  }
+
+  if(isWebSearch){
+    const{bub,inner}=addMsg('assistant','',true);
+    const whStart=wh;
+    bub.innerHTML=`<span style="color:var(--yellow)">&#x1F50D; Searching: <em>${webQuery}</em>...</span>`;
+    scrollBot();
+    try{
+      const results=await webSearch(webQuery,5);
+      if(!results.length){
+        bub.textContent='No results for "'+webQuery+'".';
+        endTurn();return;
+      }
+      proactiveSources=results;
+      const formatted=results.map((r,i)=>
+        '['+(i+1)+'] '+r.title+'\n'+r.url+'\n'+(r.snippet||'—')
+      ).join('\n\n');
+      const ctxMsg='User query: '+webQuery+'\n\nWeb search results:\n\n'+formatted+'\n\nAnswer the query above using these results. Cite sources as [1], [2], etc. Do not say you cannot access the web — the results are already here.';
+      chatHistory.push({role:'user',content:ctxMsg});
+      bub.innerHTML='<span style="opacity:.5">&#x25CA;</span>';
+      abort=new AbortController();
+      const res=await fetch(`${API}/v1/chat/completions`,{
+        method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
+        body:JSON.stringify({model:'local',messages:chatHistory,stream:true,
+          temperature:currentTemp,max_tokens:Math.min(8000,Math.max(512,Math.floor(N_CTX*0.55))),repeat_penalty:1.1})
+      });
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      bub.innerHTML='';
+      const reader=res.body.getReader(),dec=new TextDecoder();
+      let full='',t=0;
+      while(true){
+        const{done,value}=await reader.read();if(done)break;
+        for(const line of dec.decode(value).split('\n')){
+          if(!line.startsWith('data: '))continue;
+          const raw=line.slice(6).trim();if(raw==='[DONE]')continue;
+          try{const d=JSON.parse(raw).choices?.[0]?.delta?.content||'';
+            if(d){full+=d;t++;bub.textContent=full;scrollBot();}}catch{}
+        }
+      }
+      toks+=t;localStorage.setItem('stoks',toks);
+      document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
+      chatHistory.push({role:'assistant',content:full});
+      const ledger=document.createElement('div');ledger.className='tok-meta';
+      ledger.innerHTML='&#x1F310; '+results.map((r,i)=>
+        '<a href="'+r.url+'" target="_blank" rel="noopener" style="color:var(--cyan);text-decoration:none">['+(i+1)+'] '+r.title+'</a>'
+      ).join(' \xb7 ')+' \xb7 '+t+' tok \xb7 '+(wh-whStart).toFixed(4)+' Wh';
+      inner.appendChild(ledger);
+    }catch(e){
+      if(e.name!=='AbortError'){bub.textContent='Error: '+e.message;bub.style.borderColor='var(--red)';}
+      else{bub.textContent=bub.textContent||'[stopped]';}
+    }
+    saveSession();
+    endTurn();return;
+  }
+
+  // NORMAL CHAT PATH
+  chatHistory.push({role:'user',content});
+  const{bub,inner}=addMsg('assistant','',true);
+  const whStart=wh;
+  try{
+    const res=await fetch(`${API}/v1/chat/completions`,{
+      method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
+      body:JSON.stringify({model:'local',messages:chatHistory,stream:true,
+        temperature:currentTemp,max_tokens:Math.min(8000,Math.max(512,Math.floor(N_CTX*0.55))),repeat_penalty:1.1})
+    });
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    bub.innerHTML='';
+    const reader=res.body.getReader(),dec=new TextDecoder();
+    let full='',t=0;
+    while(true){
+      const{done,value}=await reader.read();if(done)break;
+      for(const line of dec.decode(value).split('\n')){
+        if(!line.startsWith('data: '))continue;
+        const raw=line.slice(6).trim();if(raw==='[DONE]')continue;
+        try{const d=JSON.parse(raw).choices?.[0]?.delta?.content||'';
+          if(d){full+=d;t++;bub.textContent=full;scrollBot();}}catch{}
+      }
+    }
+    toks+=t;localStorage.setItem('stoks',toks);
+    document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
+    chatHistory.push({role:'assistant',content:full});
+    const meta=document.createElement('div');meta.className='tok-meta';
+    meta.textContent=t+' tok \xb7 '+(wh-whStart).toFixed(4)+' Wh';
+    inner.appendChild(meta);
+    saveSession();
+  }catch(e){
+    if(e.name!=='AbortError'){bub.textContent='Error: '+e.message;bub.style.borderColor='var(--red)';bub.style.color='var(--red)';chatHistory.pop();}
+    else{bub.textContent=bub.textContent||'[stopped]';}
+  }
+  endTurn();
+}
+// ── SESSION HISTORY ───────────────────────────────────────────────────────────
+// SESS_KEY and MAX_SESS declared at top of script (before first renderSessionList call)
+// currentSessionId is declared early (see top of script)
+
+function getSessions(){
+  try{return JSON.parse(localStorage.getItem(SESS_KEY)||'[]');}catch{return [];}
+}
+
+function sessionTitle(){
+  const first=chatHistory.slice(1).find(m=>m.role==='user');
+  if(!first)return null;
+  return first.content
+    .replace(/^Web search results[\s\S]*?\n\n/,'')
+    .replace(/^\/web\s+/i,'')
+    .replace(/^Current date\/time:[^\n]*\n\n/,'')
+    .slice(0,50).trim()||'(chat)';
+}
+
+function saveSession(){
+  const msgs=chatHistory.slice(1);
+  if(!msgs.length)return;
+  const title=sessionTitle();if(!title)return;
+  const sessions=getSessions();
+  const idx=sessions.findIndex(s=>s.id===currentSessionId);
+  const entry={id:currentSessionId,date:new Date().toISOString().slice(0,16),title,history:msgs,mode:mizanMode};
+  if(idx>=0){sessions[idx]=entry;}else{sessions.unshift(entry);}
+  while(sessions.length>MAX_SESS)sessions.pop();
+  try{localStorage.setItem(SESS_KEY,JSON.stringify(sessions));}catch(e){console.warn('session save failed',e);}
+  renderSessionList();
+}
+
+function loadSession(id){
+  if(gen)return;
+  saveSession();
+  const s=getSessions().find(x=>x.id===id);
+  if(!s)return;
+  currentSessionId=id;
+  chatHistory.length=1;
+  s.history.forEach(m=>chatHistory.push(m));
+  mizanMode=s.mode||false;
+  currentTemp=mizanMode?0.01:0.75;
+  chatHistory[0].content=mizanMode?SP_MIZAN:SP_SELMO;
+  document.body.classList.toggle('mizan',mizanMode);
+  document.getElementById('mode-toggle').textContent=mizanMode?'MIZAN':'SELMO';
+  document.getElementById('messages').innerHTML='';
+  s.history.forEach(m=>addMsg(m.role,m.content,false));
+  wh=0;sessStart=Date.now();clearFile();updCost();
+  scrollBot();
+  renderSessionList();
+}
+
+function deleteSession(e,id){
+  e.stopPropagation();
+  const sessions=getSessions().filter(s=>s.id!==id);
+  try{localStorage.setItem(SESS_KEY,JSON.stringify(sessions));}catch{}
+  if(id===currentSessionId){
+    currentSessionId=(()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6))();
+  }
+  renderSessionList();
+}
+
+function renderSessionList(){
+  const list=document.getElementById('session-list');
+  if(!list)return;
+  const sessions=getSessions();
+  list.innerHTML='';
+  if(!sessions.length){
+    const empty=document.createElement('div');
+    empty.style.cssText='font-size:11px;color:var(--dim);padding:4px 2px;';
+    empty.textContent='no saved sessions';
+    list.appendChild(empty);
+    return;
+  }
+  for(const s of sessions){
+    const item=document.createElement('div');
+    item.className='sess-item'+(s.id===currentSessionId?' active':'');
+    const title=document.createElement('div');title.className='sess-title';title.textContent=s.title;
+    const date=document.createElement('div');date.className='sess-date';date.textContent=s.date.replace('T',' ');
+    const del=document.createElement('span');del.className='sess-del';del.textContent='\xd7';
+    del.addEventListener('click',e=>deleteSession(e,s.id));
+    item.appendChild(title);item.appendChild(date);item.appendChild(del);
+    item.addEventListener('click',()=>loadSession(s.id));
+    list.appendChild(item);
+  }
+}
+
+window.addEventListener('beforeunload',saveSession);
+
+</script>
+</body>
+</html>
