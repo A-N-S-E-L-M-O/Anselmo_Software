@@ -250,6 +250,27 @@ Il toggle Selmo/Mizan cambia system prompt + temperatura + palette colori (blu/r
 
 ---
 
+## Vision Gemma 4 — strategia lean (da ricostruire, BUG-IMG-01)
+
+Ricerca sessione 13. Gemma 4 **non** usa il pan-and-scan di Gemma 3: ha un **budget di token per immagine** che fissa la risoluzione interpretata. Livelli: 70, 140, 280, 560, 1120. Consigli per task:
+- 70 / 140 → captioning, classificazione, frame video veloci
+- 280 / 560 → chat multimodale generica, grafici, screen/UI
+- **1120 → OCR, parsing documenti, scrittura a mano, testo piccolo** (il nostro caso: busta paga)
+
+Conseguenze pratiche:
+- Inutile renderizzare immagini enormi: il modello ridimensiona comunque al budget. Lato `chat.html` basta **una immagine per pagina** a ~1024–1280px lato lungo, niente canvas concatenato.
+- Costo contesto ≈ il budget scelto (≈1120 token/pagina in OCR): con ctx 8192 ci stanno un paio di pagine.
+
+Flag llama.cpp (in `Selmo.bat`, solo quando c'è mmproj):
+```
+--image-min-tokens 1120 --image-max-tokens 1120 --batch-size 2048 --ubatch-size 2048
+```
+**Causa vera di BUG-IMG-01**: l'encoder vision di Gemma 4 usa attenzione **non-causale** sui token immagine → devono stare tutti in un solo ubatch. Con `ubatch` di default (512) e immagine grande scatta `GGML_ASSERT(n_ubatch >= n_tokens)` e il server muore (HTTP 500/400). Non era il formato del messaggio: era il batching. Alzare batch/ubatch a 2048 lo risolve.
+
+Fonti: ai.google.dev/gemma/docs/capabilities/vision · dev.to/someoddcodeguy "Gemma 4 image settings in llama.cpp" · unsloth.ai/docs/models/gemma-4
+
+---
+
 ## Storico sessioni
 
 ### Sessione 1-3
