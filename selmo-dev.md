@@ -218,7 +218,8 @@ Il toggle Selmo/Mizan cambia system prompt + temperatura + palette colori (blu/r
 - Caricamento .odp (JSZip + content.xml + NS API): estrazione testo per pagina
 - Kokoro TTS (kokoro-onnx, Apache 2.0): voce neurale offline, porta 8084, auto-detect lingua (langdetect)
 - Ctrl+Spazio: PTT web search (trascrive e invia come /web <testo>, risposta letta ad alta voce)
-- Versione v0.5
+- Launcher: abbinamento mmproj automatico per nome (niente più scelta manuale)
+- Versione v0.6
 
 ---
 
@@ -237,6 +238,8 @@ Il toggle Selmo/Mizan cambia system prompt + temperatura + palette colori (blu/r
 **IQ3_M vs Q3_K_M** — IQ3_M è quantizzazione a importanza: stesso ingombro, qualità leggermente superiore perché preserva i pesi critici.
 
 **Timeout server** — `--timeout 0` disabilita il timeout lato server. Il `should_stop` nel log indica cancellazione per disconnessione client, non un errore critico.
+
+**Git è l'unico safety net — commit a ogni feedback positivo** — niente più backup `.bat` (`bk.bat`/`restore.bat`/`bk*`, deprecati). Quando Fabio conferma che qualcosa funziona: commit immediato con messaggio chiaro + avanzamento versione (badge `hbadge` in chat.html e intestazione di questo file). Lezione costosa s13: la prima iterazione vision funzionante è rimasta solo nel working tree, mai committata, e quando le micro-modifiche successive l'hanno rotta non c'era nessuno snapshot a cui tornare. Mai più stati buoni non committati.
 
 **Vision PDF — mai un canvas concatenato** — più pagine in un solo canvas verticale gigante danno aspect ratio estremo e base64 multi-MB → HTTP 400 / crash mmproj (BUG-IMG-01). Renderizzare una immagine per pagina, cap del lato lungo (~1280px), e passarle come array di `image_url` nel content multimodale.
 
@@ -281,4 +284,7 @@ Bug report s7 aperto (BUG-01/02/03/04). Tentativo fix chat.html — file corrott
 **BUG-IMG-01** — NetworkError / HTTP 400 su richieste multimodali con immagine
 - Sintomo: invio immagine → NetworkError (connessione rifiutata) oppure HTTP 400
 - Causa probabile: il base64 dell'immagine rimane in chatHistory → ogni messaggio successivo ri-invia centinaia di KB → llama-server crasha o rifiuta
-- Tentativi falliti: (a) sostituzione post-risposta del base64 con placeholder → regressio
+- Tentativi falliti: (a) sostituzione post-risposta del base64 con placeholder → regressione, modello non vede più l'immagine nei follow-up; (b) apiMessages separato da chatHistory → HTTP 400 (formato messaggi sbagliato)
+- Stato: **aperto** — da riprendere in nuova sessione con test isolato
+- Workaround: usare solo il primo messaggio con immagine (non fare follow-up), ricaricare server se crasha
+

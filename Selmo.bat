@@ -54,44 +54,29 @@ if "!MODELFILE!"=="" (
 )
 
 :: ── Auto-detection mmproj (visione multimodale) ─────────────────
+:: Abbina automaticamente il mmproj al modello scelto, in base al nome.
+:: Niente domanda: il primo mmproj il cui nome combacia col modello vince.
+:: Convenzione: il mmproj si chiama "mmproj-<nome-base-modello>-<formato>.gguf",
+:: quindi togliendo "mmproj-" i primi caratteri coincidono col nome del modello.
 set "MMPROJ_FILE="
-set mmproj_count=0
+set "MMPROJ_NAME="
 for %%F in ("models\*mmproj*.gguf") do (
-    set /a mmproj_count+=1
-    set "mmproj_!mmproj_count!=%%~fF"
-    set "mmproj_name_!mmproj_count!=%%~nxF"
-)
-
-if !mmproj_count!==1 (
-    :: Abbina mmproj al modello per nome (keyword matching)
-    set "mmproj_kw=!mmproj_name_1!"
-    set "model_kw=!MODELNAME!"
-    :: Estrai la prima parola significativa dal nome mmproj (es. "mistralai", "gemma")
-    :: Strategia semplice: controlla se il nome del modello contiene substring del nome mmproj
-    :: Per sicurezza: confronta prefisso (primi 6 char del nome mmproj senza "mmproj-")
-    set "mmproj_stripped=!mmproj_name_1!"
-    set "mmproj_stripped=!mmproj_stripped:mmproj-=!"
-    :: Prendi i primi 8 caratteri come keyword
-    set "mmproj_key=!mmproj_stripped:~0,8!"
-    echo !MODELNAME! | findstr /i "!mmproj_key!" >nul
-    if not errorlevel 1 (
-        set "MMPROJ_FILE=!mmproj_1!"
-        echo  Vision: mmproj compatibile rilevato: !mmproj_name_1!
-    ) else (
-        echo  Vision: mmproj trovato ma non compatibile con il modello selezionato, ignorato.
-        echo         ^(mmproj: !mmproj_name_1! / modello: !MODELNAME!^)
+    if not defined MMPROJ_FILE (
+        set "mp_name=%%~nxF"
+        set "mp_path=%%~fF"
+        set "mp_key=!mp_name:mmproj-=!"
+        set "mp_key=!mp_key:~0,10!"
+        echo !MODELNAME! | findstr /i /c:"!mp_key!" >nul
+        if not errorlevel 1 (
+            set "MMPROJ_FILE=!mp_path!"
+            set "MMPROJ_NAME=!mp_name!"
+        )
     )
 )
-if !mmproj_count! GTR 1 (
-    echo.
-    echo  Piu' file mmproj trovati:
-    for /l %%i in (1,1,!mmproj_count!) do (
-        echo    [%%i] !mmproj_name_%%i!
-    )
-    echo    [0] Nessuno
-    echo.
-    set /p "mmsel=  Scegli mmproj [0-!mmproj_count!]: "
-    if "!mmsel!" NEQ "0" if "!mmproj_!mmsel!!"  NEQ "" set "MMPROJ_FILE=!mmproj_!mmsel!!"
+if defined MMPROJ_FILE (
+    echo  Visione  : mmproj abbinato in automatico -- !MMPROJ_NAME!
+) else (
+    echo  Visione  : nessun mmproj compatibile con il modello -- solo testo
 )
 
 :: ── Calcolo -ngl adattivo ────────────────────────────────────────

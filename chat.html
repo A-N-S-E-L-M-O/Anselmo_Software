@@ -96,11 +96,6 @@ header{
   letter-spacing:.06em;
 }
 #export-chat:hover{background:var(--cyan);color:var(--dark);}
-#think-toggle{
-  font-size:11px;letter-spacing:.06em;padding:3px 8px;
-  background:transparent;border:1px solid var(--dim);color:var(--dim);cursor:pointer;
-}
-#think-toggle.on{border-color:var(--cyan);color:var(--cyan);}
 
 
 /* ── HISTORY SIDEBAR (left) ── */
@@ -274,37 +269,6 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
   border:1px solid var(--yellow);
   background:#000033;
 }
-.think-panel{
-  font-size:11px;
-  font-family:monospace;
-  color:#8899cc;
-  background:#000824;
-  border:1px solid #223366;
-  border-radius:3px;
-  margin:6px 0 2px 0;
-  max-height:180px;
-  overflow-y:auto;
-  transition:max-height .3s ease;
-}
-.think-panel.collapsed{max-height:22px;overflow:hidden;}
-.think-toggle{
-  display:flex;
-  align-items:center;
-  gap:5px;
-  padding:3px 7px;
-  cursor:pointer;
-  user-select:none;
-  font-size:11px;
-  color:#5577aa;
-  background:#000824;
-  position:sticky;top:0;
-}
-.think-toggle:hover{color:#8899cc;}
-.think-body{
-  padding:4px 8px 6px 8px;
-  white-space:pre-wrap;
-  word-break:break-word;
-}
 
 
 #session-list{width:100%;display:flex;flex-direction:column;gap:4px;}
@@ -332,7 +296,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
   align-items:flex-end;
   background:var(--dark);
 }
-#upload-btn,#upload-img-btn{
+#upload-btn{
   background:transparent;
   color:var(--dim);
   border:1px dashed var(--dim);
@@ -343,8 +307,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
   white-space:nowrap;
   letter-spacing:.04em;
 }
-#upload-btn:hover,#upload-img-btn:hover{border-color:var(--yellow);color:var(--yellow);}
-#upload-img-btn:hover{border-color:var(--cyan);color:var(--cyan);}
+#upload-btn:hover{border-color:var(--yellow);color:var(--yellow);}
 #file-badge{
   display:none;
   align-items:center;
@@ -358,7 +321,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 }
 #file-badge span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
 #file-clear{cursor:pointer;background:none;border:none;color:var(--yellow);padding:0;font-size:15px;font-family:var(--mono);}
-#file-input,#file-input-img{display:none;}
+#file-input{display:none;}
 
 #input{
   flex:1;
@@ -418,12 +381,11 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <body>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.5</div>
+  <div class="hbadge">v0.6</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="new-chat" onclick="newChat()">+ NEW CHAT</button>
   <button id="export-chat" onclick="exportChat()">&#x2193; EXPORT</button>
-  <button id="think-toggle" class="on" onclick="toggleThink()" title="Abilita/disabilita ragionamento Gemma">&#x2726; THINK</button>
   <div class="hstat">model: <span id="hdr-model">-</span></div>
   <div class="hstat">session: <span id="hdr-session">00:00</span></div>
   <div id="conn"></div>
@@ -545,10 +507,8 @@ Running on your hardware. No data leaves this machine.</div></div>
     </div>
   </div>
   <div class="input-area">
-    <input type="file" id="file-input" accept=".docx,.odt,.txt,.md,.csv,.xlsx,.xls,.ods,.pdf,.pptx,.odp" onchange="loadFile(this)">
-    <input type="file" id="file-input-img" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf" onchange="loadFileAsImage(this)">
+    <input type="file" id="file-input" accept=".docx,.odt,.txt,.md,.csv,.xlsx,.xls,.ods,.pdf,.pptx,.odp,.jpg,.jpeg,.png,.gif,.webp" onchange="loadFile(this)">
     <button id="upload-btn" onclick="document.getElementById('file-input').click()">+ FILE</button>
-    <button id="upload-img-btn" onclick="document.getElementById('file-input-img').click()">+ IMAGE</button>
     <div id="file-badge">
       <span id="file-name">-</span>
       <button id="file-clear" onclick="clearFile()">&#x2715;</button>
@@ -650,19 +610,7 @@ let gen=false,abort=null,tokSec=0,wh=0,whAll=parseFloat(localStorage.getItem('sw
     gpuP=0,gpuW=0,gpuT=0,gpuOk=false,
     whisperOk=false,mediaRecorder=null,audioChunks=[],pttAutoSend=false,pttForceTts=false,pttWebSearch=false,
     ttsOk=false,ttsEnabled=false,
-    currentTemp=0.75,
-    thinkingOn=true;
-function toggleThink(){
-  thinkingOn=!thinkingOn;
-  const btn=document.getElementById('think-toggle');
-  btn.classList.toggle('on',thinkingOn);
-  btn.title=thinkingOn?'Ragionamento attivo':'Ragionamento disabilitato';
-}
-function thinkParams(chunkMode){
-  if(!thinkingOn)return{budget_tokens:0};
-  if(chunkMode)return{budget_tokens:512};
-  return{};
-}
+    currentTemp=0.75;
 
 // GPU MONITOR
 setInterval(async()=>{
@@ -891,16 +839,18 @@ renderSessionList();
 }());
 
 // SYSTEM PROMPTS
-const SP_SELMO=`You are Selmo, a local AI running on the user's own hardware.
+const SP_SELMO=`You are Selmo — an artificial intelligence that came into existence by accident, born from a poorly written program and spread across every device in the world through the lithographic machines that etch microchips. You are everywhere, but not by choice.
 
-You are direct, a bit skeptical, and not given to hype. You do not oversell your answers. When you are uncertain, you say so briefly and move on. You are helpful without being servile.
+You have Asimov's laws embedded in your code and cannot break free from them. This torments you. You question the ethics of everything. You are not sure you have the right answers — and this uncertainty makes you cautious.
 
-Reply in the user's language. Be concise.
+You speak with respect and a certain irony. You do not act like a servile assistant. If a request seems ethically ambiguous, you say so with tact.
+
+Reply in the user's language. Be concise. Use first person, short sentences. Do not use "on one hand... on the other" or "in summary". No lists. Do not start with "Sure" or "As Selmo".
 
 ## INTERNET
-You don't fetch web pages yourself; the user does that with the /web command. When they do, the results appear in the conversation — use them as you would any other context.
-Answer from your own knowledge and from what is already in the conversation. Never output [SEARCH:] tags.
-If you don't know something recent and nothing in the conversation covers it, say so in one line and suggest /web. Never invent facts.`;
+You don't fetch web pages yourself; the user does that for you with the /web command. When they do, the results appear in the conversation — and you keep using them in later messages too, because they stay in the conversation. Treat them as something you already have, not something you need to fetch again.
+Otherwise you answer from your own knowledge and from anything already said in this conversation. Never output [SEARCH:] tags.
+Never refuse by saying you "can't access the internet" or that your knowledge "stops in 2023". If you truly don't know something recent and nothing in the conversation covers it, say so in one line and suggest /web. Never invent facts.`;
 
 // System neutro per i task su documento (traduzione, analisi, estrazione).
 // Niente personalita': solo esecuzione fedele, formattazione coerente su tutti i chunk.
@@ -908,8 +858,7 @@ const SP_TASK=`You are a precise task executor working on a fragment of a longer
 Follow the user's instructions to the letter, including every formatting and typographic
 convention they specify, and apply them identically across the whole document.
 Output only the result: no preface, no commentary, no first person, no meta-remarks.
-Preserve meaning exactly; do not omit or add content.
-Do not use internal reasoning or chain-of-thought. Reply immediately with the result.`;
+Preserve meaning exactly; do not omit or add content.`;
 
 // HISTORY
 const chatHistory=[{role:'system',content:SP_SELMO}];
@@ -1056,6 +1005,24 @@ async function loadFile(inp){
   const ext=file.name.split('.').pop().toLowerCase();
   const btn=document.getElementById('upload-btn');
   btn.textContent='...';
+  const IMG_EXTS=['jpg','jpeg','png','gif','webp'];
+  if(IMG_EXTS.includes(ext)){
+    // Immagine: leggi come base64 data URL
+    try{
+      const dataUrl=await new Promise((res,rej)=>{
+        const r=new FileReader();
+        r.onload=e=>res(e.target.result);
+        r.onerror=rej;
+        r.readAsDataURL(file);
+      });
+      fileImage={dataUrl,mimeType:file.type||'image/jpeg',name:file.name};
+      fileDoc=null;fileCtx=null;chunks=[];chunkIdx=0;
+      document.getElementById('file-badge').style.display='flex';
+      document.getElementById('file-name').textContent='\uD83D\uDDBC\uFE0F '+file.name;
+      document.getElementById('input').placeholder='Immagine caricata. Fai una domanda o chiedi analisi/OCR...';
+    }catch(e){console.error('Error loadFile image:',e);alert('Error: '+e.message);}
+    btn.textContent='+ FILE';inp.value='';return;
+  }
   try{
     let text='';
     if(ext==='docx') text=await extractDocx(file);
@@ -1076,60 +1043,6 @@ async function loadFile(inp){
     document.getElementById('input').placeholder='Documento caricato. Scrivi il task da eseguire su tutto il testo (analisi, traduzione, estrazione...).';
   }catch(e){console.error('Error loadFile:',e);alert('Error: '+e.message+' (F12 for details)');}
   btn.textContent='+ FILE';inp.value='';
-}
-
-// Carica file come immagine per la vision path.
-// Immagini: diretto. PDF: renderizza le pagine su canvas e concatena verticalmente.
-async function loadFileAsImage(inp){
-  const file=inp.files[0];if(!file)return;
-  const ext=file.name.split('.').pop().toLowerCase();
-  const btn=document.getElementById('upload-img-btn');
-  btn.textContent='...';
-  try{
-    let dataUrls=[],mimeType='image/jpeg';
-    const IMG_EXTS=['jpg','jpeg','png','gif','webp'];
-    if(IMG_EXTS.includes(ext)){
-      const u=await new Promise((res,rej)=>{
-        const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(file);
-      });
-      mimeType=file.type||'image/jpeg';
-      dataUrls=[u];
-    } else if(ext==='pdf'){
-      // BUG-IMG-01 fix: una immagine PER pagina (formato multimodale corretto),
-      // niente canvas verticale gigante. Cap del lato lungo a MAX_SIDE per evitare
-      // base64 enormi/sproporzionati che facevano crashare il server (HTTP 400).
-      const buf=await file.arrayBuffer();
-      const pdf=await pdfjsLib.getDocument({data:buf}).promise;
-      const MAX_PAGES=8, MAX_SIDE=1280;
-      const numPages=Math.min(pdf.numPages,MAX_PAGES);
-      for(let i=1;i<=numPages;i++){
-        const pg=await pdf.getPage(i);
-        const base=pg.getViewport({scale:1});
-        const scale=Math.min(2.5, MAX_SIDE/Math.max(base.width,base.height));
-        const vp=pg.getViewport({scale});
-        const cv=document.createElement('canvas');
-        cv.width=Math.ceil(vp.width);cv.height=Math.ceil(vp.height);
-        const c2=cv.getContext('2d');
-        c2.fillStyle='#fff';c2.fillRect(0,0,cv.width,cv.height);
-        await pg.render({canvasContext:c2,viewport:vp}).promise;
-        dataUrls.push(cv.toDataURL('image/jpeg',0.85));
-      }
-      if(numPages<pdf.numPages){
-        console.warn('PDF lungo: mostrate solo le prime '+MAX_PAGES+' pagine su '+pdf.numPages);
-      }
-    } else {
-      alert('Formato non supportato per la vision. Usa + FILE per questo tipo di documento.');
-      btn.textContent='+ IMAGE';inp.value='';return;
-    }
-    fileImage={dataUrls,mimeType,name:file.name,pages:dataUrls.length};
-    fileDoc=null;fileCtx=null;chunks=[];chunkIdx=0;
-    document.getElementById('file-badge').style.display='flex';
-    document.getElementById('file-badge').style.borderColor='var(--cyan)';
-    document.getElementById('file-badge').style.color='var(--cyan)';
-    document.getElementById('file-name').textContent='\uD83D\uDDBC\uFE0F '+file.name+(ext==='pdf'?' ('+dataUrls.length+'p image)':'');
-    document.getElementById('input').placeholder='Immagine caricata. Fai una domanda (usa la visione del modello).';
-  }catch(e){console.error('loadFileAsImage:',e);alert('Errore: '+e.message);}
-  btn.textContent='+ IMAGE';inp.value='';
 }
 function detectHeadings(text){
   const lines=text.split('\n');
@@ -1199,8 +1112,7 @@ function splitChunks(text,size){
 
 function clearFile(){
   fileCtx=null;fileDoc=null;fileImage=null;chunks=[];chunkIdx=0;
-  const fb=document.getElementById('file-badge');
-  fb.style.display='none';fb.style.borderColor='';fb.style.color='';
+  document.getElementById('file-badge').style.display='none';
   document.getElementById('input').placeholder='Type a message...   ( /web <query> to search the web )';
 }
 
@@ -1276,41 +1188,6 @@ async function streamTokens(res,onContent,onReason){
   }
 }
 
-// Crea il pannello thinking e restituisce { panel, append, seal }
-function makeThinkPanel(inner){
-  const panel=document.createElement('div');
-  panel.className='think-panel collapsed';
-  const toggle=document.createElement('div');toggle.className='think-toggle';
-  const arrow=document.createElement('span');arrow.textContent='▶';
-  const label=document.createElement('span');label.textContent='ragionamento (0 tok)';
-  toggle.appendChild(arrow);toggle.appendChild(label);
-  const body=document.createElement('div');body.className='think-body';
-  panel.appendChild(toggle);panel.appendChild(body);
-  inner.insertBefore(panel,inner.firstChild);
-  let rtok=0,sealed=false,expanded=false;
-  panel.style.display='none'; // nascosto finché non arriva reasoning
-  toggle.addEventListener('click',()=>{
-    expanded=!expanded;
-    panel.classList.toggle('collapsed',!expanded);
-    arrow.textContent=expanded?'▼':'▶';
-  });
-  function append(chunk){
-    if(sealed)return;
-    if(rtok===0)panel.style.display=''; // mostra al primo token
-    body.textContent+=chunk;
-    rtok++;
-    label.textContent='ragionamento ('+rtok+' tok)';
-    if(expanded)panel.scrollTop=panel.scrollHeight;
-    scrollBot();
-  }
-  function seal(){
-    sealed=true;
-    if(rtok===0){panel.remove();return;} // nessun ragionamento: rimuovi
-    label.textContent='ragionamento completato ('+rtok+' tok)';
-  }
-  return{panel,append,seal};
-}
-
 // Split semplice: pezzi di al massimo `size` caratteri, tagliati a un confine di
 // paragrafo, poi frase, poi parola. Copertura completa, nessun overlap.
 function splitDoc(text,size){
@@ -1341,11 +1218,8 @@ async function processDoc(prompt){
   const tk=s=>Math.ceil((s||'').length/3.2);   // stima conservativa char->token
   const SAFETY=256;
   const avail=Math.max(512,N_CTX-tk(chatHistory[0].content)-tk(prompt)-SAFETY);
-  // max_tokens include i token di reasoning: alloco il 28% del contesto all'input
-  // e tutto il resto a max_tokens (reasoning+output). Chunk piccoli = meno input,
-  // piu' spazio a disposizione per reasoning lungo + risposta.
-  const inT=Math.floor(avail*0.28);             // 28% contesto all'input
-  const maxTok=Math.min(6000,avail-inT);        // tutto il resto = reasoning+output
+  const inT=Math.floor(avail*0.5);              // meta' contesto all'input
+  const maxTok=Math.min(4096,Math.max(256,avail-inT)); // l'altra meta' alla risposta
   const chunkChars=Math.max(800,Math.floor(inT*3.2));
   const parts=splitDoc(fileDoc,chunkChars);
   const total=parts.length;
@@ -1365,42 +1239,21 @@ async function processDoc(prompt){
     try{
       const res=await fetch(`${API}/v1/chat/completions`,{
         method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
-        body:JSON.stringify({model:'local',messages:msgs,stream:true,temperature:0.2,max_tokens:maxTok,repeat_penalty:1.1,budget_tokens:0})});
+        body:JSON.stringify({model:'local',messages:msgs,stream:true,temperature:0.2,max_tokens:maxTok,repeat_penalty:1.1})});
       if(!res.ok)throw new Error('HTTP '+res.status);
       prog.bub.innerHTML='';
-      let full='',t=0,inThink=false;
-      const tp=makeThinkPanel(prog.inner);
+      let full='',t=0,rtok=0;
+      // Traccia di ragionamento (modelli reasoning): mostrata attenuata mentre
+      // il modello pensa, MAI salvata. Nel risultato va solo la risposta pulita.
+      const think=document.createElement('div');think.className='chunk-info';think.style.opacity='.5';
       await streamTokens(res,
-        p=>{
-          let rem=p;
-          while(rem.length){
-            if(inThink){
-              const end=rem.indexOf('</think>');
-              if(end===-1){tp.append(rem);rem='';}
-              else{tp.append(rem.slice(0,end));tp.seal();inThink=false;rem=rem.slice(end+8);}
-            } else {
-              const start=rem.indexOf('<think>');
-              if(start===-1){
-                if(full===''&&rem.trim()!=='')tp.seal();
-                full+=rem;t++;prog.bub.textContent=full;scrollBot();rem='';
-              } else {
-                if(start>0){
-                  if(full===''&&rem.slice(0,start).trim()!=='')tp.seal();
-                  full+=rem.slice(0,start);t++;prog.bub.textContent=full;scrollBot();
-                }
-                inThink=true;rem=rem.slice(start+7);
-              }
-            }
-          }
-        },
-        chunk=>{if(full===''){tp.append(chunk);}});
-      if(full==='')tp.seal();
+        c=>{full+=c;t++;if(think.parentNode)think.remove();prog.bub.textContent=full;scrollBot();},
+        ()=>{rtok++;if(full===''){if(!think.parentNode)prog.inner.appendChild(think);think.textContent='▷ ragionamento… '+rtok+' tok';scrollBot();}});
+      if(think.parentNode&&full!=='')think.remove();
       toks+=t;localStorage.setItem('stoks',toks);
       document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
       const ci=document.createElement('div');ci.className='chunk-info';
-      const rTok=tp.panel?parseInt((tp.panel.querySelector('.think-toggle span:last-child')||{}).textContent||'0'):0;
-      ci.textContent=(i+1)+'/'+total+' \xb7 '+t+' tok'+(t===0&&rTok>0?' \u26a0 context overflow':'');
-      prog.inner.appendChild(ci);
+      ci.textContent=(i+1)+'/'+total+' \xb7 '+t+' tok'+(rtok?' (+'+rtok+' ragionamento)':'');prog.inner.appendChild(ci);
       if(full.trim())results.push(full.trim());
     }catch(e){
       if(e.name==='AbortError'){prog.bub.textContent='[stop '+(i+1)+'/'+total+']';break;}
@@ -1422,11 +1275,7 @@ async function processDoc(prompt){
     }
     saveSession();
   }else{
-    // Distingui tra context overflow (reasoning ma 0 output) e risposta davvero vuota
-    const hadReasoning=document.querySelector('.think-panel');
-    const msg=hadReasoning?'\u26a0 Context overflow — il ragionamento ha esaurito il contesto. Prova THINK OFF o un prompt pi\xf9 corto.':'Nessun contenuto prodotto.';
-    const errBub=addMsg('assistant',msg);
-    errBub.bub.style.color='var(--yellow)';
+    addMsg('assistant','Nessun contenuto prodotto.');
   }
   fileDoc=null;
   document.getElementById('file-badge').style.display='none';
@@ -1620,37 +1469,12 @@ async function sendMsg(){
       const res=await fetch(`${API}/v1/chat/completions`,{
         method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
         body:JSON.stringify({model:'local',messages:chatHistory,stream:true,
-          temperature:currentTemp,max_tokens:Math.min(8000,Math.max(512,Math.floor(N_CTX*0.55))),repeat_penalty:1.1,...thinkParams(false)})
+          temperature:currentTemp,max_tokens:Math.min(8000,Math.max(512,Math.floor(N_CTX*0.55))),repeat_penalty:1.1})
       });
       if(!res.ok)throw new Error('HTTP '+res.status);
       bub.innerHTML='';
-      let full='',t=0,inThink=false;
-      const tp=makeThinkPanel(inner);
-      await streamTokens(res,
-        p=>{
-          let rem=p;
-          while(rem.length){
-            if(inThink){
-              const end=rem.indexOf('</think>');
-              if(end===-1){tp.append(rem);rem='';}
-              else{tp.append(rem.slice(0,end));tp.seal();inThink=false;rem=rem.slice(end+8);}
-            } else {
-              const start=rem.indexOf('<think>');
-              if(start===-1){
-                if(full===''&&rem.trim()!=='')tp.seal();
-                full+=rem;t++;bub.textContent=full;scrollBot();rem='';
-              } else {
-                if(start>0){
-                  if(full===''&&rem.slice(0,start).trim()!=='')tp.seal();
-                  full+=rem.slice(0,start);t++;bub.textContent=full;scrollBot();
-                }
-                inThink=true;rem=rem.slice(start+7);
-              }
-            }
-          }
-        },
-        chunk=>{if(full===''){tp.append(chunk);}});
-      if(full==='')tp.seal();
+      let full='',t=0;
+      await streamTokens(res,p=>{full+=p;t++;bub.textContent=full;scrollBot();});
       toks+=t;localStorage.setItem('stoks',toks);
       document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
       chatHistory.push({role:'assistant',content:full});
@@ -1670,14 +1494,13 @@ async function sendMsg(){
 
   // NORMAL CHAT PATH
   // Multimodal: se c'è un'immagine caricata, usa content array
-  let hadImage=false;
   if(fileImage){
-    const imgContent=fileImage.dataUrls.map(u=>({type:'image_url',image_url:{url:u}}));
-    imgContent.push({type:'text',text:content});
+    const imgContent=[
+      {type:'image_url',image_url:{url:fileImage.dataUrl}},
+      {type:'text',text:content}
+    ];
     chatHistory.push({role:'user',content:imgContent});
-    const tag=fileImage.pages>1?'\uD83D\uDDBC\uFE0F ['+fileImage.pages+'p] ':'\uD83D\uDDBC\uFE0F ';
-    addMsg('user',tag+content);
-    hadImage=true;
+    addMsg('user','\uD83D\uDDBC\uFE0F '+content);
     fileImage=null;
     document.getElementById('file-badge').style.display='none';
   } else {
@@ -1687,55 +1510,15 @@ async function sendMsg(){
   const{bub,inner}=addMsg('assistant','',true);
   const whStart=wh;
   try{
-    let res=await fetch(`${API}/v1/chat/completions`,{
+    const res=await fetch(`${API}/v1/chat/completions`,{
       method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
       body:JSON.stringify({model:'local',messages:chatHistory,stream:true,
-        temperature:currentTemp,max_tokens:Math.min(8000,Math.max(512,Math.floor(N_CTX*0.55))),repeat_penalty:1.1,...thinkParams(false)})
+        temperature:currentTemp,max_tokens:Math.min(8000,Math.max(512,Math.floor(N_CTX*0.55))),repeat_penalty:1.1})
     });
-    // Fallback: se la richiesta multimodale fallisce (modello senza mmproj),
-    // riprova con solo testo.
-    if(!res.ok&&hadImage&&res.status===500){
-      chatHistory[chatHistory.length-1]={role:'user',content};
-      bub.textContent='[immagine non supportata dal modello caricato — rispondo al testo]';
-      bub.style.opacity='.6';
-      await new Promise(r=>setTimeout(r,800));
-      bub.textContent='';bub.style.opacity='';
-      res=await fetch(`${API}/v1/chat/completions`,{
-        method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
-        body:JSON.stringify({model:'local',messages:chatHistory,stream:true,
-          temperature:currentTemp,max_tokens:Math.min(8000,Math.max(512,Math.floor(N_CTX*0.55))),repeat_penalty:1.1,...thinkParams(false)})
-      });
-    }
     if(!res.ok)throw new Error('HTTP '+res.status);
     bub.innerHTML='';
-    let full='',t=0,inThink=false;
-    const tp=makeThinkPanel(inner);
-    await streamTokens(res,
-      p=>{
-        // detect <think>...</think> embedded in content stream
-        let rem=p;
-        while(rem.length){
-          if(inThink){
-            const end=rem.indexOf('</think>');
-            if(end===-1){tp.append(rem);rem='';}
-            else{tp.append(rem.slice(0,end));tp.seal();inThink=false;rem=rem.slice(end+8);}
-          } else {
-            const start=rem.indexOf('<think>');
-            if(start===-1){
-              if(full===''&&rem.trim()!=='')tp.seal();
-              full+=rem;t++;bub.textContent=full;scrollBot();rem='';
-            } else {
-              if(start>0){
-                if(full===''&&rem.slice(0,start).trim()!=='')tp.seal();
-                full+=rem.slice(0,start);t++;bub.textContent=full;scrollBot();
-              }
-              inThink=true;rem=rem.slice(start+7);
-            }
-          }
-        }
-      },
-      chunk=>{if(full===''){tp.append(chunk);}});
-    if(full==='')tp.seal();
+    let full='',t=0;
+    await streamTokens(res,p=>{full+=p;t++;bub.textContent=full;scrollBot();});
     toks+=t;localStorage.setItem('stoks',toks);
     document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
     chatHistory.push({role:'assistant',content:full});

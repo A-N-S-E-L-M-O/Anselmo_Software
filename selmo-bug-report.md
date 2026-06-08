@@ -127,10 +127,35 @@ Durante questa sessione il mount Linux di bash era *congelato* allo stato di ini
 ---
 
 ## BUG-IMG-01 · NetworkError / HTTP 400 su richieste multimodali (immagine/PDF)
-**Stato:** ✓ Risolto (sessione 13)
+**Stato:** ↩️ Riaperto / da ricostruire (sessione 13) — il path vision (+ IMAGE, PDF-come-immagine) è stato **rollbackato** a `16f02c8` perché aveva regressioni e la prima versione funzionante non era mai stata committata. Da ricostruire da capo con commit a ogni step confermato. La descrizione qui sotto è la diagnosi/fix tentato, NON lo stato attuale del codice.
 
 **Sintomo**
 Invio di un'immagine — soprattutto un PDF via + IMAGE — produceva NetworkError o HTTP 400, oppure crashava llama-server.
 
 **Causa**
-Il path PDF renderizzava fino a 8 pagine a `scale=2.5` e le concatenava in **un unico canvas verticale gigante** (es. ~1500 × 20.000+ px), poi lo inviava come singolo `image_url` base64 da diversi 
+Il path PDF renderizzava fino a 8 pagine a `scale=2.5` e le concatenava in **un unico canvas verticale gigante** (es. ~1500 × 20.000+ px), poi lo inviava come singolo `image_url` base64 da diversi MB. Immagine enorme e con aspect ratio estremo → il preprocessing mmproj la rifiutava / il body della richiesta era sovradimensionato → HTTP 400.
+
+**Fix applicato (sessione 13)** — in `chat.html`, via Python (BUG-META-01)
+- `loadFileAsImage`: il PDF ora produce **una immagine per pagina** invece di un canvas concatenato. `fileImage` diventa `{dataUrls:[...],mimeType,name,pages}`.
+- Cap del lato lungo a `MAX_SIDE=1280` (scala adattiva, mai upscale oltre 2.5), JPEG q0.85 → ogni pagina ~120KB invece di un blob multi-MB.
+- `send`: costruisce un content array con un `{type:'image_url'}` per pagina + il testo (formato multimodale OpenAI corretto, supportato da llama.cpp). L'immagine persiste in `chatHistory`, quindi i follow-up la vedono.
+- Badge e bolla utente mostrano il conteggio pagine (`[Np]`).
+
+**Verifica**
+`node --check` sullo script estratto OK; edit verificati con tool Read; nessun riferimento residuo al vecchio `fileImage.dataUrl`.
+
+**Note residue**
+- Fallback HTTP 500 (modello senza mmproj) invariato: scarta le immagini e risponde al solo testo.
+- Con 8 pagine le immagini restano in contesto a ogni turno: con Gemma vision (~256 tok/immagine resize a 896) ≈ 2k token, ok dentro ctx 8192 per qualche turno.
+
+---
+
+## Piano sessione 9
+
+1. ✓ Fix BUG-05: flag `--thinking`/`--thinking-buffer`, domanda condizionata a `isatty`, wrapper `.bat`
+2. Aprire devtools → riprodurre `/web` error → copiare stack trace → fix BUG-04
+2. Fix BUG-03: spostare SESS_KEY in cima allo script (Python)
+3. Fix BUG-01: aggiungere `min-height:0` (Python)
+4. Verificare BUG-02 con devtools
+5. `node --check` dopo ogni modifica
+6. Commit git dopo ogni fix — non aspettare la fine della sessione
