@@ -9,6 +9,8 @@
 <title>Selmo</title>
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 :root{
   --bg:#001166;
@@ -379,7 +381,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <body>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.4</div>
+  <div class="hbadge">v0.5</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="new-chat" onclick="newChat()">+ NEW CHAT</button>
@@ -505,7 +507,7 @@ Running on your hardware. No data leaves this machine.</div></div>
     </div>
   </div>
   <div class="input-area">
-    <input type="file" id="file-input" accept=".docx,.odt,.txt,.md,.jpg,.jpeg,.png,.gif,.webp" onchange="loadFile(this)">
+    <input type="file" id="file-input" accept=".docx,.odt,.txt,.md,.csv,.xlsx,.xls,.ods,.pdf,.pptx,.odp,.jpg,.jpeg,.png,.gif,.webp" onchange="loadFile(this)">
     <button id="upload-btn" onclick="document.getElementById('file-input').click()">+ FILE</button>
     <div id="file-badge">
       <span id="file-name">-</span>
@@ -515,7 +517,7 @@ Running on your hardware. No data leaves this machine.</div></div>
     <button id="send" onclick="sendMsg()">SEND</button>
     <button id="stop" onclick="stopMsg()">STOP</button>
     <button id="mic-btn" onclick="toggleMic()" title="Trascrizione vocale (Whisper)">&#x1F3A4;</button>
-    <button id="tts-btn" onclick="toggleTts()" title="Leggi risposte ad alta voce (Piper TTS)">&#x1F508;</button>
+    <button id="tts-btn" onclick="toggleTts()" title="Leggi risposte ad alta voce (Kokoro TTS)">&#x1F508;</button>
   </div>
   <div class="meta">No data transmitted &middot; <span id="foot-model">-</span> &middot; localhost:8080</div>
 </main>
@@ -606,7 +608,7 @@ let gen=false,abort=null,tokSec=0,wh=0,whAll=parseFloat(localStorage.getItem('sw
     toks=parseInt(localStorage.getItem('stoks')||'0'),
     sessStart=Date.now(),fileCtx=null,fileDoc=null,fileImage=null,
     gpuP=0,gpuW=0,gpuT=0,gpuOk=false,
-    whisperOk=false,mediaRecorder=null,audioChunks=[],pttAutoSend=false,pttForceTts=false,
+    whisperOk=false,mediaRecorder=null,audioChunks=[],pttAutoSend=false,pttForceTts=false,pttWebSearch=false,
     ttsOk=false,ttsEnabled=false,
     currentTemp=0.75;
 
@@ -753,7 +755,19 @@ async function toggleMic(){
       const inp=document.getElementById('input');
       inp.value=(inp.value?inp.value+' ':'')+d.text.trim();
       autoResize(inp);
-      if(pttAutoSend){pttAutoSend=false;pttForceTts=true;setTimeout(sendMsg,50);}
+      if(pttAutoSend){
+        pttAutoSend=false;
+        if(pttWebSearch){
+          pttWebSearch=false;
+          pttForceTts=true;
+          inp.value='/web '+inp.value.trim();
+          autoResize(inp);
+          setTimeout(sendMsg,50);
+        }else{
+          pttForceTts=true;
+          setTimeout(sendMsg,50);
+        }
+      }
       else inp.focus();
     }catch(e){
       addMsg('assistant','\u26A0 Errore trascrizione: '+e.message);
@@ -785,6 +799,10 @@ async function webSearch(query, n=5){
 setTimeout(()=>{
   console.log('JSZip disponibile:', typeof JSZip !== 'undefined');
   if(typeof JSZip === 'undefined') console.warn('JSZip non caricato - funzione docx non disponibile');
+  console.log('SheetJS disponibile:', typeof XLSX !== 'undefined');
+  console.log('PDF.js disponibile:', typeof pdfjsLib !== 'undefined');
+  if(typeof pdfjsLib !== 'undefined')
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 },2000);
 setGauge(0,0,false);setOdo(0);
 document.getElementById('pkwh').value=price.toFixed(2);
@@ -903,6 +921,85 @@ async function extractOdt(file){
   return lines.join('\n').replace(/\n{3,}/g,'\n\n').trim();
 }
 
+
+
+async function extractPdf(file){
+  if(typeof pdfjsLib==='undefined') throw new Error('PDF.js non caricato');
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  let text='';
+  for(let i=1;i<=pdf.numPages;i++){
+    const page=await pdf.getPage(i);
+    const content=await page.getTextContent();
+    const pageText=content.items.map(it=>it.str).join(' ').replace(/\s+/g,' ').trim();
+    if(pageText) text+=`[Pagina ${i}]\n${pageText}\n\n`;
+  }
+  return text.trim();
+}
+
+async function extractSpreadsheet(file){
+  if(typeof XLSX==='undefined') throw new Error('SheetJS non caricato');
+  const buf=await file.arrayBuffer();
+  const wb=XLSX.read(buf,{type:'array'});
+  let text='';
+  for(const sheetName of wb.SheetNames){
+    const ws=wb.Sheets[sheetName];
+    const csv=XLSX.utils.sheet_to_csv(ws,{blankrows:false});
+    if(csv.trim()) text+=`[Foglio: ${sheetName}]\n${csv}\n\n`;
+  }
+  return text.trim();
+}
+
+async function extractPptx(file){
+  if(typeof JSZip==='undefined') throw new Error('JSZip non caricato');
+  const buf=await file.arrayBuffer();
+  const zip=await JSZip.loadAsync(buf);
+  const slideFiles=Object.keys(zip.files)
+    .filter(n=>/^ppt\/slides\/slide\d+\.xml$/.test(n))
+    .sort((a,b)=>{
+      const na=parseInt(a.match(/\d+/)[0]),nb=parseInt(b.match(/\d+/)[0]);
+      return na-nb;
+    });
+  let text='';
+  for(const sf of slideFiles){
+    const xml=await zip.files[sf].async('string');
+    const doc=new DOMParser().parseFromString(xml,'text/xml');
+    const parts=Array.from(doc.querySelectorAll('t')).map(t=>t.textContent).filter(t=>t.trim());
+    if(parts.length){
+      const n=sf.match(/\d+/)[0];
+      text+=`[Slide ${n}]\n${parts.join(' ')}\n\n`;
+    }
+  }
+  return text.trim();
+}
+
+async function extractOdp(file){
+  if(typeof JSZip==='undefined') throw new Error('JSZip non caricato');
+  const buf=await file.arrayBuffer();
+  const zip=await JSZip.loadAsync(buf);
+  const xmlFile=zip.file('content.xml');
+  if(!xmlFile) throw new Error('content.xml non trovato');
+  const xml=await xmlFile.async('string');
+  const doc=new DOMParser().parseFromString(xml,'text/xml');
+  // ODP usa namespace: prova querySelectorAll con escape poi fallback via NS
+  const NS_DRAW='urn:oasis:names:tc:opendocument:xmlns:drawing:1.0';
+  const NS_TEXT='urn:oasis:names:tc:opendocument:xmlns:text:1.0';
+  const pages=Array.from(doc.getElementsByTagNameNS(NS_DRAW,'page'));
+  let text='';
+  pages.forEach((page,i)=>{
+    const name=page.getAttributeNS(null,'name')||page.getAttribute('draw:name')||('Slide '+(i+1));
+    const parts=Array.from(page.getElementsByTagNameNS(NS_TEXT,'p'))
+      .map(t=>t.textContent.trim()).filter(Boolean);
+    if(parts.length) text+=`[${name}]\n${parts.join(' ')}\n\n`;
+  });
+  if(!text.trim()){
+    const allText=Array.from(doc.getElementsByTagNameNS(NS_TEXT,'p'))
+      .map(t=>t.textContent.trim()).filter(Boolean);
+    text=allText.join('\n');
+  }
+  return text.trim();
+}
+
 async function loadFile(inp){
   const file=inp.files[0];if(!file)return;
   const ext=file.name.split('.').pop().toLowerCase();
@@ -930,6 +1027,10 @@ async function loadFile(inp){
     let text='';
     if(ext==='docx') text=await extractDocx(file);
     else if(ext==='odt') text=await extractOdt(file);
+    else if(['xlsx','xls','ods'].includes(ext)) text=await extractSpreadsheet(file);
+    else if(ext==='pdf') text=await extractPdf(file);
+    else if(ext==='pptx') text=await extractPptx(file);
+    else if(ext==='odp') text=await extractOdp(file);
     else text=await file.text();
 
     if(!text.trim()){alert('File vuoto o non leggibile');btn.textContent='+ FILE';inp.value='';return;}
@@ -1438,10 +1539,11 @@ function isTypingFocus(){
   return el&&(el.tagName==='TEXTAREA'||el.tagName==='INPUT'||el.isContentEditable);
 }
 
-async function pttStart(){
+async function pttStart(webSearch=false){
   if(!whisperOk||gen)return;
   if(mediaRecorder&&mediaRecorder.state==='recording')return;
   pttAutoSend=true;
+  pttWebSearch=webSearch;
   await toggleMic();
 }
 
@@ -1452,7 +1554,7 @@ function pttStop(){
 document.addEventListener('keydown',e=>{
   if(e.code==='Space'&&!isTypingFocus()&&!e.repeat){
     e.preventDefault();
-    pttStart();
+    pttStart(e.ctrlKey);
   }
 });
 document.addEventListener('keyup',e=>{
@@ -1468,41 +1570,90 @@ document.addEventListener('mouseup',e=>{
 document.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault();});
 
 
-// ── TTS — Web Speech API (voce di sistema) ───────────────────────────────────
-(()=>{
+// ── TTS — Kokoro (porta 8084) con fallback Web Speech API ────────────────────
+const TTS_URL='http://127.0.0.1:8084';
+let kokoroOk=false;
+
+async function checkKokoroBridge(){
   const dot=document.getElementById('tts-dot');
   const txt=document.getElementById('tts-txt');
+  try{
+    const r=await fetch(`${TTS_URL}/status`,{signal:AbortSignal.timeout(2000)});
+    if(r.ok){
+      kokoroOk=true;ttsOk=true;
+      dot.style.background='var(--green)';dot.style.borderColor='var(--green)';
+      dot.style.boxShadow='0 0 4px var(--green)';
+      txt.style.color='var(--green)';
+      txt.textContent='tts kokoro';
+      return;
+    }
+  }catch(e){}
+  // fallback Web Speech
   if('speechSynthesis' in window){
     ttsOk=true;
-    dot.style.background='var(--green)';dot.style.borderColor='var(--green)';
-    dot.style.boxShadow='0 0 4px var(--green)';
-    txt.style.color='var(--green)';
+    dot.style.background='var(--yellow)';dot.style.borderColor='var(--yellow)';
+    dot.style.boxShadow='0 0 4px var(--yellow)';
+    txt.style.color='var(--yellow)';
     txt.textContent='tts sistema';
   }else{
     txt.textContent='tts n/d';
   }
-})();
+}
+checkKokoroBridge();
 
 function toggleTts(){
   if(!ttsOk)return;
   ttsEnabled=!ttsEnabled;
-  if(!ttsEnabled)window.speechSynthesis.cancel();
+  if(!ttsEnabled){
+    if(kokoroOk){/* niente da cancellare */}
+    else window.speechSynthesis.cancel();
+  }
   const btn=document.getElementById('tts-btn');
   btn.classList.toggle('active',ttsEnabled);
   btn.title=ttsEnabled?'Lettura attiva (clicca per disattivare)':'Leggi risposte ad alta voce';
 }
 
+function cleanForTts(text){
+  return text.replace(/\*+/g,'').replace(/`[^`]*`/g,'').replace(/```[\s\S]*?```/g,'')
+             .replace(/#+\s/g,'').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1')
+             .replace(/\s+/g,' ').trim();
+}
+
 function speakText(text){
   const _forceTts=pttForceTts;pttForceTts=false;
   if(!ttsOk||(!ttsEnabled&&!_forceTts)||!text.trim())return;
-  window.speechSynthesis.cancel();
-  // Pulizia markdown
-  text=text.replace(/\*+/g,'').replace(/`[^`]*`/g,'').replace(/```[\s\S]*?```/g,'')
-           .replace(/#+\s/g,'').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').trim();
-  const utt=new SpeechSynthesisUtterance(text);
-  utt.lang='it-IT';
-  utt.rate=1.05;
-  window.speechSynthesis.speak(utt);
+  text=cleanForTts(text);
+  if(!text)return;
+  if(kokoroOk){
+    fetch(`${TTS_URL}/speak`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text})
+    }).then(r=>{
+      if(!r.ok)throw new Error('TTS error '+r.status);
+      return r.arrayBuffer();
+    }).then(buf=>{
+      const ctx=new(window.AudioContext||window.webkitAudioContext)();
+      return ctx.decodeAudioData(buf).then(decoded=>{
+        const src=ctx.createBufferSource();
+        src.buffer=decoded;
+        src.connect(ctx.destination);
+        src.start(0);
+      });
+    }).catch(e=>{
+      console.warn('Kokoro TTS error, fallback Web Speech:',e);
+      if('speechSynthesis' in window){
+        const utt=new SpeechSynthesisUtterance(text);
+        utt.lang='it-IT';utt.rate=1.05;
+        window.speechSynthesis.speak(utt);
+      }
+    });
+  }else{
+    window.speechSynthesis.cancel();
+    const utt=new SpeechSynthesisUtterance(text);
+    utt.lang='it-IT';utt.rate=1.05;
+    window.speechSynthesis.speak(utt);
+  }
 }
 
 

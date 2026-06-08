@@ -63,8 +63,24 @@ for %%F in ("models\*mmproj*.gguf") do (
 )
 
 if !mmproj_count!==1 (
-    set "MMPROJ_FILE=!mmproj_1!"
-    echo  Vision: mmproj rilevato: !mmproj_name_1!
+    :: Abbina mmproj al modello per nome (keyword matching)
+    set "mmproj_kw=!mmproj_name_1!"
+    set "model_kw=!MODELNAME!"
+    :: Estrai la prima parola significativa dal nome mmproj (es. "mistralai", "gemma")
+    :: Strategia semplice: controlla se il nome del modello contiene substring del nome mmproj
+    :: Per sicurezza: confronta prefisso (primi 6 char del nome mmproj senza "mmproj-")
+    set "mmproj_stripped=!mmproj_name_1!"
+    set "mmproj_stripped=!mmproj_stripped:mmproj-=!"
+    :: Prendi i primi 8 caratteri come keyword
+    set "mmproj_key=!mmproj_stripped:~0,8!"
+    echo !MODELNAME! | findstr /i "!mmproj_key!" >nul
+    if not errorlevel 1 (
+        set "MMPROJ_FILE=!mmproj_1!"
+        echo  Vision: mmproj compatibile rilevato: !mmproj_name_1!
+    ) else (
+        echo  Vision: mmproj trovato ma non compatibile con il modello selezionato, ignorato.
+        echo         ^(mmproj: !mmproj_name_1! / modello: !MODELNAME!^)
+    )
 )
 if !mmproj_count! GTR 1 (
     echo.
@@ -122,6 +138,7 @@ echo  Avvio servizi Python...
 start "SelmoGPU"     /min python "%~dp0selmo_gpu_monitor.py" 2>nul
 start "SelmoWeb"     /min python "%~dp0selmo_web.py" 2>nul
 start "SelmoWhisper" /min python "%~dp0selmo_whisper.py" 2>nul
+start "SelmoTTS"     /min python "%~dp0selmo_tts.py" --voice im_nicola 2>nul
 timeout /t 2 /nobreak >nul
 :skip_python
 
@@ -157,4 +174,9 @@ if defined MMPROJ_FILE (
         -ngl %NGL% ^
         --parallel 1 ^
         --no-warmup ^
-        --ti
+        --timeout 0 ^
+        --metrics ^
+        --path "." ^
+        --temp 0.75 ^
+        --top-p 0.9
+)

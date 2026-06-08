@@ -1,5 +1,5 @@
 # Selmo — Documentazione di sviluppo
-*Aggiornato sessione 8 · Giugno 2026*
+*Aggiornato sessione 11 · Giugno 2026*
 
 ---
 
@@ -25,6 +25,62 @@ Consumo reale GPU durante inferenza: 70-90W · Utilizzo: ~40-99% · Temperatura:
 | Web bridge | selmo_web.py · porta 8081 | SearXNG locale (Podman) + DDG fallback + trafilatura |
 | Container engine | Podman Desktop · Apache 2.0 | SearXNG su porta 8888 |
 | Launcher | Selmo.bat / Mizan.bat | Selettore modello + logica -ngl adattiva |
+| TTS | selmo_tts.py · porta 8084 | Kokoro-ONNX, voci italiane, auto-detect lingua |
+
+
+---
+
+## Dipendenze — setup completo
+
+### Python
+Richiede Python 3.10+ (testato su 3.14). Un solo interprete, nessun venv.
+
+```
+pip install flask faster-whisper pynvml trafilatura requests --break-system-packages
+pip install kokoro-onnx soundfile langdetect --break-system-packages --prefer-binary
+```
+
+| Pacchetto | Usato da | Note |
+|---|---|---|
+| flask | tutti i bridge | web server leggero |
+| faster-whisper | selmo_whisper.py | STT, modello small ~500MB (auto-download) |
+| pynvml | selmo_gpu_monitor.py | watt reali GPU |
+| trafilatura | selmo_web.py | estrazione testo da pagine web |
+| requests | selmo_web.py | HTTP client |
+| kokoro-onnx | selmo_tts.py | TTS neurale, Apache 2.0 |
+| soundfile | selmo_tts.py | encode WAV |
+| langdetect | selmo_tts.py | auto-detect lingua per TTS |
+
+### File modello da scaricare manualmente
+
+| File | Dove | Dimensione |
+|---|---|---|
+|  |  | ~290MB |
+|  |  | ~10MB |
+| modello LLM  |  | variabile |
+| mmproj  |  | ~170-880MB (opzionale, per visione) |
+| Whisper  | auto in  | ~500MB (scaricato al primo avvio) |
+
+Link kokoro: https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0
+
+### Binari esterni
+
+| Strumento | Dove | Note |
+|---|---|---|
+|  |  | llama.cpp CUDA build |
+| Podman Desktop | installato globalmente | per SearXNG locale |
+| SearXNG | container Podman su porta 8888 | avvio manuale o autostart Podman |
+
+### Porte
+
+| Porta | Servizio |
+|---|---|
+| 8080 | llama-server (LLM) |
+| 8081 | selmo_web.py (ricerca web) |
+| 8082 | selmo_gpu_monitor.py (GPU watt) |
+| 8083 | selmo_whisper.py (STT) |
+| 8084 | selmo_tts.py (TTS Kokoro) |
+| 8888 | SearXNG (container Podman) |
 
 ---
 
@@ -78,6 +134,7 @@ AppData\Local\Selmo\
 ├── setup-git.ps1                 # inizializzazione repo git locale
 ├── selmo-manifesto.md            # visione e roadmap
 ├── selmo-dev.md                  # questo file
+├── selmo_whisper.py              # Whisper bridge (porta 8083)
 └── selmo-bug-report.md           # bug tracker vivente
 ```
 
@@ -141,7 +198,7 @@ Il toggle Selmo/Mizan cambia system prompt + temperatura + palette colori (blu/r
 - Font Share Tech Mono
 - Palette blu (Selmo) e rossa (Mizan) con toggle a runtime
 - Toggle Selmo/Mizan — cambio system prompt + temperatura + colori
-- Caricamento file: .txt, .docx (JSZip + DOMParser namespace-aware), .odt (JSZip + DOMParser)
+- Caricamento file: .txt, .csv, .docx (JSZip + DOMParser namespace-aware), .odt (JSZip + DOMParser)
 - Auto-chunking documenti lunghi (CHUNK_SIZE=11000 char) con riepilogo finale
 - Comando `/web <query>`: ricerca esplicita, niente parte da sola
 - Risultati `/web` iniettati come contesto a priorità massima, riusabili nei messaggi successivi, citazioni `[1][2]`, ledger fonti
@@ -155,7 +212,13 @@ Il toggle Selmo/Mizan cambia system prompt + temperatura + palette colori (blu/r
 - Indicatore stato Whisper bridge (porta 8083)
 - Push-to-talk: tieni Spazio o tasto centrale mouse → registra → rilascia → trascrive → invia automaticamente
 - TTS voce di sistema (Web Speech API, it-IT): pulsante 🔊, sempre attivo senza server. PTT forza TTS anche se disattivato manualmente
-- Versione v0.4
+- Caricamento .xlsx/.xls/.ods (SheetJS): converti in testo CSV con nome foglio
+- Caricamento .pdf (PDF.js): estrazione testo pagina per pagina
+- Caricamento .pptx (JSZip + XML): estrazione testo slide per slide
+- Caricamento .odp (JSZip + content.xml + NS API): estrazione testo per pagina
+- Kokoro TTS (kokoro-onnx, Apache 2.0): voce neurale offline, porta 8084, auto-detect lingua (langdetect)
+- Ctrl+Spazio: PTT web search (trascrive e invia come /web <testo>, risposta letta ad alta voce)
+- Versione v0.5
 
 ---
 
@@ -202,29 +265,4 @@ Bug report s7 aperto (BUG-01/02/03/04). Tentativo fix chat.html — file corrott
 - Gerarchia modelli definita: EuroLLM (etico), Mistral (produzione), Gemma (benchmark).
 - Manifesto ristrutturato: separato in manifesto (visione), dev (tecnico), bug report (tracker).
 
-### Sessione 9
-- **Visione multimodale**: Selmo.bat rileva automaticamente `*mmproj*.gguf` in models/ (escluso dal menu modelli), aggiunge `--mmproj` al lancio. chat.html accetta jpg/png/gif/webp, converte in base64, invia come content array OpenAI-compatible (immagine prima del testo). Fix: sessionTitle() gestisce content array vs stringa.
-- **Whisper locale**: selmo_whisper.py (porta 8083, faster-whisper, device CPU, lingua forzata it). Pulsante 🎤 in chat.html. Avvio automatico da Selmo.bat.
-- **Push-to-talk**: Spazio o tasto centrale mouse → avvia registrazione → rilascia → trascrive → invia. Non interferisce con focus su textarea.
-- **TTS voce di sistema**: Web Speech API (it-IT), zero server, zero dipendenze. `selmo_tts.py` rimosso dalla stack (file conservato ma non avviato). PTT forza sempre TTS indipendentemente dal toggle 🔊.
-- **Fix duplicazione messaggio utente**: rimossa chiamata addMsg rimasta dall'originale prima del blocco if/else multimodale.
-- **Versione**: v0.4
-
----
-
-## Lezione appresa — sessione 9
-
-**piper-tts Python API rotta su Windows** — `voice.synthesize()` non scrive frame WAV (44 byte vuoti) e `synthesize_stream_raw()` non esiste in 1.4.2. Sostituito con Web Speech API del browser: più semplice, gestisce accenti italiani correttamente, zero dipendenze.
-
-**content array nei messaggi multimodali** — quando il messaggio utente è multimodale, `first.content` è un array non una stringa. Qualsiasi funzione che legge `chatHistory` e chiama `.replace()` o simili sul content deve gestire entrambi i casi.
-
-**llama.cpp ordine content array** — in modalità multimodale llama-server vuole l'immagine prima del testo nel content array, non dopo.
-
----
-
-## Prossimi passi — sessione 10
-
-1. **Fix BUG-01/02/03/04** — aprire devtools, riprodurre errori, fixare via Python (mai Edit tool su chat.html)
-2. **Portare chunking robusto in chat.html** — le 5 garanzie di test_chunking.py → build_chunks + prove_coverage in chat.html
-3. **Rimuovere codice morto** — loop agentico disattivato con `if(false)` in chat.html
-4. **Pacchettizzazione .exe** — PyInstaller sui bridge, launcher, installer Inno Setup
+### Sessione

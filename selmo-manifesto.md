@@ -90,6 +90,10 @@ Flower (Oxford) + OpenFedLLM. Solo delta dei pesi — i dati non escono mai. Ric
 
 **Email IMAP** — `selmo_mail.py`. Legge la posta in locale, la passa al modello. Zero cloud.
 
+**NGL adattivo alla VRAM** — invece di soglie per dimensione file, calcolare quanti layer entrano in VRAM leggendo la memoria libera via nvidia-smi e stimando i byte per layer dal .gguf. Elimina la necessità di tuning manuale al cambio hardware.
+
+**Selettore voce TTS in-app** — pannello impostazioni per scegliere la voce Kokoro (im_nicola, if_sara, bm_george, am_michael…) e la lingua preferita per l'interazione vocale. Persistente in localStorage. Elimina la necessità di editare Selmo.bat per cambiare voce.
+
 **Model switcher in-app** — selettore modello in chat.html senza riavvio manuale. Endpoint `/switch-model` in `selmo_web.py`, UI con indicatore "server in riavvio…".
 
 **Selmo come orchestratore** — `selmo_master.py` per pipeline multi-step su documenti lunghi (sinossi, analisi, riassemblaggio capitoli).

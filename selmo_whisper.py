@@ -100,7 +100,7 @@ def transcribe():
         segments, info = model.transcribe(
             tmp_path,
             beam_size=5,
-            language="it",          # forza italiano
+            language=None,          # auto-detect lingua
             vad_filter=True,        # salta silenzio
             vad_parameters=dict(min_silence_duration_ms=500),
         )
