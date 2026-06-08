@@ -1,8 +1,13 @@
 ﻿# Modelli e binari enormi -- non versionare
 models/
 bin/
+tts/
 *.dll
 *.exe
+*.zip
+*.onnx
+*.bin
+*.gguf
 
 # Backup e file troncati
 *.bak
