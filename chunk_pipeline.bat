@@ -1,0 +1,12 @@
+@echo off
+title chunk_pipeline -- Selmo
+cd /d "%~dp0"
+
+:: Finestra CMD dedicata: stdin interattivo, la domanda "thinking model?"
+:: compare correttamente anche al doppio click (BUG-05).
+:: Eventuali argomenti passati da riga di comando vengono inoltrati con %*
+python "%~dp0chunk_pipeline.py" %*
+
+echo.
+echo  Premi un tasto per chiudere...
+pause >nul

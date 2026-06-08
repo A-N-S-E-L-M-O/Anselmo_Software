@@ -93,6 +93,29 @@ Devtools → riprodurre `/web` error → copiare stack trace completo → identi
 
 ---
 
+---
+
+## BUG-05 · input() non appare quando lanciato da doppio click su Windows
+**Stato:** ✓ Risolto (sessione 9)
+
+**Sintomo**
+La domanda "Is this a thinking model?" non appare quando `chunk_pipeline.py` viene lanciato con doppio click. Il fix tentato in s8 (modalità interattiva con fallback per --prompt mancante) non ha risolto. In più la domanda veniva posta in modo *incondizionato*, quindi anche con `--prompt` da script lo script si bloccava o sollevava `EOFError`.
+
+**Causa**
+Due difetti combinati:
+1. L'`input(" Is this a thinking model?...")` girava sempre, ignorando il flag `interactive` già calcolato. Con stdin non-interattivo (doppio click windowless o lancio con `--prompt`) → `EOFError` e finestra che si chiude.
+2. Il flag `--thinking-buffer` era documentato nel docstring ma mai aggiunto ad argparse: nessun modo non interattivo per impostarlo.
+
+**Fix applicato (sessione 9)** — in `chunk_pipeline.py` e `translate_chunks.py`
+- Aggiunti gli argomenti CLI `--thinking` (store_true → 800 token) e `--thinking-buffer N`.
+- La scelta del buffer ora segue una priorità: `--thinking-buffer` esplicito > `--thinking` > domanda interattiva (solo se `sys.stdin.isatty()`) > default 0. La domanda è racchiusa in `try/except EOFError`.
+- Creati i wrapper `chunk_pipeline.bat` e `translate_chunks.bat`: aprono una finestra CMD con stdin interattivo (la domanda compare al doppio click) e tengono la finestra aperta con `pause`. Inoltrano gli argomenti con `%*`.
+
+**Verifica**
+Tabella di verità degli 8 rami testata (override, flag, tty y/n, non-tty, --prompt, EOFError): tutti OK. `py_compile` OK, `--help` mostra i nuovi flag, pipe non-tty → buffer 0 senza crash.
+
+**Lezione (mount bash)**
+Durante questa sessione il mount Linux di bash era *congelato* allo stato di inizio sessione: non rifletteva le scritture del tool Edit (mtime fermi, contenuto troncato/misto). Il file reale su disco — quello che Windows esegue, visibile via tool Read — era corretto e completo. **Per verificare modifiche fatte con Edit/Write usare il tool Read, non `cat`/`wc` da bash**, oppure ricostruire una copia in `outputs/` (quel mount è sincronizzato).
 ## Fix applicati in sessione 8
 
 | Fix | File | Stato |
@@ -105,7 +128,8 @@ Devtools → riprodurre `/web` error → copiare stack trace completo → identi
 
 ## Piano sessione 9
 
-1. Aprire devtools → riprodurre `/web` error → copiare stack trace → fix BUG-04
+1. ✓ Fix BUG-05: flag `--thinking`/`--thinking-buffer`, domanda condizionata a `isatty`, wrapper `.bat`
+2. Aprire devtools → riprodurre `/web` error → copiare stack trace → fix BUG-04
 2. Fix BUG-03: spostare SESS_KEY in cima allo script (Python)
 3. Fix BUG-01: aggiungere `min-height:0` (Python)
 4. Verificare BUG-02 con devtools

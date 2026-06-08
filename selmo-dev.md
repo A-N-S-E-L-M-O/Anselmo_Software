@@ -30,14 +30,16 @@ Consumo reale GPU durante inferenza: 70-90W · Utilizzo: ~40-99% · Temperatura:
 
 ## Parametri server — logica adattiva launcher
 
-Basata sulla dimensione del file .gguf. Aggiornata sessione 8 con soglia a 9500MB per separare 13B da 22-24B (KV cache sfora a 16384 ctx con 11GB VRAM liberi — verificato su Mistral Small 3.2 24B IQ3_M).
+Basata sulla dimensione del file .gguf. Aggiornata sessione 8 con soglia a 9000MB per separare 13B da 22-24B (KV cache sfora a 16384 ctx con 11GB VRAM liberi — verificato su Mistral Small 3.2 24B IQ3_M).
 
 | Range file | Modelli tipici | -ngl | --ctx-size |
 |---|---|---|---|
 | < 6000 MB | ~9B | 99 | 4096 |
-| 6000–9500 MB | ~13B | 99 | 16384 |
-| 9500–13000 MB | 22-24B | 45 | 8192 |
+| 6000–9000 MB | ~13B | 99 | 16384 |
+| 9000–13000 MB | 22-24B | 45 | 8192 |
 | > 13000 MB | >30B | 30 | 8192 |
+
+**Thinking model e finestra di contesto — decisione s9.** Il launcher NON cambia la finestra per i modelli reasoning: tiene GPU piena e `ctx 8192` per tutti. Motivo: il flusso di lavoro è basato sul chunking, quindi ogni pezzo è già piccolo e non serve una ctx grande; in più contesti lunghi di solito peggiorano la qualità e costano velocità. La priorità è sfruttare la GPU al massimo, non avere una finestra ampia. Lo spazio per i token di ragionamento si riserva lato client in `chunk_pipeline.py` con `--thinking-buffer` (default 0; 800+ per reasoning): riduce un po' la dimensione dei chunk lasciando margine al thinking, a parità di ctx server. Percorso sbagliato scartato in s9: nel launcher si era provato (a) ad abbassare `-ngl` da 45 a 35 per far stare ctx 16384 → Gemma crollata da 22 a 8 t/s; (b) a usare KV cache q8_0 per tenere ctx 16384 a GPU piena → comunque inutile/controproducente col chunking. Regola: mai sacrificare `-ngl`, e non allargare la ctx server per il thinking — gestirlo nel pipeline.
 
 `--timeout 0` su entrambi i launcher (aggiunto s8): disabilita timeout server-side, controllo lasciato al client (AbortController in chat.html, 300s in chunk_pipeline.py).
 
@@ -189,7 +191,7 @@ Bug report s7 aperto (BUG-01/02/03/04). Tentativo fix chat.html — file corrott
 ### Sessione 8 (corrente)
 - Stitch semplificato in chunk_pipeline.py e translate_chunks.py: rimosso dedup per frase, join puro. Selftest OK.
 - Timeout server: `--timeout 0` in Selmo.bat e Mizan.bat.
-- Logica launcher aggiornata: soglia 9500MB per separare 13B da 22-24B, ctx 8192 per range superiore.
+- Logica launcher aggiornata: soglia 9000MB per separare 13B da 22-24B, ctx 8192 per range superiore.
 - Modelli testati: Gemma 4 12B Q6 (22 t/s, reasoning, benchmark), Mistral Small 3.2 24B IQ3_M (32 t/s, nuovo default produzione).
 - Gerarchia modelli definita: EuroLLM (etico), Mistral (produzione), Gemma (benchmark).
 - Manifesto ristrutturato: separato in manifesto (visione), dev (tecnico), bug report (tracker).

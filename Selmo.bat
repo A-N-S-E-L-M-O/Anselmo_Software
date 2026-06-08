@@ -56,8 +56,8 @@ for /f "usebackq" %%S in (`powershell -NoProfile -Command "[int]((Get-Item '!MOD
 
 :: Logica adattiva:
 ::   < 6000 MB  -> modelli ~9B   : tutto su GPU, ctx 4096 (limite architetturale)
-::   6000-9500  -> modelli ~13B  : tutto su GPU, ctx 16384 (KV cache ok)
-::   9500-13000 -> modelli 22-24B: layer parziali, ctx 8192 (KV cache sforerebbe a 16384)
+::   6000-9000  -> modelli ~13B  : tutto su GPU, ctx 16384 (KV cache ok)
+::   9000-13000 -> modelli 12-24B: layer parziali, ctx 8192 (KV cache sforerebbe a 16384)
 ::   > 13000    -> modelli >30B  : layer ridotti, ctx 8192
 set NGL=45
 set CTX=8192
@@ -65,7 +65,7 @@ if !fsize_mb! LSS 6000 (
     set NGL=99
     set CTX=4096
 )
-if !fsize_mb! LSS 9500 if !fsize_mb! GEQ 6000 (
+if !fsize_mb! LSS 9000 if !fsize_mb! GEQ 6000 (
     set NGL=99
     set CTX=16384
 )
@@ -73,6 +73,11 @@ if !fsize_mb! GTR 13000 (
     set NGL=30
     set CTX=8192
 )
+
+:: Nota (s9): nessun prompt "thinking" qui. Con il chunking la finestra resta
+:: piccola e veloce (GPU piena, ctx 8192). Lo spazio per il ragionamento dei
+:: modelli reasoning si riserva nel client con chunk_pipeline.py --thinking-buffer,
+:: non allargando la ctx del server (contesti grandi = piu' lenti e peggiori).
 
 echo.
 echo  Modello  : !MODELNAME!

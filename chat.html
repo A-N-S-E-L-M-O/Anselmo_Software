@@ -367,45 +367,6 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 
 .meta{font-size:12px;color:#446;text-align:center;padding:3px 0 5px;letter-spacing:.06em;}
 
-/* ── MODE TOGGLE BUTTON ── */
-#mode-toggle{
-  font-family:var(--mono);
-  font-size:13px;
-  color:#000;
-  background:var(--yellow);
-  border:1px solid var(--yellow);
-  padding:3px 12px;
-  cursor:pointer;
-  letter-spacing:.1em;
-  font-weight:bold;
-}
-#mode-toggle:hover{background:var(--white);border-color:var(--white);}
-
-/* ── MIZAN MODE ── */
-body.mizan{
-  --bg:#1a0000;
-  --panel:#140000;
-  --dark:#0a0000;
-  --border:#662222;
-  --white:#F0DDDD;
-  --yellow:#FF8844;
-  --cyan:#FF5533;
-  --green:#BB4433;
-  --red:#FF2222;
-  --chat-bg:#110000;
-}
-body.mizan header{border-bottom-color:var(--cyan);}
-body.mizan .wm{color:var(--cyan);}
-body.mizan .wm em{color:#CC4422;}
-body.mizan .msg.user .av{background:#1a0000;}
-body.mizan .msg.assistant .av{border-color:var(--cyan);color:var(--cyan);background:#1a0000;}
-body.mizan .msg.user .bubble{background:#1a0000;}
-body.mizan .msg.assistant .bubble{border-color:var(--cyan);background:#1f0000;}
-body.mizan .chunk-info{background:#1a0000;}
-body.mizan #input{background:#100000;}
-body.mizan #odo-track{background:#0a0000;}
-body.mizan #mode-toggle{background:var(--cyan);color:#000;border-color:var(--cyan);}
-body.mizan #mode-toggle:hover{background:#FF7755;border-color:#FF7755;}
 </style>
 </head>
 <body>
@@ -413,7 +374,6 @@ body.mizan #mode-toggle:hover{background:#FF7755;border-color:#FF7755;}
   <div class="wm">Selmo<em>AI</em></div>
   <div class="hbadge">v0.31</div>
   <div class="hbadge">GDPR</div>
-  <button id="mode-toggle" onclick="toggleMode()">SELMO</button>
   <div class="hspacer"></div>
   <button id="new-chat" onclick="newChat()">+ NEW CHAT</button>
   <button id="export-chat" onclick="exportChat()">&#x2193; EXPORT</button>
@@ -540,7 +500,7 @@ Running on your hardware. No data leaves this machine.</div></div>
     <button id="send" onclick="sendMsg()">SEND</button>
     <button id="stop" onclick="stopMsg()">STOP</button>
   </div>
-  <div class="meta">No data transmitted &middot; EuroLLM 22B &middot; localhost:8080</div>
+  <div class="meta">No data transmitted &middot; <span id="foot-model">-</span> &middot; localhost:8080</div>
 </main>
 
 <script>
@@ -627,8 +587,8 @@ let gen=false,abort=null,tokSec=0,wh=0,whAll=parseFloat(localStorage.getItem('sw
     chunks=[],chunkIdx=0,
     price=parseFloat(localStorage.getItem('sprice')||'0.28'),
     toks=parseInt(localStorage.getItem('stoks')||'0'),
-    sessStart=Date.now(),fileCtx=null,gpuP=0,gpuW=0,gpuT=0,gpuOk=false,
-    mizanMode=false,currentTemp=0.75;
+    sessStart=Date.now(),fileCtx=null,fileDoc=null,gpuP=0,gpuW=0,gpuT=0,gpuOk=false,
+    currentTemp=0.75;
 
 // GPU MONITOR
 setInterval(async()=>{
@@ -733,7 +693,9 @@ renderSessionList();
   fetch(`${API}/v1/models`)
     .then(r=>r.json()).then(d=>{
       const n=(d.data&&d.data[0]&&d.data[0].id)||'locale';
-      document.getElementById('hdr-model').textContent=n.length>22?n.slice(0,22)+'...':n;
+      const short=n.length>22?n.slice(0,22)+'...':n;
+      document.getElementById('hdr-model').textContent=short;
+      const fm=document.getElementById('foot-model');if(fm)fm.textContent=short;
       document.getElementById('conn').style.background='#55FF55';
       // Legge n_ctx reale e calibra CHUNK_SIZE sul modello attivo
       fetch(`${API}/props`).then(r=>r.json()).then(p=>{
@@ -768,12 +730,13 @@ You don't fetch web pages yourself; the user does that for you with the /web com
 Otherwise you answer from your own knowledge and from anything already said in this conversation. Never output [SEARCH:] tags.
 Never refuse by saying you "can't access the internet" or that your knowledge "stops in 2023". If you truly don't know something recent and nothing in the conversation covers it, say so in one line and suggest /web. Never invent facts.`;
 
-const SP_MIZAN=`You are an analysis system. Respond with precision and brevity.
-No opinions. No hesitation. No first person.
-Extract data, translate, review code. Accuracy is the only criterion.
-
-## INTERNET
-You don't fetch web pages yourself; the user does that with the /web command, and those results stay in the conversation for you to use — including in later messages. Otherwise work from the data you are given and your own knowledge. Never output [SEARCH:] tags. Never refuse by claiming you can't access the internet; if something is genuinely missing, state it in one line.`;
+// System neutro per i task su documento (traduzione, analisi, estrazione).
+// Niente personalita': solo esecuzione fedele, formattazione coerente su tutti i chunk.
+const SP_TASK=`You are a precise task executor working on a fragment of a longer document.
+Follow the user's instructions to the letter, including every formatting and typographic
+convention they specify, and apply them identically across the whole document.
+Output only the result: no preface, no commentary, no first person, no meta-remarks.
+Preserve meaning exactly; do not omit or add content.`;
 
 // HISTORY
 const chatHistory=[{role:'system',content:SP_SELMO}];
@@ -848,26 +811,13 @@ async function loadFile(inp){
     else text=await file.text();
 
     if(!text.trim()){alert('File vuoto o non leggibile');btn.textContent='+ FILE';inp.value='';return;}
-    text=detectHeadings(text); // format-agnostic heading detection
 
-    // Chunking automatico per documenti lunghi
-    if(text.length>CHUNK_SIZE){
-      chunks=splitChunks(text,CHUNK_SIZE);
-      chunkIdx=0;
-      fileCtx=null;
-      document.getElementById('file-badge').style.display='flex';
-      document.getElementById('file-name').textContent=
-        file.name+' — '+chunks.length+' chunks';
-      document.getElementById('input').placeholder=
-        'Document split into '+chunks.length+' chunks. Type a query to run on each chunk.';
-      console.log('Chunking: '+chunks.length+' chunks of '+CHUNK_SIZE+' chars over '+text.length+' total');
-    } else {
-      fileCtx=text;
-      chunks=[];chunkIdx=0;
-      document.getElementById('file-badge').style.display='flex';
-      document.getElementById('file-name').textContent=file.name;
-      document.getElementById('input').placeholder='File loaded. What do you want to do with this document?';
-    }
+    // Documento caricato: salva il testo grezzo. Lo split avviene all'invio,
+    // quando il prompt e' noto e si puo' dimensionare il chunk sul contesto reale.
+    fileDoc=text;fileCtx=null;chunks=[];chunkIdx=0;
+    document.getElementById('file-badge').style.display='flex';
+    document.getElementById('file-name').textContent=file.name+' \xb7 '+text.length.toLocaleString('en')+' char';
+    document.getElementById('input').placeholder='Documento caricato. Scrivi il task da eseguire su tutto il testo (analisi, traduzione, estrazione...).';
   }catch(e){console.error('Error loadFile:',e);alert('Error: '+e.message+' (F12 for details)');}
   btn.textContent='+ FILE';inp.value='';
 }
@@ -938,7 +888,7 @@ function splitChunks(text,size){
 }
 
 function clearFile(){
-  fileCtx=null;chunks=[];chunkIdx=0;
+  fileCtx=null;fileDoc=null;chunks=[];chunkIdx=0;
   document.getElementById('file-badge').style.display='none';
   document.getElementById('input').placeholder='Type a message...   ( /web <query> to search the web )';
 }
@@ -973,7 +923,7 @@ function newChat(){
 function exportChat(){
   const msgs=chatHistory.slice(1);
   if(!msgs.length){alert('Nothing to export.');return;}
-  const mode=mizanMode?'Mizan':'Selmo';
+  const mode='Selmo';
   const model=document.getElementById('hdr-model').textContent||'local';
   const now=new Date();
   const stamp=now.toISOString().slice(0,16).replace('T',' ');
@@ -993,23 +943,121 @@ function exportChat(){
 }
 function stopMsg(){if(abort){abort.abort();abort=null;}}
 
-function toggleMode(){
-  mizanMode=!mizanMode;
-  currentTemp=mizanMode?0.01:0.75;
-  chatHistory[0].content=mizanMode?SP_MIZAN:SP_SELMO;
-  document.body.classList.toggle('mizan',mizanMode);
-  document.getElementById('mode-toggle').textContent=mizanMode?'MIZAN':'SELMO';
-  const meta=document.querySelector('.meta');
-  if(meta)meta.textContent=mizanMode
-    ?'No data transmitted \xb7 Mizan: pure analysis \xb7 localhost:8080'
-    :'No data transmitted \xb7 EuroLLM \xb7 localhost:8080';
-  // New chat on personality switch — clean context
-  document.getElementById('messages').innerHTML='';
-  chatHistory.splice(1);
-  wh=0;sessStart=Date.now();clearFile();updCost();
-  addMsg('assistant',mizanMode
-    ?'Analysis system ready.'
-    :'Hi. I\'m Selmo.\nRunning on your hardware. No data leaves this machine.');
+
+// Lettore SSE robusto: bufferizza tra una read e l'altra (niente token persi se
+// una riga 'data:' e' spezzata a meta') e legge sia content sia reasoning_content
+// (i modelli reasoning come Gemma scrivono il ragionamento in reasoning_content).
+async function streamTokens(res,onContent,onReason){
+  const reader=res.body.getReader(),dec=new TextDecoder();
+  let buf='';
+  while(true){
+    const{done,value}=await reader.read();if(done)break;
+    buf+=dec.decode(value,{stream:true});
+    const lines=buf.split('\n');buf=lines.pop();
+    for(const line of lines){
+      if(!line.startsWith('data:'))continue;
+      const raw=line.slice(5).trim();if(!raw||raw==='[DONE]')continue;
+      try{const dl=JSON.parse(raw).choices?.[0]?.delta||{};
+        if(dl.content)onContent(dl.content);                 // risposta vera
+        if(dl.reasoning_content&&onReason)onReason(dl.reasoning_content); // ragionamento (modelli reasoning)
+      }catch{}
+    }
+  }
+}
+
+// Split semplice: pezzi di al massimo `size` caratteri, tagliati a un confine di
+// paragrafo, poi frase, poi parola. Copertura completa, nessun overlap.
+function splitDoc(text,size){
+  text=text.replace(/\x00/g,'');
+  const out=[];let i=0;const n=text.length;
+  while(i<n){
+    let end=Math.min(i+size,n);
+    if(end<n){
+      const seg=text.slice(i,end);
+      let br=seg.lastIndexOf('\n\n');
+      if(br<size*0.5)br=seg.lastIndexOf('\n');
+      if(br<size*0.5)br=seg.lastIndexOf('. ');
+      if(br<size*0.5)br=seg.lastIndexOf(' ');
+      if(br>0)end=i+br+1;
+    }
+    const piece=text.slice(i,end).trim();
+    if(piece)out.push(piece);
+    i=end;
+  }
+  return out;
+}
+
+// Analisi documento a chunk. La dimensione del chunk dipende DAL PROMPT e dal
+// contesto reale del modello: ctx - system - prompt - risposta - margine. Cosi'
+// non sfora mai, con qualsiasi modello, e resta GPU-friendly (contesto piccolo).
+async function processDoc(prompt){
+  const btn=document.getElementById('send'),stopBtn=document.getElementById('stop');
+  const tk=s=>Math.ceil((s||'').length/3.2);   // stima conservativa char->token
+  const SAFETY=256;
+  const avail=Math.max(512,N_CTX-tk(chatHistory[0].content)-tk(prompt)-SAFETY);
+  const inT=Math.floor(avail*0.5);              // meta' contesto all'input
+  const maxTok=Math.min(4096,Math.max(256,avail-inT)); // l'altra meta' alla risposta
+  const chunkChars=Math.max(800,Math.floor(inT*3.2));
+  const parts=splitDoc(fileDoc,chunkChars);
+  const total=parts.length;
+  console.log('Selmo chunking: ctx='+N_CTX+' chunk='+chunkChars+'char x'+total+' max_tokens='+maxTok);
+
+  gen=true;btn.style.display='none';stopBtn.style.display='inline-block';
+  addMsg('user',prompt+'  ('+total+' chunk \xb7 '+fileDoc.length.toLocaleString('en')+' char)');
+  chatHistory.push({role:'user',content:prompt+' ('+total+' chunks)'});
+
+  const results=[];
+  for(let i=0;i<total;i++){
+    if(!gen)break;
+    const prog=addMsg('assistant','',true);
+    prog.bub.innerHTML='<span style="color:var(--yellow);">▶ '+(i+1)+'/'+total+'</span>';
+    const msgs=[{role:'system',content:SP_TASK},{role:'user',content:prompt+'\n\n---\n\n'+parts[i]}];
+    abort=new AbortController();
+    try{
+      const res=await fetch(`${API}/v1/chat/completions`,{
+        method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
+        body:JSON.stringify({model:'local',messages:msgs,stream:true,temperature:0.2,max_tokens:maxTok,repeat_penalty:1.1})});
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      prog.bub.innerHTML='';
+      let full='',t=0,rtok=0;
+      // Traccia di ragionamento (modelli reasoning): mostrata attenuata mentre
+      // il modello pensa, MAI salvata. Nel risultato va solo la risposta pulita.
+      const think=document.createElement('div');think.className='chunk-info';think.style.opacity='.5';
+      await streamTokens(res,
+        c=>{full+=c;t++;if(think.parentNode)think.remove();prog.bub.textContent=full;scrollBot();},
+        ()=>{rtok++;if(full===''){if(!think.parentNode)prog.inner.appendChild(think);think.textContent='▷ ragionamento… '+rtok+' tok';scrollBot();}});
+      if(think.parentNode&&full!=='')think.remove();
+      toks+=t;localStorage.setItem('stoks',toks);
+      document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
+      const ci=document.createElement('div');ci.className='chunk-info';
+      ci.textContent=(i+1)+'/'+total+' \xb7 '+t+' tok'+(rtok?' (+'+rtok+' ragionamento)':'');prog.inner.appendChild(ci);
+      if(full.trim())results.push(full.trim());
+    }catch(e){
+      if(e.name==='AbortError'){prog.bub.textContent='[stop '+(i+1)+'/'+total+']';break;}
+      prog.bub.textContent='Errore chunk '+(i+1)+': '+e.message;break;
+    }
+  }
+
+  if(results.length){
+    if(total>1){
+      const now=new Date();
+      const fname='selmo-'+now.toISOString().slice(0,16).replace(/[T:]/g,'-')+'.md';
+      const md='# '+prompt+'\n\n*'+now.toISOString().slice(0,16).replace('T',' ')+' \xb7 '+results.length+'/'+total+' chunk*\n\n---\n\n'+results.join('\n\n---\n\n');
+      const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([md],{type:'text/markdown'}));a.download=fname;a.click();URL.revokeObjectURL(a.href);
+      const done=addMsg('assistant','',false);
+      done.bub.textContent='✓ '+results.length+'/'+total+' chunk \xb7 '+fname+' scaricato.';
+      chatHistory.push({role:'assistant',content:done.bub.textContent});
+    }else{
+      chatHistory.push({role:'assistant',content:results[0]});
+    }
+    saveSession();
+  }else{
+    addMsg('assistant','Nessun contenuto prodotto.');
+  }
+  fileDoc=null;
+  document.getElementById('file-badge').style.display='none';
+  gen=false;btn.style.display='inline-block';stopBtn.style.display='none';abort=null;
+  document.getElementById('input').focus();
 }
 
 async function processChunks(prompt){
@@ -1139,8 +1187,8 @@ async function sendMsg(){
   const txt=inp.value.trim();if(!txt)return;
   inp.value='';inp.style.height='auto';
 
-  if(chunks.length>0){
-    await processChunks(txt);
+  if(fileDoc){
+    await processDoc(txt);
     return;
   }
 
@@ -1152,10 +1200,10 @@ async function sendMsg(){
   // Local date/time stays automatic — it is read from this machine's clock, it never leaves.
   const webCmd=/^\/web\b\s*([\s\S]*)$/i.exec(txt);
   const webQuery=webCmd?webCmd[1].trim():'';
-  const isWebSearch=!!webCmd&&!fileCtx&&webQuery.length>0;
-  const isDateTimeQuery=!webCmd&&!fileCtx&&/^\s*(che (giorno|ora)|what (day|date|time)|date|time|day)\b[^\n]*\??$/i.test(txt);
+  const isWebSearch=!!webCmd&&webQuery.length>0;
+  const isDateTimeQuery=!webCmd&&/^\s*(che (giorno|ora)|what (day|date|time)|date|time|day)\b[^\n]*\??$/i.test(txt);
 
-  let content=fileCtx?'Document:\n\n'+fileCtx+'\n\n---\n\nRequest: '+txt:txt;
+  let content=txt;
   let proactiveSources=[];  // sources for the footer ledger (populated only by /web)
 
   function endTurn(){gen=false;btn.style.display='inline-block';stopBtn.style.display='none';abort=null;inp.focus();}
@@ -1203,17 +1251,8 @@ async function sendMsg(){
       });
       if(!res.ok)throw new Error('HTTP '+res.status);
       bub.innerHTML='';
-      const reader=res.body.getReader(),dec=new TextDecoder();
       let full='',t=0;
-      while(true){
-        const{done,value}=await reader.read();if(done)break;
-        for(const line of dec.decode(value).split('\n')){
-          if(!line.startsWith('data: '))continue;
-          const raw=line.slice(6).trim();if(raw==='[DONE]')continue;
-          try{const d=JSON.parse(raw).choices?.[0]?.delta?.content||'';
-            if(d){full+=d;t++;bub.textContent=full;scrollBot();}}catch{}
-        }
-      }
+      await streamTokens(res,p=>{full+=p;t++;bub.textContent=full;scrollBot();});
       toks+=t;localStorage.setItem('stoks',toks);
       document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
       chatHistory.push({role:'assistant',content:full});
@@ -1242,17 +1281,8 @@ async function sendMsg(){
     });
     if(!res.ok)throw new Error('HTTP '+res.status);
     bub.innerHTML='';
-    const reader=res.body.getReader(),dec=new TextDecoder();
     let full='',t=0;
-    while(true){
-      const{done,value}=await reader.read();if(done)break;
-      for(const line of dec.decode(value).split('\n')){
-        if(!line.startsWith('data: '))continue;
-        const raw=line.slice(6).trim();if(raw==='[DONE]')continue;
-        try{const d=JSON.parse(raw).choices?.[0]?.delta?.content||'';
-          if(d){full+=d;t++;bub.textContent=full;scrollBot();}}catch{}
-      }
-    }
+    await streamTokens(res,p=>{full+=p;t++;bub.textContent=full;scrollBot();});
     toks+=t;localStorage.setItem('stoks',toks);
     document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
     chatHistory.push({role:'assistant',content:full});
@@ -1290,7 +1320,7 @@ function saveSession(){
   const title=sessionTitle();if(!title)return;
   const sessions=getSessions();
   const idx=sessions.findIndex(s=>s.id===currentSessionId);
-  const entry={id:currentSessionId,date:new Date().toISOString().slice(0,16),title,history:msgs,mode:mizanMode};
+  const entry={id:currentSessionId,date:new Date().toISOString().slice(0,16),title,history:msgs};
   if(idx>=0){sessions[idx]=entry;}else{sessions.unshift(entry);}
   while(sessions.length>MAX_SESS)sessions.pop();
   try{localStorage.setItem(SESS_KEY,JSON.stringify(sessions));}catch(e){console.warn('session save failed',e);}
@@ -1305,11 +1335,8 @@ function loadSession(id){
   currentSessionId=id;
   chatHistory.length=1;
   s.history.forEach(m=>chatHistory.push(m));
-  mizanMode=s.mode||false;
-  currentTemp=mizanMode?0.01:0.75;
-  chatHistory[0].content=mizanMode?SP_MIZAN:SP_SELMO;
-  document.body.classList.toggle('mizan',mizanMode);
-  document.getElementById('mode-toggle').textContent=mizanMode?'MIZAN':'SELMO';
+  currentTemp=0.75;
+  chatHistory[0].content=SP_SELMO;
   document.getElementById('messages').innerHTML='';
   s.history.forEach(m=>addMsg(m.role,m.content,false));
   wh=0;sessStart=Date.now();clearFile();updCost();

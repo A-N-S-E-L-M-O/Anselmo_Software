@@ -10,11 +10,16 @@ Tre responsabilità, ognuna isolata:
 Uso:
     python translate_chunks.py [percorso.odt] [--selftest] [--dry-run]
 
-    --selftest  verifica chunking senza chiamare il modello
-    --dry-run   mostra i chunk senza tradurre
-    --out FILE  file di output (default: <nome_odt>_EN.md)
-    --size N    caratteri per chunk (default: 3000)
-    --model URL url del server llama.cpp (default: http://127.0.0.1:8080/v1/chat/completions)
+    --selftest          verifica chunking senza chiamare il modello
+    --dry-run           mostra i chunk senza tradurre
+    --out FILE          file di output (default: <nome_odt>_EN.md)
+    --size N            forza chunk size in caratteri (default: calcolo automatico)
+    --thinking-buffer N token riservati al thinking del modello (default: 0)
+    --model URL         url del server llama.cpp (default: http://127.0.0.1:8080/...)
+
+Chunk size automatico (default):
+    Interroga /props (n_ctx reale) e /tokenize (tokenizer esatto) prima di iniziare.
+    Calcola il chunk size ottimale per qualsiasi modello. Usa --size N per forzare.
 """
 
 import zipfile, json, urllib.request, urllib.error, time, sys, os, re, argparse
@@ -22,8 +27,9 @@ from xml.etree import ElementTree as ET
 
 # ── Config default ────────────────────────────────────────────────────────────
 DEFAULT_API    = "http://127.0.0.1:8080/v1/chat/completions"
-DEFAULT_SIZE   = 3000   # caratteri per chunk; lascia ampio spazio in ctx 16k
 MAX_TOKENS     = 2000
+SAFETY_MARGIN  = 200
+FALLBACK_SIZE  = 3000
 
 SYSTEM_PROMPT = (
     "You are a literary translator. Translate the Italian text given to you into English. "
@@ -126,6 +132,59 @@ def translate_chunk(text_fragment, api_url, chunk_num, total):
     except urllib.error.URLError as e:
         return f"[TRANSLATION ERROR chunk {chunk_num}: {e}]"
 
+# ── Calcolo automatico chunk size ─────────────────────────────────────────────
+def _api_base(api_url):
+    return api_url.split('/v1/')[0]
+
+def get_server_props(api_url):
+    url = _api_base(api_url) + '/props'
+    req = urllib.request.Request(url, method='GET')
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return json.loads(resp.read().decode('utf-8'))
+    except Exception:
+        return None
+
+def tokenize_text(text, api_url):
+    url = _api_base(api_url) + '/tokenize'
+    payload = json.dumps({'content': text}).encode('utf-8')
+    req = urllib.request.Request(url, data=payload,
+                                  headers={'Content-Type': 'application/json'}, method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            return len(data.get('tokens', []))
+    except Exception:
+        return None
+
+def auto_chunk_size(text, system_prompt, api_url, max_tokens, thinking_buffer):
+    props = get_server_props(api_url)
+    if props is None:
+        return None, None
+    n_ctx = (props.get('n_ctx')
+             or props.get('default_generation_settings', {}).get('n_ctx'))
+    if not n_ctx:
+        return None, None
+    sys_tokens = tokenize_text(system_prompt, api_url)
+    if sys_tokens is None:
+        return None, None
+    available_tokens = n_ctx - sys_tokens - max_tokens - thinking_buffer - SAFETY_MARGIN
+    if available_tokens <= 100:
+        return None, None
+    sample = text[:1500] if len(text) >= 1500 else text
+    sample_tokens = tokenize_text(sample, api_url)
+    if not sample_tokens:
+        return None, None
+    chars_per_token = len(sample) / sample_tokens
+    chunk_size = max(500, int(available_tokens * chars_per_token))
+    info = {
+        'n_ctx': n_ctx, 'sys_tokens': sys_tokens,
+        'available_tokens': available_tokens,
+        'chars_per_token': round(chars_per_token, 2),
+        'chunk_size': chunk_size, 'thinking_buffer': thinking_buffer,
+    }
+    return chunk_size, info
+
 # ── Stitching ─────────────────────────────────────────────────────────────────
 def stitch(translated_chunks):
     """Incolla i chunk tradotti in sequenza. Nessuna modifica al testo."""
@@ -143,16 +202,38 @@ def main():
     ap.add_argument('odt', nargs='?',
                     default=os.path.join(os.path.dirname(__file__),
                                          "Test files", "Dialoghi con la lavatrice.odt"))
-    ap.add_argument('--selftest',  action='store_true')
-    ap.add_argument('--dry-run',   action='store_true')
-    ap.add_argument('--out',       default=None)
-    ap.add_argument('--size', type=int, default=DEFAULT_SIZE)
-    ap.add_argument('--model',     default=DEFAULT_API)
+    ap.add_argument('--selftest',         action='store_true')
+    ap.add_argument('--dry-run',          action='store_true')
+    ap.add_argument('--out',              default=None)
+    ap.add_argument('--size',             type=int, default=None,
+                    help='forza chunk size in caratteri (default: calcolo automatico)')
+    ap.add_argument('--model',            default=DEFAULT_API)
+    ap.add_argument('--thinking',         action='store_true',
+                    help='modello reasoning (es. Gemma): riserva 800 token per il thinking interno')
+    ap.add_argument('--thinking-buffer',  type=int, default=None, dest='thinking_buffer',
+                    help='token riservati al thinking interno (override di --thinking; default 0)')
     args = ap.parse_args()
 
     if args.selftest:
         selftest()
         return
+
+    # ── Thinking model? — riserva token per il reasoning interno ──────────────
+    # Priorità: --thinking-buffer esplicito > --thinking > domanda interattiva > 0.
+    # La domanda compare SOLO con terminale interattivo (stdin.isatty): evita
+    # l'EOFError e la finestra che si chiude al doppio click windowless.
+    if args.thinking_buffer is not None:
+        thinking_buffer = args.thinking_buffer
+    elif args.thinking:
+        thinking_buffer = 800
+    elif sys.stdin.isatty() and not args.dry_run:
+        try:
+            ans = input(" Is this a thinking model? (e.g. Gemma) [y/N]: ").strip().lower()
+        except EOFError:
+            ans = ''
+        thinking_buffer = 800 if ans == 'y' else 0
+    else:
+        thinking_buffer = 0
 
     if not os.path.exists(args.odt):
         print(f"{C.R}File non trovato: {args.odt}{C.OFF}")
@@ -162,14 +243,36 @@ def main():
 
     print(f"\n Selmo — traduzione chunked")
     print(f" {'─' * 50}")
+    text = extract_odt(args.odt)
+
+    # ── Calcolo chunk size ────────────────────────────────────────────────────
+    if args.size is not None:
+        chunk_size = args.size
+        size_source = f"manuale ({chunk_size:,} char)"
+    else:
+        print(f"\n translate_chunks — calibrazione modello…")
+        cs, info = auto_chunk_size(text, SYSTEM_PROMPT, args.model,
+                                   MAX_TOKENS, thinking_buffer)
+        if cs is not None:
+            chunk_size = cs
+            size_source = (
+                f"auto ({chunk_size:,} char · n_ctx={info['n_ctx']} · "
+                f"{info['chars_per_token']} char/tok"
+                + (f" · thinking={info['thinking_buffer']}" if info['thinking_buffer'] else "")
+                + ")"
+            )
+        else:
+            chunk_size = FALLBACK_SIZE
+            size_source = f"fallback ({chunk_size:,} char)"
+            print(f" {C.Y}Server non raggiungibile, uso fallback {FALLBACK_SIZE:,} char{C.OFF}")
+
     print(f" Sorgente : {os.path.basename(args.odt)}")
     print(f" Output   : {os.path.basename(out_path)}")
-    print(f" Chunk    : {args.size:,} char\n")
+    print(f" Chunk    : {size_source}\n")
 
-    text = extract_odt(args.odt)
     print(f" Estratti {len(text):,} caratteri")
 
-    ranges = build_chunks(text, args.size)
+    ranges = build_chunks(text, chunk_size)
     try:
         prove_coverage(text, ranges)
     except AssertionError as e:
@@ -248,7 +351,7 @@ def selftest():
     print(f" [3] stitch: chunk vuoti ignorati  : {'OK' if g3 else 'FAIL'}")
     ok &= g3
 
-    print("\n " + (f"{C.G}SELFTEST OK{C.OFF}" if ok else f"{C.R}SELFTEST FALLITO{C.OFF}"))
+    print("\n " + (f"\033[92mSELFTEST OK\033[0m" if ok else f"\033[91mSELFTEST FALLITO\033[0m"))
     sys.exit(0 if ok else 1)
 
 if __name__ == '__main__':
