@@ -96,6 +96,8 @@ header{
   letter-spacing:.06em;
 }
 #export-chat:hover{background:var(--cyan);color:var(--dark);}
+#think-btn{background:none;border:1px solid #555;color:#888;padding:4px 10px;border-radius:3px;cursor:pointer;font-family:inherit;font-size:.8rem;margin-right:4px;}
+#think-btn.on{border-color:var(--cyan);color:var(--cyan);}
 #think-toggle{
   font-size:11px;letter-spacing:.06em;padding:3px 8px;
   background:transparent;border:1px solid var(--dim);color:var(--dim);cursor:pointer;
@@ -400,11 +402,12 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <body>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.703</div>
+  <div class="hbadge">v0.704</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="new-chat" onclick="newChat()">+ NEW CHAT</button>
   <button id="export-chat" onclick="exportChat()">&#x2193; EXPORT</button>
+  <button id="think-btn" onclick="toggleThink()" title="Ragionamento esteso ON/OFF">THINK</button>
   <div class="hstat">model: <span id="hdr-model">-</span></div>
   <div class="hstat">session: <span id="hdr-session">00:00</span></div>
   <div id="conn"></div>
@@ -848,6 +851,11 @@ renderSessionList();
       document.getElementById('hdr-model').textContent=short;
       const fm=document.getElementById('foot-model');if(fm)fm.textContent=short;
       document.getElementById('conn').style.background='#55FF55';
+      // Magistral usa [THINK]...[/THINK] nel content (non reasoning_content).
+      // Il template bypassa il default_system_message quando riceviamo SP_SELMO,
+      // quindi le istruzioni thinking vanno aggiunte manualmente al system message.
+
+
       // Legge n_ctx reale e calibra CHUNK_SIZE sul modello attivo
       fetch(`${API}/props`).then(r=>r.json()).then(p=>{
         const nCtx=p?.default_generation_settings?.n_ctx||p?.n_ctx||0;
@@ -866,6 +874,10 @@ renderSessionList();
       setTimeout(checkServer,3000);
     });
 }());
+
+// Flag e istruzione thinking per modelli reasoning (aggiornato al detect del modello)
+let IS_THINK_ON=false; // reasoning toggle — off di default
+const THINK_INSTR='\n\nFirst draft your thinking process (inner monologue) until you arrive at a response. Format your response using Markdown. Write both your thoughts and the response in the same language as the input.\n\nYour thinking process must follow the template below:[THINK]Your thoughts or/and draft, like working through an exercise on scratch paper. Be as casual and as long as you want until you are confident to generate the response. Use the same language as the input.[/THINK]Here, provide a self-contained response.';
 
 // SYSTEM PROMPTS
 const SP_SELMO=`You are Selmo, a local AI on the user's own hardware.
@@ -1223,17 +1235,32 @@ function stopMsg(){if(abort){abort.abort();abort=null;}}
 // (i modelli reasoning come Gemma scrivono il ragionamento in reasoning_content).
 async function streamTokens(res,onContent,onReason){
   const reader=res.body.getReader(),dec=new TextDecoder();
-  let buf='';
+  let buf='',tb='',inTk=false;
+  const OPEN='[THINK]',CLOSE='[/THINK]',ML=CLOSE.length;
+  function flush(){
+    while(tb.length>0){
+      if(!inTk){
+        const i=tb.indexOf(OPEN);
+        if(i===-1){const s=tb.slice(0,Math.max(0,tb.length-(ML-1)));if(s){onContent(s);tb=tb.slice(s.length);}break;}
+        if(i>0)onContent(tb.slice(0,i));tb=tb.slice(i+OPEN.length);inTk=true;
+      }else{
+        const i=tb.indexOf(CLOSE);
+        if(i===-1){const s=tb.slice(0,Math.max(0,tb.length-(ML-1)));if(s&&onReason){onReason(s);tb=tb.slice(s.length);}break;}
+        if(i>0&&onReason)onReason(tb.slice(0,i));tb=tb.slice(i+CLOSE.length);inTk=false;
+      }
+    }
+  }
   while(true){
-    const{done,value}=await reader.read();if(done)break;
+    const{done,value}=await reader.read();
+    if(done){if(tb)inTk?(onReason&&onReason(tb)):onContent(tb);break;}
     buf+=dec.decode(value,{stream:true});
     const lines=buf.split('\n');buf=lines.pop();
     for(const line of lines){
       if(!line.startsWith('data:'))continue;
       const raw=line.slice(5).trim();if(!raw||raw==='[DONE]')continue;
       try{const dl=JSON.parse(raw).choices?.[0]?.delta||{};
-        if(dl.content)onContent(dl.content);                 // risposta vera
-        if(dl.reasoning_content&&onReason)onReason(dl.reasoning_content); // ragionamento (modelli reasoning)
+        if(dl.reasoning_content&&onReason){onReason(dl.reasoning_content);}  // Gemma: reasoning_content
+        else if(dl.content){tb+=dl.content;flush();}                          // Magistral: [THINK]...[/THINK] nel content
       }catch{}
     }
   }
@@ -1522,6 +1549,9 @@ async function sendMsg(){
 
   // Web access is EXPLICIT only: nothing leaves localhost unless the user types /web.
   // Local date/time stays automatic — it is read from this machine's clock, it never leaves.
+  // /think: toggle ragionamento esteso
+
+
   const webCmd=/^\/web\b\s*([\s\S]*)$/i.exec(txt);
   const webQuery=webCmd?webCmd[1].trim():'';
   const isWebSearch=!!webCmd&&webQuery.length>0;
@@ -1576,15 +1606,15 @@ async function sendMsg(){
       });
       if(!res.ok)throw new Error('HTTP '+res.status);
       bub.innerHTML='';
-      let full='',t=0;
+      let full='',rthink='',t=0;
       const tp=makeThinkPanel(inner);
       await streamTokens(res,
         c=>{full+=c;t++;bub.textContent=full;scrollBot();},
-        r=>{tp.append(r);});
+        r=>{rthink+=r;tp.append(r);});
       tp.seal();
       toks+=t;localStorage.setItem('stoks',toks);
       document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
-      chatHistory.push({role:'assistant',content:full});
+      chatHistory.push({role:'assistant',content:(rthink?'[THINK]'+rthink+'[/THINK]':'')+full});
       const ledger=document.createElement('div');ledger.className='tok-meta';
       ledger.innerHTML='&#x1F310; '+results.map((r,i)=>
         '<a href="'+r.url+'" target="_blank" rel="noopener" style="color:var(--cyan);text-decoration:none">['+(i+1)+'] '+r.title+'</a>'
@@ -1637,15 +1667,15 @@ async function sendMsg(){
     });
     if(!res.ok)throw new Error('HTTP '+res.status);
     bub.innerHTML='';
-    let full='',t=0;
+    let full='',rthink='',t=0;
     const tp=makeThinkPanel(inner);
     await streamTokens(res,
       c=>{full+=c;t++;bub.textContent=full;scrollBot();},
-      r=>{tp.append(r);});
+      r=>{rthink+=r;tp.append(r);});
     tp.seal();
     toks+=t;localStorage.setItem('stoks',toks);
     document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
-    chatHistory.push({role:'assistant',content:full});
+    chatHistory.push({role:'assistant',content:(rthink?'[THINK]'+rthink+'[/THINK]':'')+full});
     const meta=document.createElement('div');meta.className='tok-meta';
     meta.textContent=t+' tok \xb7 '+(wh-whStart).toFixed(4)+' Wh';
     inner.appendChild(meta);
@@ -1796,10 +1826,18 @@ function sessionTitle(){
     ?(first.content.find(p=>p.type==='text')||{text:''}).text
     :first.content;
   return raw
+    .replace(/^\[Attached file\][\s\S]*?\n\n---\n\n/,'')  // strip file header, keep user prompt
     .replace(/^Web search results[\s\S]*?\n\n/,'')
     .replace(/^\/web\s+/i,'')
     .replace(/^Current date\/time:[^\n]*\n\n/,'')
     .slice(0,50).trim()||'(chat)';
+}
+
+function toggleThink(){
+  IS_THINK_ON=!IS_THINK_ON;
+  chatHistory[0].content=IS_THINK_ON?(SP_SELMO+THINK_INSTR):SP_SELMO;
+  const btn=document.getElementById('think-btn');
+  if(btn){btn.classList.toggle('on',IS_THINK_ON);btn.textContent=IS_THINK_ON?'THINK ●':'THINK';}
 }
 
 function saveSession(){
@@ -1824,7 +1862,7 @@ function loadSession(id){
   chatHistory.length=1;
   s.history.forEach(m=>chatHistory.push(m));
   currentTemp=0.75;
-  chatHistory[0].content=SP_SELMO;
+  chatHistory[0].content=IS_THINK_ON?(SP_SELMO+THINK_INSTR):SP_SELMO;
   document.getElementById('messages').innerHTML='';
   s.history.forEach(m=>addMsg(m.role,m.content,false));
   wh=0;sessStart=Date.now();clearFile();updCost();

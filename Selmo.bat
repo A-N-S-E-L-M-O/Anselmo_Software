@@ -151,7 +151,8 @@ if defined MMPROJ_FILE (
         --metrics ^
         --path "." ^
         --temp 0.75 ^
-        --top-p 0.9
+        --top-p 0.9 ^
+        --reasoning-format deepseek
 ) else (
     "%~dp0bin\llama-server.exe" ^
         --model "!MODELFILE!" ^
@@ -165,10 +166,8 @@ if defined MMPROJ_FILE (
         --metrics ^
         --path "." ^
         --temp 0.75 ^
-        --top-p 0.9
+        --top-p 0.9 ^
+        --reasoning-format deepseek
 )
 
-:: -- Pausa diagnostica: tiene la finestra aperta se il server esce/crasha --
-echo.
-echo  [llama-server e' terminato. Se e' un crash, leggi l'errore qui sopra.]
-pause
+:: -- Pausa diagnostica: tiene la finestra aperta se il

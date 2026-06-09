@@ -1,5 +1,5 @@
 # Selmo — Documentazione di sviluppo
-*Aggiornato sessione 14 · 2026-06-09 · v0.703*
+*Aggiornato sessione 14 · 2026-06-09 · v0.704*
 
 ---
 
@@ -254,7 +254,7 @@ Il toggle Selmo/Mizan cambia system prompt + temperatura + palette colori (blu/r
 
 **Ragionamento: lascialo al server, non parsarlo nel client (s14)** — il vecchio scanner client dei tag `<think>` era rotto: i token escono spezzati tra i delta dello stream (`<`, `think`, `>`), quindi `indexOf('<think>')` falliva e il pannello non scattava. Soluzione: niente parsing manuale; `llama-server` estrae il reasoning in `reasoning_content` e il pannello aggancia **solo** quello. Rimosso anche il bottone THINK e `budget_tokens` (param non standard, ignorato). Modelli ChatML puri (EuroLLM) non emettono reasoning: nessun pannello, ed è corretto. Per far comparire il pannello con modelli reasoning può servire `--reasoning-format` nel launcher.
 
-**SP_TASK zittisce il ragionamento (s14)** — il prompt dei chunk dice "output only the result, no commentary": giusto per traduzione/estrazione, sbagliato per domande analitiche ("perché i totali non combaciano"). Su quelle il modello salta a una conclusione confusa. Per questo le domande analitiche vanno in **chat normale** (SP_SELMO), non nella pipeline a chunk. Da v0.703 la scelta è guidata: file > 50% della ctx → si chiede "Chunk it / Normal chat"; file leggero → chat normale automatica col documento come contesto.
+**SP_TASK zittisce il ragionamento (s14)** — il prompt dei chunk dice "output only the result, no commentary": giusto per traduzione/estrazione, sbagliato per domande analitiche ("perché i totali non combaciano"). Su quelle il modello salta a una conclusione confusa. Per questo le domande analitiche vanno in **chat normale** (SP_SELMO), non nella pipeline a chunk. Da v0.704 la scelta è guidata: file > 50% della ctx → si chiede "Chunk it / Normal chat"; file leggero → chat normale automatica col documento come contesto.
 
 ---
 
@@ -305,47 +305,4 @@ Approccio:
 ## Storico sessioni
 
 ### Sessione 1-3
-Setup iniziale. llama.cpp con CUDA, EuroLLM 22B, interfaccia base.
-
-### Sessione 4
-Fix critico: chat.html era troncato a metà istruzione. Scoperta regola BUG-META-01. Fix fetch malformata in processChunks. Connessione interfaccia ↔ server ripristinata.
-
-### Sessione 5
-Ricerca web v0.2: selmo_web.py, SearXNG in Podman, DDG fallback.
-
-### Sessione 6
-Ricerca web v0.3: rimosso auto-search e loop agentico [SEARCH:], sostituito con comando esplicito `/web`. Risultati riusabili in conversazione. trafilatura. Chunking robusto (test_chunking.py con 5 garanzie).
-
-### Sessione 7
-Bug report s7 aperto (BUG-01/02/03/04). Tentativo fix chat.html — file corrotto di nuovo da Edit tool. Piano sessione 8 definito.
-
-### Sessione 8
-- Stitch semplificato in chunk_pipeline.py e translate_chunks.py: rimosso dedup per frase, join puro. Selftest OK.
-- Timeout server: `--timeout 0` in Selmo.bat e Mizan.bat.
-- Logica launcher aggiornata: soglia 9000MB per separare 13B da 22-24B, ctx 8192 per range superiore.
-- Modelli testati: Gemma 4 12B Q6 (22 t/s, reasoning, benchmark), Mistral Small 3.2 24B IQ3_M (32 t/s, nuovo default produzione).
-- Gerarchia modelli definita: EuroLLM (etico), Mistral (produzione), Gemma (benchmark).
-- Manifesto ristrutturato: separato in manifesto (visione), dev (tecnico), bug report (tracker).
-
-### Sessione 12 (2026-06-08)
-Lavoro su visione + reasoning, in gran parte **non committato** → poi rollbackato in s13.
-- Thinking panel collassabile + toggle THINK; split max_tokens 28/72 nel chunk path.
-- Pulsante + IMAGE (PDF → canvas → vision a scale 2.5): instabile (BUG-IMG-01).
-- System prompt semplificato (SP_SELMO); mmproj multi-file matching nel launcher.
-- Lezione: niente di tutto questo era in un commit pulito (vedi s13).
-
-### Sessione 13 (2026-06-08)
-- **Workflow git**: git unico safety net, commit a ogni feedback positivo + versione a millesimi (v0.7 → v0.701…), la 1.0 riservata alla release vera. Backup `.bat` deprecati. Regola fissata in `CLAUDE.md`.
-- **Rollback** del lavoro vision instabile alla baseline pulita `16f02c8` (la prima iterazione funzionante non era mai stata committata → persa).
-- Launcher: abbinamento **mmproj automatico** per nome (v0.6).
-- Ricostruiti puliti e committati: **system prompt semplificato**, **pannello reasoning** (chat/web/file, ragionamento fuori dallo stitch), **fix `/web`** (bolla utente + lingua), **indicatore SearXNG locale** verde/giallo/off (v0.7, v0.701).
-- **Visione + IMG/OCR ricostruita** (v0.702): pulsante dedicato, PDF una immagine per pagina, thumbnail cliccabili, flag Gemma 4 nel launcher (budget 1120 + ubatch 2048). BUG-IMG-01 chiuso. Scoperta la causa dei crash all'avvio: corruzione NUL/LF del `.bat` (BUG-META-02), non i flag.
-
-### Sessione 14 (2026-06-09) — v0.703
-- **Reasoning gestito dal server**: rimosso il bottone THINK, `thinkParams`/`budget_tokens` e lo scanner client dei tag `<think>` (era rotto, token spezzati tra i delta). Il pannello aggancia solo `reasoning_content`. Meno codice, comportamento deciso dal modello.
-- **SP_SELMO alleggerito a 4 righe** (no preamble/hype/servility).
-- **Scelta chunk-vs-chat automatica**: alla selezione di un file, se supera il **50% della ctx** compare la domanda con bottoni *Chunk it* / *Normal chat*; sotto soglia va dritto in chat normale col documento iniettato come contesto (così il modello può ragionare). Risolve il caso "domanda analitica finita nella pipeline a chunk" → risposta confusa.
-- **Diagnosi EuroLLM-22B lento (6 t/s)**: causa = **54 layer** contro `NGL=45` fisso (9 layer su CPU). Mistral-Small-24B ha 40 layer → sta tutto in GPU, 33 t/s. EuroLLM-9B vola a 70 t/s (tutto in GPU). Qualità EuroLLM-22B non impressionante.
-- **Ricerca modelli reasoning "etici"**: candidato sostituto **Magistral Small 2509** (Apache 2.0, francese, reasoning **+ vision**, architettura Mistral-Small a 40 layer → veloce su 12GB). Testo-puro 100% open-data: **OLMo 3 Think**. Dettagli e quant nella tabella "Modelli testati".
-- Validato su Gemma: file leggero dei totali spese → chat normale → risposta corretta (scarto 0,73€ individuato). Commit del codice: `v0.703`.
-
+Setup iniziale. llama.cpp con CUD
