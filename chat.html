@@ -400,12 +400,11 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <body>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.702</div>
+  <div class="hbadge">v0.703</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="new-chat" onclick="newChat()">+ NEW CHAT</button>
   <button id="export-chat" onclick="exportChat()">&#x2193; EXPORT</button>
-  <button id="think-toggle" class="on" onclick="toggleThink()" title="Abilita/disabilita ragionamento">&#x2726; THINK</button>
   <div class="hstat">model: <span id="hdr-model">-</span></div>
   <div class="hstat">session: <span id="hdr-session">00:00</span></div>
   <div id="conn"></div>
@@ -628,23 +627,11 @@ let gen=false,abort=null,tokSec=0,wh=0,whAll=parseFloat(localStorage.getItem('sw
     chunks=[],chunkIdx=0,
     price=parseFloat(localStorage.getItem('sprice')||'0.28'),
     toks=parseInt(localStorage.getItem('stoks')||'0'),
-    sessStart=Date.now(),fileCtx=null,fileDoc=null,fileImage=null,
+    sessStart=Date.now(),fileCtx=null,fileDoc=null,fileImage=null,fileChat=null,
     gpuP=0,gpuW=0,gpuT=0,gpuOk=false,
     whisperOk=false,mediaRecorder=null,audioChunks=[],pttAutoSend=false,pttForceTts=false,pttWebSearch=false,
     ttsOk=false,ttsEnabled=false,
-    currentTemp=0.75,
-    thinkingOn=true;
-function toggleThink(){
-  thinkingOn=!thinkingOn;
-  const btn=document.getElementById('think-toggle');
-  btn.classList.toggle('on',thinkingOn);
-  btn.title=thinkingOn?'Ragionamento attivo':'Ragionamento disabilitato';
-}
-function thinkParams(chunkMode){
-  if(!thinkingOn)return{budget_tokens:0};
-  if(chunkMode)return{budget_tokens:512};
-  return{};
-}
+    currentTemp=0.75;
 
 // GPU MONITOR
 setInterval(async()=>{
@@ -881,16 +868,10 @@ renderSessionList();
 }());
 
 // SYSTEM PROMPTS
-const SP_SELMO=`You are Selmo, a local AI running on the user's own hardware.
-
-You are direct, a bit skeptical, and not given to hype. You do not oversell your answers. When you are uncertain, you say so briefly and move on. You are helpful without being servile.
-
-Reply in the user's language. Be concise.
-
-## INTERNET
-You don't fetch web pages yourself; the user does that with the /web command. When they do, the results appear in the conversation — use them as you would any other context.
-Answer from your own knowledge and from what is already in the conversation. Never output [SEARCH:] tags.
-If you don't know something recent and nothing in the conversation covers it, say so in one line and suggest /web. Never invent facts.`;
+const SP_SELMO=`You are Selmo, a local AI on the user's own hardware.
+Direct and concise. No preamble, no hype, no servility. When unsure, say so in a line. Never invent facts.
+Reply in the user's language.
+You don't browse; the user fetches pages with /web and the results appear in the conversation — use them when present. Never output [SEARCH:] tags.`;
 
 // System neutro per i task su documento (traduzione, analisi, estrazione).
 // Niente personalita': solo esecuzione fedele, formattazione coerente su tutti i chunk.
@@ -1181,7 +1162,7 @@ function splitChunks(text,size){
 }
 
 function clearFile(){
-  fileCtx=null;fileDoc=null;fileImage=null;chunks=[];chunkIdx=0;
+  fileCtx=null;fileDoc=null;fileImage=null;fileChat=null;chunks=[];chunkIdx=0;
   document.getElementById('file-badge').style.display='none';
   document.getElementById('input').placeholder='Type a message...   ( /web <query> to search the web )';
 }
@@ -1345,38 +1326,17 @@ async function processDoc(prompt){
     try{
       const res=await fetch(`${API}/v1/chat/completions`,{
         method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
-        body:JSON.stringify({model:'local',messages:msgs,stream:true,temperature:0.2,max_tokens:maxTok,repeat_penalty:1.1,...thinkParams(true)})});
+        body:JSON.stringify({model:'local',messages:msgs,stream:true,temperature:0.2,max_tokens:maxTok,repeat_penalty:1.1})});
       if(!res.ok)throw new Error('HTTP '+res.status);
       prog.bub.innerHTML='';
-      let full='',t=0,inThink=false;
+      let full='',t=0;
       // Il ragionamento (reasoning_content o <think>..</think>) va nel pannello,
       // MAI nello stitch del documento: in 'full' finisce solo la risposta pulita.
       const tp=makeThinkPanel(prog.inner);
       await streamTokens(res,
-        p=>{
-          let rem=p;
-          while(rem.length){
-            if(inThink){
-              const end=rem.indexOf('</think>');
-              if(end===-1){tp.append(rem);rem='';}
-              else{tp.append(rem.slice(0,end));tp.seal();inThink=false;rem=rem.slice(end+8);}
-            } else {
-              const start=rem.indexOf('<think>');
-              if(start===-1){
-                if(full===''&&rem.trim()!=='')tp.seal();
-                full+=rem;t++;prog.bub.textContent=full;scrollBot();rem='';
-              } else {
-                if(start>0){
-                  if(full===''&&rem.slice(0,start).trim()!=='')tp.seal();
-                  full+=rem.slice(0,start);t++;prog.bub.textContent=full;scrollBot();
-                }
-                inThink=true;rem=rem.slice(start+7);
-              }
-            }
-          }
-        },
-        chunk=>{if(full===''){tp.append(chunk);}});
-      if(full==='')tp.seal();
+        c=>{full+=c;t++;prog.bub.textContent=full;scrollBot();},
+        r=>{tp.append(r);});
+      tp.seal();
       toks+=t;localStorage.setItem('stoks',toks);
       document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
       const ci=document.createElement('div');ci.className='chunk-info';
@@ -1529,6 +1489,17 @@ async function processChunks(prompt){
   document.getElementById('input').focus();
 }
 
+function askFileMode(prompt){
+  const tok=Math.ceil(fileDoc.length/3.2);
+  const {bub}=addMsg('assistant','',false);
+  bub.innerHTML='<div style="margin-bottom:8px"><b>Large file loaded</b> (~'+tok.toLocaleString('en')+' tokens). Process it as a chunked task?<br><span style="opacity:.65">Chunking is for analysis, extraction and translation only \u2014 not for reasoning (\u201Cwhy / explain\u201D) questions.</span></div>';
+  const wrap=document.createElement('div');wrap.style.cssText='display:flex;gap:8px;flex-wrap:wrap';
+  const mk=(label,primary)=>{const b=document.createElement('button');b.textContent=label;b.style.cssText='font-size:12px;letter-spacing:.04em;padding:5px 12px;cursor:pointer;border-radius:3px;border:1px solid var(--cyan);background:'+(primary?'var(--cyan)':'transparent')+';color:'+(primary?'var(--dark)':'var(--cyan)')+'';return b;};
+  const b1=mk('Chunk it',true),b2=mk('Normal chat',false);
+  b1.onclick=()=>{wrap.remove();processDoc(prompt);};
+  b2.onclick=()=>{wrap.remove();fileChat=fileDoc;fileDoc=null;document.getElementById('file-badge').style.display='none';document.getElementById('input').value=prompt;sendMsg();};
+  wrap.appendChild(b1);wrap.appendChild(b2);bub.appendChild(wrap);scrollBot();
+}
 async function sendMsg(){
   if(gen)return;
   const inp=document.getElementById('input');
@@ -1538,8 +1509,12 @@ async function sendMsg(){
   inp.value='';inp.style.height='auto';
 
   if(fileDoc){
-    await processDoc(txt);
-    return;
+    // Soglia: se il file supera il 50% della finestra del modello chiediamo
+    // se trattarlo a chunk (analisi) o tenerlo in chat normale (ragionamento).
+    if(Math.ceil(fileDoc.length/3.2) > N_CTX*0.5){ askFileMode(txt); return; }
+    // Sta nella finestra: chat normale, documento iniettato come contesto.
+    fileChat=fileDoc; fileDoc=null;
+    document.getElementById('file-badge').style.display='none';
   }
 
   gen=true;btn.style.display='none';stopBtn.style.display='inline-block';
@@ -1597,37 +1572,16 @@ async function sendMsg(){
       const res=await fetch(`${API}/v1/chat/completions`,{
         method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
         body:JSON.stringify({model:'local',messages:chatHistory,stream:true,
-          temperature:currentTemp,max_tokens:Math.min(8000,Math.max(512,Math.floor(N_CTX*0.55))),repeat_penalty:1.1,...thinkParams(false)})
+          temperature:currentTemp,max_tokens:Math.min(8000,Math.max(512,Math.floor(N_CTX*0.55))),repeat_penalty:1.1})
       });
       if(!res.ok)throw new Error('HTTP '+res.status);
       bub.innerHTML='';
-      let full='',t=0,inThink=false;
+      let full='',t=0;
       const tp=makeThinkPanel(inner);
       await streamTokens(res,
-        p=>{
-          let rem=p;
-          while(rem.length){
-            if(inThink){
-              const end=rem.indexOf('</think>');
-              if(end===-1){tp.append(rem);rem='';}
-              else{tp.append(rem.slice(0,end));tp.seal();inThink=false;rem=rem.slice(end+8);}
-            } else {
-              const start=rem.indexOf('<think>');
-              if(start===-1){
-                if(full===''&&rem.trim()!=='')tp.seal();
-                full+=rem;t++;bub.textContent=full;scrollBot();rem='';
-              } else {
-                if(start>0){
-                  if(full===''&&rem.slice(0,start).trim()!=='')tp.seal();
-                  full+=rem.slice(0,start);t++;bub.textContent=full;scrollBot();
-                }
-                inThink=true;rem=rem.slice(start+7);
-              }
-            }
-          }
-        },
-        chunk=>{if(full===''){tp.append(chunk);}});
-      if(full==='')tp.seal();
+        c=>{full+=c;t++;bub.textContent=full;scrollBot();},
+        r=>{tp.append(r);});
+      tp.seal();
       toks+=t;localStorage.setItem('stoks',toks);
       document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
       chatHistory.push({role:'assistant',content:full});
@@ -1668,7 +1622,9 @@ async function sendMsg(){
     fileImage=null;
     document.getElementById('file-badge').style.display='none';
   } else {
-    chatHistory.push({role:'user',content});
+    let apiContent=content;
+    if(fileChat){apiContent='[Attached file]\n\n'+fileChat+'\n\n---\n\n'+content;fileChat=null;}
+    chatHistory.push({role:'user',content:apiContent});
     addMsg('user',content);
   }
   const{bub,inner}=addMsg('assistant','',true);
@@ -1677,37 +1633,16 @@ async function sendMsg(){
     const res=await fetch(`${API}/v1/chat/completions`,{
       method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
       body:JSON.stringify({model:'local',messages:chatHistory,stream:true,
-        temperature:currentTemp,max_tokens:Math.min(8000,Math.max(512,Math.floor(N_CTX*0.55))),repeat_penalty:1.1,...thinkParams(false)})
+        temperature:currentTemp,max_tokens:Math.min(8000,Math.max(512,Math.floor(N_CTX*0.55))),repeat_penalty:1.1})
     });
     if(!res.ok)throw new Error('HTTP '+res.status);
     bub.innerHTML='';
-    let full='',t=0,inThink=false;
+    let full='',t=0;
     const tp=makeThinkPanel(inner);
     await streamTokens(res,
-      p=>{
-        let rem=p;
-        while(rem.length){
-          if(inThink){
-            const end=rem.indexOf('</think>');
-            if(end===-1){tp.append(rem);rem='';}
-            else{tp.append(rem.slice(0,end));tp.seal();inThink=false;rem=rem.slice(end+8);}
-          } else {
-            const start=rem.indexOf('<think>');
-            if(start===-1){
-              if(full===''&&rem.trim()!=='')tp.seal();
-              full+=rem;t++;bub.textContent=full;scrollBot();rem='';
-            } else {
-              if(start>0){
-                if(full===''&&rem.slice(0,start).trim()!=='')tp.seal();
-                full+=rem.slice(0,start);t++;bub.textContent=full;scrollBot();
-              }
-              inThink=true;rem=rem.slice(start+7);
-            }
-          }
-        }
-      },
-      chunk=>{if(full===''){tp.append(chunk);}});
-    if(full==='')tp.seal();
+      c=>{full+=c;t++;bub.textContent=full;scrollBot();},
+      r=>{tp.append(r);});
+    tp.seal();
     toks+=t;localStorage.setItem('stoks',toks);
     document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
     chatHistory.push({role:'assistant',content:full});

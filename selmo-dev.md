@@ -1,5 +1,5 @@
 # Selmo — Documentazione di sviluppo
-*Aggiornato sessione 13 · Giugno 2026 · v0.702*
+*Aggiornato sessione 13 · Giugno 2026 · v0.703*
 
 ---
 
@@ -275,6 +275,27 @@ Flag llama.cpp (in `Selmo.bat`, solo quando c'è mmproj):
 **Causa vera di BUG-IMG-01**: l'encoder vision di Gemma 4 usa attenzione **non-causale** sui token immagine → devono stare tutti in un solo ubatch. Con `ubatch` di default (512) e immagine grande scatta `GGML_ASSERT(n_ubatch >= n_tokens)` e il server muore (HTTP 500/400). Non era il formato del messaggio: era il batching. Alzare batch/ubatch a 2048 lo risolve.
 
 Fonti: ai.google.dev/gemma/docs/capabilities/vision · dev.to/someoddcodeguy "Gemma 4 image settings in llama.cpp" · unsloth.ai/docs/models/gemma-4
+
+---
+
+## Prossimi passi (roadmap s14)
+
+### 1. Lifecycle pulito — niente finestre orfane, purge all'arresto
+Problema: `Selmo.bat` apre 4 servizi Python (GPU monitor 8082, web 8081, whisper 8083, TTS 8084) con `start /min`, ognuno in una finestra che resta aperta e va chiusa a mano quando si ferma il task principale. Brutto e scomodo.
+Obiettivo: backend nascosto + **purge completo** quando `llama-server` (il processo principale) si arresta.
+Approccio:
+- Avviare i bridge **senza finestra**: `pythonw.exe` (niente console) o `start /b`, invece di `start /min`.
+- Tracciare i PID all'avvio e, alla chiusura di llama-server, fare cleanup (`taskkill` dei 4 servizi). In `Selmo.bat` il cleanup va dopo il blocco server (foreground), prima del `pause`.
+- Alternativa più pulita: un orchestratore unico (`selmo_launch.py` via pythonw) che spawna i sottoprocessi + llama-server, aspetta, e killa i figli all'uscita. SearXNG (Podman) resta fuori, è separato.
+
+### 2. UI responsive / uso da telefono
+Stato: il server è già raggiungibile in rete locale (testato da un altro device — funziona), ma la grafica non si adatta.
+Obiettivo: usabile da telefono e a finestre piccole.
+Approccio:
+- Media query: sotto una soglia di larghezza utile (~800×600) impilare le 3 colonne (history / chat / dashboard) in una sola; target touch più grandi.
+- Tachimetro SVG → a finestra piccola sostituirlo con una **barra orizzontale** (gauge lineare) per i Watt; compattare odometro Wh, costo, token.
+- Dashboard collassabile su mobile per dare spazio alla chat.
+- Viewport meta già presente; manca il CSS adattivo.
 
 ---
 
