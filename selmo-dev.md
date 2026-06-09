@@ -1,5 +1,5 @@
 # Selmo — Documentazione di sviluppo
-*Aggiornato sessione 13 · Giugno 2026 · v0.703*
+*Aggiornato sessione 14 · 2026-06-09 · v0.703*
 
 ---
 
@@ -95,6 +95,8 @@ Basata sulla dimensione del file .gguf. Aggiornata sessione 8 con soglia a 9000M
 | 9000–13000 MB | 22-24B | 45 | 8192 |
 | > 13000 MB | >30B | 30 | 8192 |
 
+**⚠ Limite noto (s14): NGL fisso vs numero di layer.** La fascia 9000–13000 usa `NGL=45`, tarato implicitamente sui **40 layer** di Mistral-Small-24B (45≥40 → tutto in GPU, 33 t/s). Ma **EuroLLM-22B ha 54 layer**: con NGL=45 ne restano **9 sulla CPU** → 6 t/s. La dimensione del file (MB) **non** basta a prevedere la velocità: conta il `block_count` del GGUF. Un 22B "piccolo" su disco può avere più layer di un 24B. Per far volare EuroLLM-22B servirebbe NGL più alto con ctx ridotta (resta comunque al limite dei 12GB). Non corretto in s14 (deciso di puntare su Magistral come sostituto).
+
 **Thinking model e finestra di contesto — decisione s9.** Il launcher NON cambia la finestra per i modelli reasoning: tiene GPU piena e `ctx 8192` per tutti. Motivo: il flusso di lavoro è basato sul chunking, quindi ogni pezzo è già piccolo e non serve una ctx grande; in più contesti lunghi di solito peggiorano la qualità e costano velocità. La priorità è sfruttare la GPU al massimo, non avere una finestra ampia. Lo spazio per i token di ragionamento si riserva lato client in `chunk_pipeline.py` con `--thinking-buffer` (default 0; 800+ per reasoning): riduce un po' la dimensione dei chunk lasciando margine al thinking, a parità di ctx server. Percorso sbagliato scartato in s9: nel launcher si era provato (a) ad abbassare `-ngl` da 45 a 35 per far stare ctx 16384 → Gemma crollata da 22 a 8 t/s; (b) a usare KV cache q8_0 per tenere ctx 16384 a GPU piena → comunque inutile/controproducente col chunking. Regola: mai sacrificare `-ngl`, e non allargare la ctx server per il thinking — gestirlo nel pipeline.
 
 `--timeout 0` su entrambi i launcher (aggiunto s8): disabilita timeout server-side, controllo lasciato al client (AbortController in chat.html, 300s in chunk_pipeline.py).
@@ -107,10 +109,12 @@ Nota: EuroLLM 9B ha `n_ctx_train=4096` — ctx superiore genera warning e viene 
 
 | Modello | File | VRAM | ctx | t/s | Note |
 |---|---|---|---|---|---|
-| Mistral Small 3.2 24B IQ3_M | mistralai_Mistral-Small-3.2-24B-Instruct-2506-IQ3_M.gguf | ~10.5GB | 8192 | 32 | Default produzione |
-| EuroLLM 22B Q3_K_M | utter-project_EuroLLM-22B-Instruct-2512-Q3_K_M.gguf | ~10.5GB | 8192 | ~11 | Default etico |
-| EuroLLM 9B Q4_K_M | eurollm-9b-instruct-q4_k_m.gguf | ~5.5GB | 4096 | ~20 | |
-| Gemma 4 12B Q6_K | (benchmark, non in produzione) | ~9-10GB | 8192 | 22 | Multimodale, reasoning |
+| Mistral Small 3.2 24B IQ3_M | mistralai_Mistral-Small-3.2-24B-Instruct-2506-IQ3_M.gguf | ~10.5GB | 8192 | 32-33 | Default produzione · **40 layer** → tutti in GPU con NGL=45 |
+| EuroLLM 22B Q3_K_M | utter-project_EuroLLM-22B-Instruct-2512-Q3_K_M.gguf | ~10.5GB | 8192 | **6** | **54 layer** → con NGL=45 restano 9 layer su CPU = lento. Qualità non impressionante. Vedi lezione NGL. |
+| EuroLLM 9B Q4_K_M | EuroLLM-9B-Instruct-2512.i1-Q4_K_M.gguf | ~5.5GB | 4096 | **70** | ChatML puro (no reasoning). Tutto in GPU. Ragiona bene "nel contesto" in chat normale. |
+| Gemma 4 12B Q6_K | gemma-4-12b-it-Q6_K.gguf | ~9-10GB | 8192 | 22 | Multimodale, reasoning. Apache 2.0. |
+
+**Candidato sostituto etico (ricerca s14)**: **Magistral Small 2509** (Mistral, francese, Apache 2.0) — reasoning **+ vision** (encoder visivo dalla 2509). Stessa architettura del Mistral-Small-24B (**40 layer** → veloce su 12GB). GGUF: `unsloth/Magistral-Small-2509-GGUF`. Per 12GB: `Q3_K_S` (10.4GB) o ripiego `UD-IQ3_XXS` (9.41GB), + `mmproj-F16.gguf` (rinominare `mmproj-Magistral-Small-2509-F16.gguf` per l'auto-match). Reasoning con token `[THINK]`. Alternativa testo-puro 100% open-data: **OLMo 3 7B Think** (Ai2). Qwen3-VL-8B-Thinking è forte ma cinese.
 
 ---
 
@@ -143,23 +147,16 @@ AppData\Local\Selmo\
 ## Personalità — system prompts
 
 ### Selmo
-Temperatura 0.75, top-p 0.9. System prompt **semplificato** (sessione 13): asciutto e diretto,
-senza personalità elaborata. La versione "Selmo accidentale / leggi di Asimov" è stata
-sostituita perché il prompt corto dà risposte più focalizzate.
+Temperatura 0.75, top-p 0.9. System prompt **alleggerito a 4 righe** (sessione 14): un tocco di
+personalità (no preamble, no hype, no servility), più lingua e meccanica `/web`. Niente sezioni
+lunghe: il modello deve attaccare diretto. Versione precedente (s13) era già corta ma con una
+sezione INTERNET prolissa.
 
 ```
-You are Selmo, a local AI running on the user's own hardware.
-
-You are direct, a bit skeptical, and not given to hype. You do not oversell your answers.
-When you are uncertain, you say so briefly and move on. You are helpful without being servile.
-
-Reply in the user's language. Be concise.
-
-## INTERNET
-You don't fetch web pages yourself; the user does that with the /web command. When they do,
-the results appear in the conversation — use them as you would any other context.
-Answer from your own knowledge and from what is already in the conversation. Never output [SEARCH:] tags.
-If you don't know something recent and nothing in the conversation covers it, say so in one line and suggest /web. Never invent facts.
+You are Selmo, a local AI on the user's own hardware.
+Direct and concise. No preamble, no hype, no servility. When unsure, say so in a line. Never invent facts.
+Reply in the user's language.
+You don't browse; the user fetches pages with /web and the results appear in the conversation — use them when present. Never output [SEARCH:] tags.
 ```
 
 ### Mizan
@@ -253,6 +250,12 @@ Il toggle Selmo/Mizan cambia system prompt + temperatura + palette colori (blu/r
 
 **.bat: CRLF e zero NUL** — i `.bat` devono essere CRLF (il `^` di continuazione su LF rompe cmd). Occhio alla corruzione NUL del mount (BUG-META-02): dopo ogni modifica a `.bat`/`.md` controllare che i byte NUL siano 0.
 
+**Velocità ≠ dimensione file: conta il numero di layer (s14)** — un modello "più piccolo" in MB può essere più lento se ha più layer del valore `-ngl` fisso. EuroLLM-22B (54 layer) a NGL=45 lascia 9 layer su CPU → 6 t/s; Mistral-Small-24B (40 layer) a NGL=45 va tutto in GPU → 33 t/s, pur essendo quasi uguale su disco. Leggere il `block_count` dal GGUF prima di concludere su VRAM o flag.
+
+**Ragionamento: lascialo al server, non parsarlo nel client (s14)** — il vecchio scanner client dei tag `<think>` era rotto: i token escono spezzati tra i delta dello stream (`<`, `think`, `>`), quindi `indexOf('<think>')` falliva e il pannello non scattava. Soluzione: niente parsing manuale; `llama-server` estrae il reasoning in `reasoning_content` e il pannello aggancia **solo** quello. Rimosso anche il bottone THINK e `budget_tokens` (param non standard, ignorato). Modelli ChatML puri (EuroLLM) non emettono reasoning: nessun pannello, ed è corretto. Per far comparire il pannello con modelli reasoning può servire `--reasoning-format` nel launcher.
+
+**SP_TASK zittisce il ragionamento (s14)** — il prompt dei chunk dice "output only the result, no commentary": giusto per traduzione/estrazione, sbagliato per domande analitiche ("perché i totali non combaciano"). Su quelle il modello salta a una conclusione confusa. Per questo le domande analitiche vanno in **chat normale** (SP_SELMO), non nella pipeline a chunk. Da v0.703 la scelta è guidata: file > 50% della ctx → si chiede "Chunk it / Normal chat"; file leggero → chat normale automatica col documento come contesto.
+
 ---
 
 ## Vision Gemma 4 — strategia lean (implementata, v0.702)
@@ -337,4 +340,12 @@ Lavoro su visione + reasoning, in gran parte **non committato** → poi rollback
 - Launcher: abbinamento **mmproj automatico** per nome (v0.6).
 - Ricostruiti puliti e committati: **system prompt semplificato**, **pannello reasoning** (chat/web/file, ragionamento fuori dallo stitch), **fix `/web`** (bolla utente + lingua), **indicatore SearXNG locale** verde/giallo/off (v0.7, v0.701).
 - **Visione + IMG/OCR ricostruita** (v0.702): pulsante dedicato, PDF una immagine per pagina, thumbnail cliccabili, flag Gemma 4 nel launcher (budget 1120 + ubatch 2048). BUG-IMG-01 chiuso. Scoperta la causa dei crash all'avvio: corruzione NUL/LF del `.bat` (BUG-META-02), non i flag.
+
+### Sessione 14 (2026-06-09) — v0.703
+- **Reasoning gestito dal server**: rimosso il bottone THINK, `thinkParams`/`budget_tokens` e lo scanner client dei tag `<think>` (era rotto, token spezzati tra i delta). Il pannello aggancia solo `reasoning_content`. Meno codice, comportamento deciso dal modello.
+- **SP_SELMO alleggerito a 4 righe** (no preamble/hype/servility).
+- **Scelta chunk-vs-chat automatica**: alla selezione di un file, se supera il **50% della ctx** compare la domanda con bottoni *Chunk it* / *Normal chat*; sotto soglia va dritto in chat normale col documento iniettato come contesto (così il modello può ragionare). Risolve il caso "domanda analitica finita nella pipeline a chunk" → risposta confusa.
+- **Diagnosi EuroLLM-22B lento (6 t/s)**: causa = **54 layer** contro `NGL=45` fisso (9 layer su CPU). Mistral-Small-24B ha 40 layer → sta tutto in GPU, 33 t/s. EuroLLM-9B vola a 70 t/s (tutto in GPU). Qualità EuroLLM-22B non impressionante.
+- **Ricerca modelli reasoning "etici"**: candidato sostituto **Magistral Small 2509** (Apache 2.0, francese, reasoning **+ vision**, architettura Mistral-Small a 40 layer → veloce su 12GB). Testo-puro 100% open-data: **OLMo 3 Think**. Dettagli e quant nella tabella "Modelli testati".
+- Validato su Gemma: file leggero dei totali spese → chat normale → risposta corretta (scarto 0,73€ individuato). Commit del codice: `v0.703`.
 
