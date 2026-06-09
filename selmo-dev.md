@@ -1,5 +1,5 @@
 # Selmo — Documentazione di sviluppo
-*Aggiornato sessione 14 · 2026-06-09 · v0.704*
+*Aggiornato sessione 14 · 2026-06-09 · v0.705*
 
 ---
 
@@ -254,7 +254,7 @@ Il toggle Selmo/Mizan cambia system prompt + temperatura + palette colori (blu/r
 
 **Ragionamento: lascialo al server, non parsarlo nel client (s14)** — il vecchio scanner client dei tag `<think>` era rotto: i token escono spezzati tra i delta dello stream (`<`, `think`, `>`), quindi `indexOf('<think>')` falliva e il pannello non scattava. Soluzione: niente parsing manuale; `llama-server` estrae il reasoning in `reasoning_content` e il pannello aggancia **solo** quello. Rimosso anche il bottone THINK e `budget_tokens` (param non standard, ignorato). Modelli ChatML puri (EuroLLM) non emettono reasoning: nessun pannello, ed è corretto. Per far comparire il pannello con modelli reasoning può servire `--reasoning-format` nel launcher.
 
-**SP_TASK zittisce il ragionamento (s14)** — il prompt dei chunk dice "output only the result, no commentary": giusto per traduzione/estrazione, sbagliato per domande analitiche ("perché i totali non combaciano"). Su quelle il modello salta a una conclusione confusa. Per questo le domande analitiche vanno in **chat normale** (SP_SELMO), non nella pipeline a chunk. Da v0.704 la scelta è guidata: file > 50% della ctx → si chiede "Chunk it / Normal chat"; file leggero → chat normale automatica col documento come contesto.
+**SP_TASK zittisce il ragionamento (s14)** — il prompt dei chunk dice "output only the result, no commentary": giusto per traduzione/estrazione, sbagliato per domande analitiche ("perché i totali non combaciano"). Su quelle il modello salta a una conclusione confusa. Per questo le domande analitiche vanno in **chat normale** (SP_SELMO), non nella pipeline a chunk. Da v0.705 la scelta è guidata: file > 50% della ctx → si chiede "Chunk it / Normal chat"; file leggero → chat normale automatica col documento come contesto.
 
 ---
 

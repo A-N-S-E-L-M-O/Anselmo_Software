@@ -96,8 +96,8 @@ header{
   letter-spacing:.06em;
 }
 #export-chat:hover{background:var(--cyan);color:var(--dark);}
-#think-btn{background:none;border:1px solid #555;color:#888;padding:4px 10px;border-radius:3px;cursor:pointer;font-family:inherit;font-size:.8rem;margin-right:4px;}
-#think-btn.on{border-color:var(--cyan);color:var(--cyan);}
+#web-btn,#think-btn{background:none;border:1px solid #555;color:#888;padding:4px 10px;border-radius:3px;cursor:pointer;font-family:inherit;font-size:.8rem;margin-right:4px;}
+#web-btn.on,#think-btn.on{border-color:var(--cyan);color:var(--cyan);}
 #think-toggle{
   font-size:11px;letter-spacing:.06em;padding:3px 8px;
   background:transparent;border:1px solid var(--dim);color:var(--dim);cursor:pointer;
@@ -402,11 +402,12 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <body>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.704</div>
+  <div class="hbadge">v0.705</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="new-chat" onclick="newChat()">+ NEW CHAT</button>
   <button id="export-chat" onclick="exportChat()">&#x2193; EXPORT</button>
+  <button id="web-btn" onclick="toggleWeb()" title="Ricerca web ON/OFF">WEB</button>
   <button id="think-btn" onclick="toggleThink()" title="Ragionamento esteso ON/OFF">THINK</button>
   <div class="hstat">model: <span id="hdr-model">-</span></div>
   <div class="hstat">session: <span id="hdr-session">00:00</span></div>
@@ -537,7 +538,8 @@ Running on your hardware. No data leaves this machine.</div></div>
       <span id="file-name">-</span>
       <button id="file-clear" onclick="clearFile()">&#x2715;</button>
     </div>
-    <textarea id="input" rows="1" placeholder="Type a message...   ( /web <query> to search the web )" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+    <textarea id="input" rows="1" placeholder="Type a message..." onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+
     <button id="send" onclick="sendMsg()">SEND</button>
     <button id="stop" onclick="stopMsg()">STOP</button>
     <button id="mic-btn" onclick="toggleMic()" title="Trascrizione vocale (Whisper)">&#x1F3A4;</button>
@@ -876,7 +878,8 @@ renderSessionList();
 }());
 
 // Flag e istruzione thinking per modelli reasoning (aggiornato al detect del modello)
-let IS_THINK_ON=false; // reasoning toggle — off di default
+let IS_THINK_ON=false;
+let IS_WEB_ON=false; // reasoning toggle — off di default
 const THINK_INSTR='\n\nFirst draft your thinking process (inner monologue) until you arrive at a response. Format your response using Markdown. Write both your thoughts and the response in the same language as the input.\n\nYour thinking process must follow the template below:[THINK]Your thoughts or/and draft, like working through an exercise on scratch paper. Be as casual and as long as you want until you are confident to generate the response. Use the same language as the input.[/THINK]Here, provide a self-contained response.';
 
 // SYSTEM PROMPTS
@@ -1176,7 +1179,7 @@ function splitChunks(text,size){
 function clearFile(){
   fileCtx=null;fileDoc=null;fileImage=null;fileChat=null;chunks=[];chunkIdx=0;
   document.getElementById('file-badge').style.display='none';
-  document.getElementById('input').placeholder='Type a message...   ( /web <query> to search the web )';
+  document.getElementById('input').placeholder='Type a message...';
 }
 
 // CHAT
@@ -1552,24 +1555,19 @@ async function sendMsg(){
   // /think: toggle ragionamento esteso
 
 
-  const webCmd=/^\/web\b\s*([\s\S]*)$/i.exec(txt);
-  const webQuery=webCmd?webCmd[1].trim():'';
-  const isWebSearch=!!webCmd&&webQuery.length>0;
-  const isDateTimeQuery=!webCmd&&/^\s*(che (giorno|ora)|what (day|date|time)|date|time|day)\b[^\n]*\??$/i.test(txt);
+  let isWebSearch=false;
+  let webQuery='';
+  if(IS_WEB_ON&&txt.trim().length>0){
+    if(!webOk){addMsg('assistant','⚠ Web bridge not active — start selmo_web.py to use web search.');endTurn();return;}
+    isWebSearch=true;
+    webQuery=txt.trim();
+  }
+  const isDateTimeQuery=!isWebSearch&&/^\s*(che (giorno|ora)|what (day|date|time)|date|time|day)\b[^\n]*\??$/i.test(txt);
 
   let content=txt;
-  let proactiveSources=[];  // sources for the footer ledger (populated only by /web)
+  let proactiveSources=[];
 
   function endTurn(){gen=false;btn.style.display='inline-block';stopBtn.style.display='none';abort=null;inp.focus();}
-
-  if(webCmd&&!isWebSearch){
-    addMsg('assistant', fileCtx?'A file is loaded — /web is off while analysing a document.':'Usage:  /web <what to search for>');
-    endTurn();return;
-  }
-  if(isWebSearch&&!webOk){
-    addMsg('assistant','⚠ Web bridge not active — start selmo_web.py to use /web.');
-    endTurn();return;
-  }
 
   if(isDateTimeQuery&&webOk){
     try{
@@ -1595,8 +1593,18 @@ async function sendMsg(){
       const formatted=results.map((r,i)=>
         '['+(i+1)+'] '+r.title+'\n'+r.url+'\n'+(r.snippet||'—')
       ).join('\n\n');
-      const ctxMsg='User query: '+webQuery+'\n\nWeb search results:\n\n'+formatted+'\n\nAnswer the query above using these results, in the same language as the user query. Cite sources as [1], [2], etc. Do not say you cannot access the web — the results are already here.';
-      chatHistory.push({role:'user',content:ctxMsg});
+      const recentClean=chatHistory
+        .filter(m=>m.role!=='system')
+        .slice(-4)
+        .map(m=>{
+          const role=m.role==='user'?'User':'Selmo';
+          const c=(m._orig||m.content||'').replace(/\[THINK\][\s\S]*?\[\/THINK\]/g,'').trim().slice(0,400);
+          return role+': '+c;
+        }).join('\n');
+      const ctxMsg=(recentClean?'Recent conversation:\n'+recentClean+'\n\n':'')
+        +'Web search results for: '+webQuery+'\n\n'+formatted
+        +'\n\nBased on the conversation context and search results above, answer the user\'s latest message directly in the same language. Be specific and useful. Cite sources as [1], [2], etc.';
+      chatHistory.push({role:'user',content:ctxMsg,_orig:txt});
       bub.innerHTML='<span style="opacity:.5">&#x25CA;</span>';
       abort=new AbortController();
       const res=await fetch(`${API}/v1/chat/completions`,{
@@ -1833,6 +1841,11 @@ function sessionTitle(){
     .slice(0,50).trim()||'(chat)';
 }
 
+function toggleWeb(){
+  IS_WEB_ON=!IS_WEB_ON;
+  const btn=document.getElementById('web-btn');
+  if(btn){btn.classList.toggle('on',IS_WEB_ON);btn.textContent=IS_WEB_ON?'WEB ●':'WEB';}
+}
 function toggleThink(){
   IS_THINK_ON=!IS_THINK_ON;
   chatHistory[0].content=IS_THINK_ON?(SP_SELMO+THINK_INSTR):SP_SELMO;
