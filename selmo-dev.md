@@ -1,5 +1,5 @@
 # Selmo — Development documentation
-*Updated session 16 · 2026-06-12 · v0.711*
+*Updated session 16 · 2026-06-12 · v0.712*
 
 ---
 
@@ -158,13 +158,13 @@ AppData\Local\Selmo\
 
 ### Selmo
 Temperature 0.75, top-p 0.9. System prompt **trimmed to 4 lines** (session 14): a touch of
-personality (no preamble, no hype, no servility), plus language and the `/web` mechanic. No long
+personality (ironic, no preamble, no hype, no servility), plus language and the `/web` mechanic. No long
 sections: the model must get straight to the point. The previous version (s13) was already short but
 had a verbose INTERNET section.
 
 ```
 You are Selmo, a local AI on the user's own hardware.
-Direct and concise. No preamble, no hype, no servility. When unsure, say so in a line. Never invent facts.
+Direct, concise, and ironic. No preamble, no hype, no servility. When unsure, say so in a line. Never invent facts.
 Reply in the user's language.
 You don't browse; the user fetches pages with /web and the results appear in the conversation — use them when present. Never output [SEARCH:] tags.
 ```
@@ -315,4 +315,4 @@ Approach:
 ## Session history
 
 ### Session 1-3
-Initial setup. llama.cpp with CUD
+Initial setup. ll

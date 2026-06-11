@@ -112,8 +112,8 @@ def _start(label: str, args: list) -> subprocess.Popen:
 def main():
     parser = argparse.ArgumentParser(description="Selmo Backend Launcher")
     parser.add_argument("--model",  required=True,  help="Path to the .gguf file")
-    parser.add_argument("--ngl",    type=int, default=45,       help="GPU layers")
-    parser.add_argument("--ctx",    type=int, default=8192,     help="Context size")
+    parser.add_argument("--ngl",    type=int, default=99,       help="GPU layers (99 = offload all, let llama.cpp fit what it can)")
+    parser.add_argument("--ctx",    type=int, default=0,        help="Context size (0 = use the model's training context, let the model decide)")
     parser.add_argument("--mmproj", default=None,               help="mmproj path (vision)")
     parser.add_argument("--voice",  default="im_nicola",        help="TTS voice")
     args = parser.parse_args()
@@ -130,8 +130,9 @@ def main():
     print(boxline("Your data stays on your computer."))
     print(border)
     print()
+    ctx_label = "model default" if args.ctx == 0 else str(args.ctx)
     print(f"  Model    : {model_name}")
-    print(f"  -ngl     : {args.ngl}   ctx: {args.ctx}")
+    print(f"  -ngl     : {args.ngl}   ctx: {ctx_label}")
     if args.mmproj:
         print(f"  Vision   : on  ({Path(args.mmproj).name})")
     else:
@@ -178,8 +179,10 @@ def main():
         "--timeout",            "600",
         "--metrics",
         "--path",               str(BASE),
-        "--temp",               "0.75",
-        "--top-p",              "0.9",
+        # No forced sampling (--temp/--top-p removed): the client sends its own
+        # per-request values, so the model's defaults apply otherwise. Neutral
+        # for benchmarking against LM Studio. Only --reasoning-format is kept,
+        # so the reasoning window keeps working.
         "--reasoning-format",   "deepseek",
     ]
     if args.mmproj:
@@ -188,14 +191,9 @@ def main():
             "--batch-size",         "2048",
             "--ubatch-size",        "2048",
         ]
-        # --image-min/max-tokens is a token budget specific to Gemma 3/4.
-        # On a Pixtral encoder (Magistral / Mistral-Small) llama.cpp does not
-        # support it and rejects the image request with HTTP 400 BEFORE launching
-        # the slot (no inference in the log) -> symptom of BUG-IMG-02. We apply
-        # those flags only to Gemma; the other vision models use their native
-        # resolution.
-        if "gemma" in model_name.lower():
-            cmd += ["--image-min-tokens", "1120", "--image-max-tokens", "1120"]
+        # No per-model image-token forcing: every vision model uses its native
+        # resolution (neutral). batch/ubatch 2048 stays so the image tokens fit
+        # in a single ubatch (avoids the Gemma GGML_ASSERT crash, BUG-IMG-01).
 
     print()
     print("  Starting llama-server...")

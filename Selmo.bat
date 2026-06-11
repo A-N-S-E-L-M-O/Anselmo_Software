@@ -60,14 +60,9 @@ for %%F in ("models\*mmproj*.gguf") do (
     )
 )
 
-:: Calcolo -ngl adattivo
-for /f "usebackq" %%S in (`powershell -NoProfile -Command "[int]((Get-Item '!MODELFILE!').Length / 1MB)"`) do set "fsize_mb=%%S"
-
-set NGL=45
-set CTX=8192
-if !fsize_mb! LSS 6000 ( set NGL=99 & set CTX=4096 )
-if !fsize_mb! LSS 9000 if !fsize_mb! GEQ 6000 ( set NGL=99 & set CTX=16384 )
-if !fsize_mb! GTR 13000 ( set NGL=30 & set CTX=8192 )
+:: No forcing: offload all layers to GPU; ctx 0 = let the model decide (training ctx)
+set NGL=99
+set CTX=0
 
 :: Avvio backend -- unica finestra, tutto muore alla chiusura
 if defined MMPROJ_FILE (
