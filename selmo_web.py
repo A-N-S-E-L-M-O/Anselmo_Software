@@ -24,7 +24,7 @@ import json, sys, re, time, datetime
 PORT    = 8081
 TIMEOUT = 8
 
-# Pool SearXNG — prima locale, poi istanze europee pubbliche
+# SearXNG pool — local first, then public European instances
 SEARX_POOL = [
     "http://localhost:8888",
     "https://searx.be",
@@ -44,7 +44,7 @@ except ImportError:
     HAS_TRAF = False
 
 def _strip_html(html_bytes):
-    """Fallback minimo se trafilatura non è installato."""
+    """Minimal fallback if trafilatura is not installed."""
     text = html_bytes.decode("utf-8", errors="replace")
     text = re.sub(r"<style[^>]*>.*?</style>", " ", text, flags=re.S)
     text = re.sub(r"<script[^>]*>.*?</script>", " ", text, flags=re.S)
@@ -192,8 +192,8 @@ def web_search(query, n=5):
     return results
 
 def searx_local_up(timeout=1.0):
-    """Reachability probe della SearXNG locale (Podman, 8888).
-    True = istanza locale raggiungibile -> la ricerca resta sul tuo computer."""
+    """Reachability probe for the local SearXNG (Podman, 8888).
+    True = local instance reachable -> the search stays on your computer."""
     try:
         req = urllib.request.Request("http://localhost:8888/",
                                      headers={"User-Agent": "Selmo"})

@@ -1,25 +1,25 @@
 """
-translate_chunks.py — pipeline ODT -> chunking -> traduzione -> stitching
+translate_chunks.py — pipeline ODT -> chunking -> translation -> stitching
 
-Tre responsabilità, ognuna isolata:
-  1. CHUNKING  : taglia al confine di paragrafo/frase; garanzia di copertura completa.
-  2. TRADUZIONE: manda ogni chunk al modello con un prompt pulito (zero CONTESTO).
-  3. STITCHING : incolla gli output in sequenza con doppio newline. Nessuna modifica al testo.
-                 Il postprocessing si fa sul file di output, non qui.
+Three responsibilities, each isolated:
+  1. CHUNKING   : cuts at paragraph/sentence boundary; full coverage guaranteed.
+  2. TRANSLATION: sends each chunk to the model with a clean prompt (zero CONTEXT).
+  3. STITCHING  : pastes the outputs in sequence with a double newline. No modification to the text.
+                  Post-processing happens on the output file, not here.
 
-Uso:
-    python translate_chunks.py [percorso.odt] [--selftest] [--dry-run]
+Usage:
+    python translate_chunks.py [path.odt] [--selftest] [--dry-run]
 
-    --selftest          verifica chunking senza chiamare il modello
-    --dry-run           mostra i chunk senza tradurre
-    --out FILE          file di output (default: <nome_odt>_EN.md)
-    --size N            forza chunk size in caratteri (default: calcolo automatico)
-    --thinking-buffer N token riservati al thinking del modello (default: 0)
-    --model URL         url del server llama.cpp (default: http://127.0.0.1:8080/...)
+    --selftest          verify chunking without calling the model
+    --dry-run           show the chunks without translating
+    --out FILE          output file (default: <odt_name>_EN.md)
+    --size N            force chunk size in characters (default: automatic calculation)
+    --thinking-buffer N tokens reserved for the model's thinking (default: 0)
+    --model URL         llama.cpp server url (default: http://127.0.0.1:8080/...)
 
-Chunk size automatico (default):
-    Interroga /props (n_ctx reale) e /tokenize (tokenizer esatto) prima di iniziare.
-    Calcola il chunk size ottimale per qualsiasi modello. Usa --size N per forzare.
+Automatic chunk size (default):
+    Queries /props (real n_ctx) and /tokenize (exact tokenizer) before starting.
+    Computes the optimal chunk size for any model. Use --size N to force.
 """
 
 import zipfile, json, urllib.request, urllib.error, time, sys, os, re, argparse
@@ -51,7 +51,7 @@ TRANSLATE_PROMPT = (
     "{text}"
 )
 
-# ── Estrazione ODT ────────────────────────────────────────────────────────────
+# ── ODT extraction ────────────────────────────────────────────────────────────
 def extract_odt(path):
     with zipfile.ZipFile(path) as z:
         xml = z.read('content.xml').decode('utf-8')
@@ -61,7 +61,7 @@ def extract_odt(path):
     def walk(node):
         if node.tag in (f'{{{NS}}}p', f'{{{NS}}}h'):
             t = ''.join(node.itertext()).strip()
-            lines.append(t)   # mantieni anche le righe vuote: sono paragrafi separatori
+            lines.append(t)   # keep empty lines too: they are separator paragraphs
             return
         for child in node:
             walk(child)
@@ -70,7 +70,7 @@ def extract_odt(path):
 
 # ── Chunking ──────────────────────────────────────────────────────────────────
 def _find_break(text, start, size):
-    """Punto di taglio: preferisce confine di paragrafo, poi frase, poi spazio."""
+    """Break point: prefers paragraph boundary, then sentence, then space."""
     n = len(text)
     if start + size >= n:
         return n
@@ -89,7 +89,7 @@ def _find_break(text, start, size):
     return hi
 
 def build_chunks(text, size):
-    """Restituisce lista di (start, end) contigui e non sovrapposti."""
+    """Return a list of contiguous, non-overlapping (start, end) tuples."""
     n, ranges, i = len(text), [], 0
     while i < n:
         e = _find_break(text, i, size)
@@ -106,7 +106,7 @@ def prove_coverage(text, ranges):
     assert ''.join(text[a:b] for a, b in ranges) == text
     return True
 
-# ── Traduzione ────────────────────────────────────────────────────────────────
+# ── Translation ───────────────────────────────────────────────────────────────
 def translate_chunk(text_fragment, api_url, chunk_num, total):
     prompt = TRANSLATE_PROMPT.format(text=text_fragment)
     messages = [
@@ -132,7 +132,7 @@ def translate_chunk(text_fragment, api_url, chunk_num, total):
     except urllib.error.URLError as e:
         return f"[TRANSLATION ERROR chunk {chunk_num}: {e}]"
 
-# ── Calcolo automatico chunk size ─────────────────────────────────────────────
+# ── Automatic chunk size calculation ──────────────────────────────────────────
 def _api_base(api_url):
     return api_url.split('/v1/')[0]
 
@@ -187,10 +187,10 @@ def auto_chunk_size(text, system_prompt, api_url, max_tokens, thinking_buffer):
 
 # ── Stitching ─────────────────────────────────────────────────────────────────
 def stitch(translated_chunks):
-    """Incolla i chunk tradotti in sequenza. Nessuna modifica al testo."""
+    """Paste the translated chunks in sequence. No modification to the text."""
     return '\n\n'.join(c for c in translated_chunks if c).strip()
 
-# ── Colori terminale ──────────────────────────────────────────────────────────
+# ── Terminal colors ───────────────────────────────────────────────────────────
 class C:
     R = '\033[91m'; G = '\033[92m'; Y = '\033[93m'; DIM = '\033[2m'; OFF = '\033[0m'
 if os.name == 'nt':
@@ -198,7 +198,7 @@ if os.name == 'nt':
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main():
-    ap = argparse.ArgumentParser(description="Traduce un ODT in inglese via llama.cpp")
+    ap = argparse.ArgumentParser(description="Translates an ODT into English via llama.cpp")
     ap.add_argument('odt', nargs='?',
                     default=os.path.join(os.path.dirname(__file__),
                                          "Test files", "Dialoghi con la lavatrice.odt"))
@@ -206,22 +206,22 @@ def main():
     ap.add_argument('--dry-run',          action='store_true')
     ap.add_argument('--out',              default=None)
     ap.add_argument('--size',             type=int, default=None,
-                    help='forza chunk size in caratteri (default: calcolo automatico)')
+                    help='force chunk size in characters (default: automatic calculation)')
     ap.add_argument('--model',            default=DEFAULT_API)
     ap.add_argument('--thinking',         action='store_true',
-                    help='modello reasoning (es. Gemma): riserva 800 token per il thinking interno')
+                    help='reasoning model (e.g. Gemma): reserve 800 tokens for internal thinking')
     ap.add_argument('--thinking-buffer',  type=int, default=None, dest='thinking_buffer',
-                    help='token riservati al thinking interno (override di --thinking; default 0)')
+                    help='tokens reserved for internal thinking (overrides --thinking; default 0)')
     args = ap.parse_args()
 
     if args.selftest:
         selftest()
         return
 
-    # ── Thinking model? — riserva token per il reasoning interno ──────────────
-    # Priorità: --thinking-buffer esplicito > --thinking > domanda interattiva > 0.
-    # La domanda compare SOLO con terminale interattivo (stdin.isatty): evita
-    # l'EOFError e la finestra che si chiude al doppio click windowless.
+    # ── Thinking model? — reserve tokens for internal reasoning ───────────────
+    # Priority: explicit --thinking-buffer > --thinking > interactive prompt > 0.
+    # The prompt appears ONLY on an interactive terminal (stdin.isatty): this avoids
+    # the EOFError and the window closing on a windowless double click.
     if args.thinking_buffer is not None:
         thinking_buffer = args.thinking_buffer
     elif args.thinking:
@@ -236,21 +236,21 @@ def main():
         thinking_buffer = 0
 
     if not os.path.exists(args.odt):
-        print(f"{C.R}File non trovato: {args.odt}{C.OFF}")
+        print(f"{C.R}File not found: {args.odt}{C.OFF}")
         sys.exit(1)
 
     out_path = args.out or os.path.splitext(args.odt)[0] + '_EN.md'
 
-    print(f"\n Selmo — traduzione chunked")
+    print(f"\n Selmo — chunked translation")
     print(f" {'─' * 50}")
     text = extract_odt(args.odt)
 
     # ── Calcolo chunk size ────────────────────────────────────────────────────
     if args.size is not None:
         chunk_size = args.size
-        size_source = f"manuale ({chunk_size:,} char)"
+        size_source = f"manual ({chunk_size:,} char)"
     else:
-        print(f"\n translate_chunks — calibrazione modello…")
+        print(f"\n translate_chunks — calibrating model…")
         cs, info = auto_chunk_size(text, SYSTEM_PROMPT, args.model,
                                    MAX_TOKENS, thinking_buffer)
         if cs is not None:
@@ -264,29 +264,29 @@ def main():
         else:
             chunk_size = FALLBACK_SIZE
             size_source = f"fallback ({chunk_size:,} char)"
-            print(f" {C.Y}Server non raggiungibile, uso fallback {FALLBACK_SIZE:,} char{C.OFF}")
+            print(f" {C.Y}Server unreachable, using fallback {FALLBACK_SIZE:,} char{C.OFF}")
 
-    print(f" Sorgente : {os.path.basename(args.odt)}")
+    print(f" Source   : {os.path.basename(args.odt)}")
     print(f" Output   : {os.path.basename(out_path)}")
     print(f" Chunk    : {size_source}\n")
 
-    print(f" Estratti {len(text):,} caratteri")
+    print(f" Extracted {len(text):,} characters")
 
     ranges = build_chunks(text, chunk_size)
     try:
         prove_coverage(text, ranges)
     except AssertionError as e:
-        print(f"{C.R}COPERTURA FALLITA: {e}{C.OFF}")
+        print(f"{C.R}COVERAGE FAILED: {e}{C.OFF}")
         sys.exit(2)
 
     biggest = max(b - a for a, b in ranges)
-    print(f" {C.G}Copertura OK{C.OFF} · {len(ranges)} chunk · max {biggest:,} char\n")
+    print(f" {C.G}Coverage OK{C.OFF} · {len(ranges)} chunk · max {biggest:,} char\n")
 
     if args.dry_run:
         for i, (a, b) in enumerate(ranges):
             snippet = text[a:b].replace('\n', ' ')[:80]
             print(f" [{i+1:3d}/{len(ranges)}] {snippet}…")
-        print(f"\n{C.Y}--dry-run: nessuna chiamata al modello.{C.OFF}")
+        print(f"\n{C.Y}--dry-run: no call to the model.{C.OFF}")
         return
 
     translated = []
@@ -310,7 +310,7 @@ def main():
 
         translated.append(result)
 
-    print(f"\n {C.G}Traduzione completata{C.OFF} in {total_time:.0f}s totali")
+    print(f"\n {C.G}Translation completed{C.OFF} in {total_time:.0f}s total")
     print(f" Stitching {len(translated)} chunk…")
 
     final = stitch(translated)
@@ -318,40 +318,40 @@ def main():
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write(final)
 
-    print(f" {C.G}Salvato{C.OFF}: {out_path}  ({len(final):,} char)\n")
+    print(f" {C.G}Saved{C.OFF}: {out_path}  ({len(final):,} char)\n")
 
 # ── Selftest ───────────────────────────────────────────────────────────────────
 def selftest():
     print("\n SELFTEST\n " + "─" * 40)
     ok = True
 
-    # Chunking: copertura char-esatta
-    text = "Primo paragrafo.\n\nSecondo paragrafo più lungo, con due frasi. Eccola.\n\nTerzo."
+    # Chunking: char-exact coverage
+    text = "First paragraph.\n\nSecond, longer paragraph, with two sentences. Here it is.\n\nThird."
     ranges = build_chunks(text, 40)
     try:
         prove_coverage(text, ranges); g = True
     except AssertionError as e:
         g = False; print("  ", e)
-    print(f" [1] copertura char-esatta         : {'OK' if g else 'FAIL'}")
+    print(f" [1] char-exact coverage           : {'OK' if g else 'FAIL'}")
     ok &= g
 
-    # Stitch: tutti i chunk presenti, in ordine, senza perdite
+    # Stitch: all chunks present, in order, no losses
     chunk_a = "She walked into the room."
     chunk_b = "Nobody moved at all."
     result = stitch([chunk_a, chunk_b])
     g2 = chunk_a in result and chunk_b in result and result.index(chunk_a) < result.index(chunk_b)
-    print(f" [2] stitch: chunk presenti e in ordine: {'OK' if g2 else 'FAIL'}")
+    print(f" [2] stitch: chunks present and ordered: {'OK' if g2 else 'FAIL'}")
     if not g2:
         print(f"     got: {result!r}")
     ok &= g2
 
-    # Stitch: chunk vuoti ignorati
+    # Stitch: empty chunks ignored
     result2 = stitch(["First.", "", "Last."])
     g3 = "First." in result2 and "Last." in result2
-    print(f" [3] stitch: chunk vuoti ignorati  : {'OK' if g3 else 'FAIL'}")
+    print(f" [3] stitch: empty chunks ignored  : {'OK' if g3 else 'FAIL'}")
     ok &= g3
 
-    print("\n " + (f"\033[92mSELFTEST OK\033[0m" if ok else f"\033[91mSELFTEST FALLITO\033[0m"))
+    print("\n " + (f"\033[92mSELFTEST OK\033[0m" if ok else f"\033[91mSELFTEST FAILED\033[0m"))
     sys.exit(0 if ok else 1)
 
 if __name__ == '__main__':

@@ -1,166 +1,166 @@
-# Selmo — Documentazione di sviluppo
-*Aggiornato sessione 15 · 2026-06-11 · v0.709*
+# Selmo — Development documentation
+*Updated session 16 · 2026-06-12 · v0.711*
 
 ---
 
-## v0.708 — UI ricostruita + multi-device (sessione 15)
+## v0.708 — UI rebuilt + multi-device (session 15)
 
-Riprogettata da zero la veste grafica di `chat.html` (solo CSS + ritocchi markup; nessuna logica toccata): estetica retro-terminal rifinita, palette vintage invariata, pannelli e bolle arrotondati, vignette CRT. Layout responsive vero: desktop a 3 colonne; ≤1024px history e dashboard diventano drawer richiamabili dai pulsanti header; ≤640px input a tutta larghezza con target touch 44–46px, `100dvh` (input non più nascosto dalla barra del browser), `overflow-x:hidden` (niente scroll orizzontale dal drawer off-canvas), header che non sfora (<400px nasconde THINK e accorcia il logo). Tipografia ricalibrata e dashboard compattata per non sforare in verticale (odometro a 36px per cella — vincolo JS).
+Redesigned `chat.html`'s look from scratch (CSS only + markup tweaks; no logic touched): refined retro-terminal aesthetic, vintage palette unchanged, rounded panels and bubbles, CRT vignettes. Real responsive layout: 3-column desktop; ≤1024px the history and dashboard become drawers triggered from the header buttons; ≤640px full-width input with 44–46px touch targets, `100dvh` (input no longer hidden by the browser bar), `overflow-x:hidden` (no horizontal scroll from the off-canvas drawer), header that doesn't overflow (<400px hides THINK and shortens the logo). Typography recalibrated and dashboard compacted so it doesn't overflow vertically (36px odometer per cell — a JS constraint).
 
-Fix accesso remoto/telefono: `selmo_web.py` (8081) e `selmo_gpu_monitor.py` (8082) ora in ascolto su `0.0.0.0` (prima `127.0.0.1`, irraggiungibili da LAN); `TTS_URL` lato client usa `location.hostname` invece di `127.0.0.1` cablato. Whisper e TTS erano già su `0.0.0.0`.
+Remote/phone access fix: `selmo_web.py` (8081) and `selmo_gpu_monitor.py` (8082) now listen on `0.0.0.0` (previously `127.0.0.1`, unreachable from LAN); the client-side `TTS_URL` uses `location.hostname` instead of a hardcoded `127.0.0.1`. Whisper and TTS were already on `0.0.0.0`.
 
-Visione: normalizzazione immagini lato client (createImageBitmap→canvas→JPEG, cap 1280px) per foto grandi e HEIC iPhone; `max_tokens` ridotto a 1200 quando c'è un'immagine (riserva ctx ai token immagine); il client mostra ora il corpo dell'errore del server invece di "HTTP 400" secco. **Due bug ancora aperti** — vedi BUG-IMG-02 e BUG-IMG-03 nel bug report.
+Vision: client-side image normalization (createImageBitmap→canvas→JPEG, cap 1280px) for large photos and iPhone HEIC; `max_tokens` reduced to 1200 when there is an image (reserving ctx for the image tokens); the client now shows the server's error body instead of a bare "HTTP 400". **Two bugs still open** — see BUG-IMG-02 and BUG-IMG-03 in the bug report.
 
 ---
 
-## Stack tecnico
+## Technical stack
 
-### Hardware di riferimento
+### Reference hardware
 
-| Componente | Spec |
+| Component | Spec |
 |---|---|
 | CPU | Intel i9-11900KF @ 3.5GHz |
 | RAM | 32GB |
 | GPU | NVIDIA RTX 4070 Ti 12GB VRAM |
 | OS | Windows 11 |
 
-Consumo reale GPU durante inferenza: 70-90W · Utilizzo: ~40-99% · Temperatura: 50-60°C
+Real GPU draw during inference: 70-90W · Utilization: ~40-99% · Temperature: 50-60°C
 
 ### Software
 
-| Componente | Scelta | Note |
+| Component | Choice | Notes |
 |---|---|---|
 | Runtime | llama.cpp (CUDA) · MIT | |
-| GPU monitor | pynvml via Python · porta 8082 | Watt reali dalla GPU |
-| Web bridge | selmo_web.py · porta 8081 | SearXNG locale (Podman) + DDG fallback + trafilatura |
-| Container engine | Podman Desktop · Apache 2.0 | SearXNG su porta 8888 |
-| Launcher | Selmo.bat / Mizan.bat | Selettore modello + logica -ngl adattiva |
-| TTS | selmo_tts.py · porta 8084 | Kokoro-ONNX, voci italiane, auto-detect lingua |
+| GPU monitor | pynvml via Python · port 8082 | Real watts from the GPU |
+| Web bridge | selmo_web.py · port 8081 | Local SearXNG (Podman) + DDG fallback + trafilatura |
+| Container engine | Podman Desktop · Apache 2.0 | SearXNG on port 8888 |
+| Launcher | Selmo.bat / Mizan.bat | Model selector + adaptive -ngl logic |
+| TTS | selmo_tts.py · port 8084 | Kokoro-ONNX, Italian voices, language auto-detect |
 
 
 ---
 
-## Dipendenze — setup completo
+## Dependencies — full setup
 
 ### Python
-Richiede Python 3.10+ (testato su 3.14). Un solo interprete, nessun venv.
+Requires Python 3.10+ (tested on 3.14). A single interpreter, no venv.
 
 ```
 pip install flask faster-whisper pynvml trafilatura requests --break-system-packages
 pip install kokoro-onnx soundfile langdetect --break-system-packages --prefer-binary
 ```
 
-| Pacchetto | Usato da | Note |
+| Package | Used by | Notes |
 |---|---|---|
-| flask | tutti i bridge | web server leggero |
-| faster-whisper | selmo_whisper.py | STT, modello small ~500MB (auto-download) |
-| pynvml | selmo_gpu_monitor.py | watt reali GPU |
-| trafilatura | selmo_web.py | estrazione testo da pagine web |
+| flask | all bridges | lightweight web server |
+| faster-whisper | selmo_whisper.py | STT, small model ~500MB (auto-download) |
+| pynvml | selmo_gpu_monitor.py | real GPU watts |
+| trafilatura | selmo_web.py | text extraction from web pages |
 | requests | selmo_web.py | HTTP client |
-| kokoro-onnx | selmo_tts.py | TTS neurale, Apache 2.0 |
-| soundfile | selmo_tts.py | encode WAV |
-| langdetect | selmo_tts.py | auto-detect lingua per TTS |
+| kokoro-onnx | selmo_tts.py | neural TTS, Apache 2.0 |
+| soundfile | selmo_tts.py | WAV encoding |
+| langdetect | selmo_tts.py | language auto-detect for TTS |
 
-### File modello da scaricare manualmente
+### Model files to download manually
 
-| File | Dove | Dimensione |
+| File | Where | Size |
 |---|---|---|
 |  |  | ~290MB |
 |  |  | ~10MB |
-| modello LLM  |  | variabile |
-| mmproj  |  | ~170-880MB (opzionale, per visione) |
-| Whisper  | auto in  | ~500MB (scaricato al primo avvio) |
+| LLM model |  | variable |
+| mmproj |  | ~170-880MB (optional, for vision) |
+| Whisper | auto in | ~500MB (downloaded on first launch) |
 
-Link kokoro: https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0
+Kokoro link: https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0
 
-### Binari esterni
+### External binaries
 
-| Strumento | Dove | Note |
+| Tool | Where | Notes |
 |---|---|---|
 |  |  | llama.cpp CUDA build |
-| Podman Desktop | installato globalmente | per SearXNG locale |
-| SearXNG | container Podman su porta 8888 | avvio manuale o autostart Podman |
+| Podman Desktop | installed globally | for local SearXNG |
+| SearXNG | Podman container on port 8888 | manual start or Podman autostart |
 
-### Porte
+### Ports
 
-| Porta | Servizio |
+| Port | Service |
 |---|---|
 | 8080 | llama-server (LLM) |
-| 8081 | selmo_web.py (ricerca web) |
-| 8082 | selmo_gpu_monitor.py (GPU watt) |
+| 8081 | selmo_web.py (web search) |
+| 8082 | selmo_gpu_monitor.py (GPU watts) |
 | 8083 | selmo_whisper.py (STT) |
 | 8084 | selmo_tts.py (TTS Kokoro) |
-| 8888 | SearXNG (container Podman) |
+| 8888 | SearXNG (Podman container) |
 
 ---
 
-## Parametri server — logica adattiva launcher
+## Server parameters — adaptive launcher logic
 
-Basata sulla dimensione del file .gguf. Aggiornata sessione 8 con soglia a 9000MB per separare 13B da 22-24B (KV cache sfora a 16384 ctx con 11GB VRAM liberi — verificato su Mistral Small 3.2 24B IQ3_M).
+Based on the size of the .gguf file. Updated in session 8 with a 9000MB threshold to separate 13B from 22-24B (the KV cache overflows at 16384 ctx with 11GB free VRAM — verified on Mistral Small 3.2 24B IQ3_M).
 
-| Range file | Modelli tipici | -ngl | --ctx-size |
+| File range | Typical models | -ngl | --ctx-size |
 |---|---|---|---|
 | < 6000 MB | ~9B | 99 | 4096 |
 | 6000–9000 MB | ~13B | 99 | 16384 |
 | 9000–13000 MB | 22-24B | 45 | 8192 |
 | > 13000 MB | >30B | 30 | 8192 |
 
-**⚠ Limite noto (s14): NGL fisso vs numero di layer.** La fascia 9000–13000 usa `NGL=45`, tarato implicitamente sui **40 layer** di Mistral-Small-24B (45≥40 → tutto in GPU, 33 t/s). Ma **EuroLLM-22B ha 54 layer**: con NGL=45 ne restano **9 sulla CPU** → 6 t/s. La dimensione del file (MB) **non** basta a prevedere la velocità: conta il `block_count` del GGUF. Un 22B "piccolo" su disco può avere più layer di un 24B. Per far volare EuroLLM-22B servirebbe NGL più alto con ctx ridotta (resta comunque al limite dei 12GB). Non corretto in s14 (deciso di puntare su Magistral come sostituto).
+**⚠ Known limit (s14): fixed NGL vs number of layers.** The 9000–13000 band uses `NGL=45`, implicitly tuned on the **40 layers** of Mistral-Small-24B (45≥40 → everything on the GPU, 33 t/s). But **EuroLLM-22B has 54 layers**: with NGL=45, **9 layers stay on the CPU** → 6 t/s. The file size (MB) is **not** enough to predict speed: what counts is the GGUF's `block_count`. A "small" 22B on disk can have more layers than a 24B. To make EuroLLM-22B fly you'd need a higher NGL with reduced ctx (it still stays at the 12GB limit). Not fixed in s14 (decided to bet on Magistral as the replacement).
 
-**Thinking model e finestra di contesto — decisione s9.** Il launcher NON cambia la finestra per i modelli reasoning: tiene GPU piena e `ctx 8192` per tutti. Motivo: il flusso di lavoro è basato sul chunking, quindi ogni pezzo è già piccolo e non serve una ctx grande; in più contesti lunghi di solito peggiorano la qualità e costano velocità. La priorità è sfruttare la GPU al massimo, non avere una finestra ampia. Lo spazio per i token di ragionamento si riserva lato client in `chunk_pipeline.py` con `--thinking-buffer` (default 0; 800+ per reasoning): riduce un po' la dimensione dei chunk lasciando margine al thinking, a parità di ctx server. Percorso sbagliato scartato in s9: nel launcher si era provato (a) ad abbassare `-ngl` da 45 a 35 per far stare ctx 16384 → Gemma crollata da 22 a 8 t/s; (b) a usare KV cache q8_0 per tenere ctx 16384 a GPU piena → comunque inutile/controproducente col chunking. Regola: mai sacrificare `-ngl`, e non allargare la ctx server per il thinking — gestirlo nel pipeline.
+**Thinking models and context window — s9 decision.** The launcher does NOT change the window for reasoning models: it keeps the GPU full and `ctx 8192` for all. Reason: the workflow is chunking-based, so every piece is already small and a large ctx isn't needed; on top of that, long contexts usually hurt quality and cost speed. The priority is to use the GPU to the max, not to have a wide window. Room for the reasoning tokens is reserved on the client side in `chunk_pipeline.py` with `--thinking-buffer` (default 0; 800+ for reasoning): it slightly reduces the chunk size, leaving margin for thinking, at the same server ctx. Wrong path discarded in s9: in the launcher we tried (a) lowering `-ngl` from 45 to 35 to fit ctx 16384 → Gemma collapsed from 22 to 8 t/s; (b) using a q8_0 KV cache to keep ctx 16384 at full GPU → useless/counterproductive with chunking anyway. Rule: never sacrifice `-ngl`, and don't widen the server ctx for thinking — handle it in the pipeline.
 
-`--timeout 0` su entrambi i launcher (aggiunto s8): disabilita timeout server-side, controllo lasciato al client (AbortController in chat.html, 300s in chunk_pipeline.py).
+`--timeout 0` on both launchers (added s8): disables the server-side timeout, control left to the client (AbortController in chat.html, 300s in chunk_pipeline.py).
 
-Nota: EuroLLM 9B ha `n_ctx_train=4096` — ctx superiore genera warning e viene cappato automaticamente.
+Note: EuroLLM 9B has `n_ctx_train=4096` — a higher ctx generates a warning and is capped automatically.
 
 ---
 
-## Modelli testati e parametri confermati
+## Tested models and confirmed parameters
 
-| Modello | File | VRAM | ctx | t/s | Note |
+| Model | File | VRAM | ctx | t/s | Notes |
 |---|---|---|---|---|---|
-| Mistral Small 3.2 24B IQ3_M | mistralai_Mistral-Small-3.2-24B-Instruct-2506-IQ3_M.gguf | ~10.5GB | 8192 | 32-33 | Default produzione · **40 layer** → tutti in GPU con NGL=45 |
-| EuroLLM 22B Q3_K_M | utter-project_EuroLLM-22B-Instruct-2512-Q3_K_M.gguf | ~10.5GB | 8192 | **6** | **54 layer** → con NGL=45 restano 9 layer su CPU = lento. Qualità non impressionante. Vedi lezione NGL. |
-| EuroLLM 9B Q4_K_M | EuroLLM-9B-Instruct-2512.i1-Q4_K_M.gguf | ~5.5GB | 4096 | **70** | ChatML puro (no reasoning). Tutto in GPU. Ragiona bene "nel contesto" in chat normale. |
-| Gemma 4 12B Q6_K | gemma-4-12b-it-Q6_K.gguf | ~9-10GB | 8192 | 22 | Multimodale, reasoning. Apache 2.0. |
+| Mistral Small 3.2 24B IQ3_M | mistralai_Mistral-Small-3.2-24B-Instruct-2506-IQ3_M.gguf | ~10.5GB | 8192 | 32-33 | Production default · **40 layers** → all on GPU with NGL=45 |
+| EuroLLM 22B Q3_K_M | utter-project_EuroLLM-22B-Instruct-2512-Q3_K_M.gguf | ~10.5GB | 8192 | **6** | **54 layers** → with NGL=45, 9 layers stay on CPU = slow. Quality not impressive. See the NGL lesson. |
+| EuroLLM 9B Q4_K_M | EuroLLM-9B-Instruct-2512.i1-Q4_K_M.gguf | ~5.5GB | 4096 | **70** | Pure ChatML (no reasoning). All on GPU. Reasons well "in context" in normal chat. |
+| Gemma 4 12B Q6_K | gemma-4-12b-it-Q6_K.gguf | ~9-10GB | 8192 | 22 | Multimodal, reasoning. Apache 2.0. |
 
-**Candidato sostituto etico (ricerca s14)**: **Magistral Small 2509** (Mistral, francese, Apache 2.0) — reasoning **+ vision** (encoder visivo dalla 2509). Stessa architettura del Mistral-Small-24B (**40 layer** → veloce su 12GB). GGUF: `unsloth/Magistral-Small-2509-GGUF`. Per 12GB: `Q3_K_S` (10.4GB) o ripiego `UD-IQ3_XXS` (9.41GB), + `mmproj-F16.gguf` (rinominare `mmproj-Magistral-Small-2509-F16.gguf` per l'auto-match). Reasoning con token `[THINK]`. Alternativa testo-puro 100% open-data: **OLMo 3 7B Think** (Ai2). Qwen3-VL-8B-Thinking è forte ma cinese.
+**Ethical replacement candidate (s14 research)**: **Magistral Small 2509** (Mistral, French, Apache 2.0) — reasoning **+ vision** (vision encoder from the 2509). Same architecture as Mistral-Small-24B (**40 layers** → fast on 12GB). GGUF: `unsloth/Magistral-Small-2509-GGUF`. For 12GB: `Q3_K_S` (10.4GB) or fallback `UD-IQ3_XXS` (9.41GB), + `mmproj-F16.gguf` (rename to `mmproj-Magistral-Small-2509-F16.gguf` for the auto-match). Reasoning with `[THINK]` tokens. Pure-text 100% open-data alternative: **OLMo 3 7B Think** (Ai2). Qwen3-VL-8B-Thinking is strong but Chinese.
 
 ---
 
-## Struttura file
+## File structure
 
 ```
 AppData\Local\Selmo\
 ├── bin\                          # llama.cpp binaries (CUDA)
-├── models\                       # qualsiasi .gguf qui appare nel menu automaticamente
+├── models\                       # any .gguf here appears in the menu automatically
 ├── Test files\
 │   └── Dialoghi con la lavatrice.odt
-├── chat.html                     # interfaccia principale
-├── mizan.html                    # stub → chat.html in modalità Mizan
-├── Selmo.bat                     # launcher universale
-├── Mizan.bat                     # launcher Mizan (temp 0.01)
-├── selmo_gpu_monitor.py          # monitor watt reali (porta 8082)
-├── selmo_web.py                  # bridge ricerca web (porta 8081)
-├── chunk_pipeline.py             # pipeline generica: file → chunking → LLM → output
-├── translate_chunks.py           # pipeline traduzione ODT
-├── test_chunking.py              # analisi anomalie testuali con chunking robusto
-├── setup-git.ps1                 # inizializzazione repo git locale
-├── selmo-manifesto.md            # visione e roadmap
-├── selmo-dev.md                  # questo file
-├── selmo_whisper.py              # Whisper bridge (porta 8083)
-└── selmo-bug-report.md           # bug tracker vivente
+├── chat.html                     # main interface
+├── mizan.html                    # stub → chat.html in Mizan mode
+├── Selmo.bat                     # universal launcher
+├── Mizan.bat                     # Mizan launcher (temp 0.01)
+├── selmo_gpu_monitor.py          # real watt monitor (port 8082)
+├── selmo_web.py                  # web search bridge (port 8081)
+├── chunk_pipeline.py             # generic pipeline: file → chunking → LLM → output
+├── translate_chunks.py           # ODT translation pipeline
+├── test_chunking.py              # text anomaly analysis with robust chunking
+├── setup-git.ps1                 # local git repo initialization
+├── selmo-manifesto.md            # vision and roadmap
+├── selmo-dev.md                  # this file
+├── selmo_whisper.py              # Whisper bridge (port 8083)
+└── selmo-bug-report.md           # living bug tracker
 ```
 
 ---
 
-## Personalità — system prompts
+## Personality — system prompts
 
 ### Selmo
-Temperatura 0.75, top-p 0.9. System prompt **alleggerito a 4 righe** (sessione 14): un tocco di
-personalità (no preamble, no hype, no servility), più lingua e meccanica `/web`. Niente sezioni
-lunghe: il modello deve attaccare diretto. Versione precedente (s13) era già corta ma con una
-sezione INTERNET prolissa.
+Temperature 0.75, top-p 0.9. System prompt **trimmed to 4 lines** (session 14): a touch of
+personality (no preamble, no hype, no servility), plus language and the `/web` mechanic. No long
+sections: the model must get straight to the point. The previous version (s13) was already short but
+had a verbose INTERNET section.
 
 ```
 You are Selmo, a local AI on the user's own hardware.
@@ -170,149 +170,149 @@ You don't browse; the user fetches pages with /web and the results appear in the
 ```
 
 ### Mizan
-Temperatura 0.01, top-p 1.0. L'antagonista. Deterministico, freddo, senza opinioni.
+Temperature 0.01, top-p 1.0. The antagonist. Deterministic, cold, without opinions.
 
 ```
-Sei un sistema di analisi. Rispondi in modo preciso e conciso.
-Nessuna opinione. Nessuna esitazione. Nessuna prima persona.
-Estrai dati, traduci, controlla codice. L'accuratezza è l'unico criterio.
+You are an analysis system. Reply precisely and concisely.
+No opinions. No hesitation. No first person.
+Extract data, translate, check code. Accuracy is the only criterion.
 
-Per dati aggiornati l'utente usa /web; i risultati restano in conversazione. Mai emettere tag di ricerca.
+For up-to-date data the user uses /web; the results stay in the conversation. Never emit search tags.
 ```
 
-Il toggle Selmo/Mizan cambia system prompt + temperatura + palette colori (blu/rosso) a runtime senza riavviare il server. `mizan.html` setta `localStorage.selmo_automode='mizan'` e redirige a `chat.html`.
+The Selmo/Mizan toggle changes the system prompt + temperature + color palette (blue/red) at runtime without restarting the server. `mizan.html` sets `localStorage.selmo_automode='mizan'` and redirects to `chat.html`.
 
 ---
 
-## Accesso
+## Access
 
 **Desktop** — `http://127.0.0.1:8080/chat.html`
-**Rete locale** — `http://192.168.x.x:8080/chat.html` (firewall Windows chiede conferma al primo avvio)
-**Remoto** — VPN sul router di casa → il telefono rientra nella rete locale, zero config aggiuntiva
+**Local network** — `http://192.168.x.x:8080/chat.html` (Windows firewall asks for confirmation on first launch)
+**Remote** — VPN on the home router → the phone re-enters the local network, zero extra config
 
 ---
 
-## Funzionalità chat.html — implementate ✓
+## chat.html features — implemented ✓
 
-- Tachimetro SVG con ago animato (Watt GPU reali o stimati)
-- Odometro meccanico a tamburi (Wh sessione)
-- Wattmetro reale via GPU monitor (porta 8082, polling 1s)
-- Costo elettricità configurabile (€/kWh persistente in localStorage)
-- Wh sessione e totali persistenti con pulsante reset
-- Token totali persistenti con pulsante reset
-- Pulsante STOP con AbortController
-- Pulsante + nuova chat
-- Pulsante EXPORT → scarica chat come .md con timestamp, modello, Wh
-- Font Share Tech Mono
-- Palette blu (Selmo) e rossa (Mizan) con toggle a runtime
-- Toggle Selmo/Mizan — cambio system prompt + temperatura + colori
-- Caricamento file: .txt, .csv, .docx (JSZip + DOMParser namespace-aware), .odt (JSZip + DOMParser)
-- Auto-chunking documenti lunghi (CHUNK_SIZE=11000 char) con riepilogo finale
-- Comando `/web <query>`: ricerca esplicita, niente parte da sola
-- Risultati `/web` iniettati come contesto a priorità massima, riusabili nei messaggi successivi, citazioni `[1][2]`, ledger fonti
-- Endpoint `/datetime`: data/ora reale senza ricerca esterna
-- Ledger fonti cliccabile con indicatore motore (verde = SearXNG local, giallo = fallback)
-- Estrazione testo completo con trafilatura (news)
-- Indicatore connessione server con retry automatico ogni 3s
-- Indicatore web bridge con motore attivo
-- Caricamento immagini (jpg/png/gif/webp): base64 → messaggio multimodale OpenAI-compatible (richiede mmproj)
-- Pulsante microfono (🎤): MediaRecorder → POST /transcribe → testo iniettato nell'input
-- Indicatore stato Whisper bridge (porta 8083)
-- Push-to-talk: tieni Spazio o tasto centrale mouse → registra → rilascia → trascrive → invia automaticamente
-- TTS voce di sistema (Web Speech API, it-IT): pulsante 🔊, sempre attivo senza server. PTT forza TTS anche se disattivato manualmente
-- Caricamento .xlsx/.xls/.ods (SheetJS): converti in testo CSV con nome foglio
-- Caricamento .pdf (PDF.js): estrazione testo pagina per pagina
-- Caricamento .pptx (JSZip + XML): estrazione testo slide per slide
-- Caricamento .odp (JSZip + content.xml + NS API): estrazione testo per pagina
-- Kokoro TTS (kokoro-onnx, Apache 2.0): voce neurale offline, porta 8084, auto-detect lingua (langdetect)
-- Ctrl+Spazio: PTT web search (trascrive e invia come /web <testo>, risposta letta ad alta voce)
-- Launcher: abbinamento mmproj automatico per nome (niente più scelta manuale)
-- Pannello reasoning collassabile (chat, web, file/chunk) — il ragionamento resta fuori dallo stitch del documento
-- System prompt semplificato (SP_SELMO asciutto)
-- Fix /web: bolla messaggio utente mostrata + risposta nella lingua dell'utente
-- Indicatore SearXNG locale: `/status` sonda la 8888; pallino verde "web locale", giallo se locale giù (fallback pubblico = dati che escono), spento se bridge off
-- Pulsante + IMG/OCR: visione Gemma 4 su immagini e PDF (una immagine per pagina, thumbnail cliccabili); flag mmproj nel launcher
-- Versione v0.702
-
----
-
-## Lezioni apprese
-
-**Mai usare il tool Edit su chat.html** — il file è grande (~1350 righe) con template literals multiriga. Il tool tronca silenziosamente. Usare sempre Python via bash (vedi BUG-META-01 nel bug report).
-
-**node --check dopo ogni modifica a chat.html** — estrarre lo script inline e verificare prima di chiudere la sessione.
-
-**Riavvio server dopo modifica a chat.html** — `llama-server --path .` può servire la versione cached. Mitigazione: meta anti-cache nell'head + Ctrl+F5.
-
-**La lingua segue sempre l'utente** — mai cablare una lingua nei prompt iniettati. Usare "reply in the same language as the user's message".
-
-**KV cache e VRAM** — modelli 22-24B con ctx 16384 sforano gli 11GB VRAM liberi su RTX 4070 Ti. Soglia sicura: ctx 8192 per file > 9.5GB.
-
-**IQ3_M vs Q3_K_M** — IQ3_M è quantizzazione a importanza: stesso ingombro, qualità leggermente superiore perché preserva i pesi critici.
-
-**Timeout server** — `--timeout 0` disabilita il timeout lato server. Il `should_stop` nel log indica cancellazione per disconnessione client, non un errore critico.
-
-**Git è l'unico safety net — commit a ogni feedback positivo** — niente più backup `.bat` (`bk.bat`/`restore.bat`/`bk*`, deprecati). Quando Fabio conferma che qualcosa funziona: commit immediato con messaggio chiaro + avanzamento versione (badge `hbadge` in chat.html e intestazione di questo file). Lezione costosa s13: la prima iterazione vision funzionante è rimasta solo nel working tree, mai committata, e quando le micro-modifiche successive l'hanno rotta non c'era nessuno snapshot a cui tornare. Mai più stati buoni non committati.
-
-**Vision PDF — mai un canvas concatenato** — più pagine in un solo canvas verticale gigante danno aspect ratio estremo e base64 multi-MB. Renderizzare una immagine per pagina, cap del lato lungo (~1280px), e passarle come array di `image_url` nel content multimodale.
-
-**Vision Gemma 4 — token budget + ubatch** — Gemma 4 ha un budget token/immagine (70/140/280/560/1120; 1120 per OCR). L'encoder usa attenzione non-causale → i token immagine devono stare in un solo ubatch: serve `--batch-size`/`--ubatch-size` ≥ token immagine (2048 per budget 1120), sennò `GGML_ASSERT` e crash. Flag solo nel ramo mmproj di Selmo.bat.
-
-**.bat: CRLF e zero NUL** — i `.bat` devono essere CRLF (il `^` di continuazione su LF rompe cmd). Occhio alla corruzione NUL del mount (BUG-META-02): dopo ogni modifica a `.bat`/`.md` controllare che i byte NUL siano 0.
-
-**Velocità ≠ dimensione file: conta il numero di layer (s14)** — un modello "più piccolo" in MB può essere più lento se ha più layer del valore `-ngl` fisso. EuroLLM-22B (54 layer) a NGL=45 lascia 9 layer su CPU → 6 t/s; Mistral-Small-24B (40 layer) a NGL=45 va tutto in GPU → 33 t/s, pur essendo quasi uguale su disco. Leggere il `block_count` dal GGUF prima di concludere su VRAM o flag.
-
-**Ragionamento: lascialo al server, non parsarlo nel client (s14)** — il vecchio scanner client dei tag `<think>` era rotto: i token escono spezzati tra i delta dello stream (`<`, `think`, `>`), quindi `indexOf('<think>')` falliva e il pannello non scattava. Soluzione: niente parsing manuale; `llama-server` estrae il reasoning in `reasoning_content` e il pannello aggancia **solo** quello. Rimosso anche il bottone THINK e `budget_tokens` (param non standard, ignorato). Modelli ChatML puri (EuroLLM) non emettono reasoning: nessun pannello, ed è corretto. Per far comparire il pannello con modelli reasoning può servire `--reasoning-format` nel launcher.
-
-**SP_TASK zittisce il ragionamento (s14)** — il prompt dei chunk dice "output only the result, no commentary": giusto per traduzione/estrazione, sbagliato per domande analitiche ("perché i totali non combaciano"). Su quelle il modello salta a una conclusione confusa. Per questo le domande analitiche vanno in **chat normale** (SP_SELMO), non nella pipeline a chunk. Da v0.705 la scelta è guidata: file > 50% della ctx → si chiede "Chunk it / Normal chat"; file leggero → chat normale automatica col documento come contesto.
+- SVG speedometer with animated needle (real or estimated GPU watts)
+- Mechanical drum odometer (session Wh)
+- Real wattmeter via GPU monitor (port 8082, 1s polling)
+- Configurable electricity cost (€/kWh persisted in localStorage)
+- Session and total Wh persisted with a reset button
+- Total tokens persisted with a reset button
+- STOP button with AbortController
+- + new chat button
+- EXPORT button → downloads the chat as .md with timestamp, model, Wh
+- Share Tech Mono font
+- Blue (Selmo) and red (Mizan) palette with a runtime toggle
+- Selmo/Mizan toggle — switches system prompt + temperature + colors
+- File loading: .txt, .csv, .docx (JSZip + namespace-aware DOMParser), .odt (JSZip + DOMParser)
+- Auto-chunking of long documents (CHUNK_SIZE=11000 char) with a final summary
+- `/web <query>` command: explicit search, nothing runs on its own
+- `/web` results injected as top-priority context, reusable in later messages, `[1][2]` citations, source ledger
+- `/datetime` endpoint: real date/time without an external search
+- Clickable source ledger with an engine indicator (green = SearXNG local, yellow = fallback)
+- Full text extraction with trafilatura (news)
+- Server connection indicator with automatic retry every 3s
+- Web bridge indicator with the active engine
+- Image loading (jpg/png/gif/webp): base64 → OpenAI-compatible multimodal message (requires mmproj)
+- Microphone button (🎤): MediaRecorder → POST /transcribe → text injected into the input
+- Whisper bridge status indicator (port 8083)
+- Push-to-talk: hold Space or the middle mouse button → record → release → transcribe → send automatically
+- System-voice TTS (Web Speech API, it-IT): 🔊 button, always available without a server. PTT forces TTS even if manually disabled
+- .xlsx/.xls/.ods loading (SheetJS): convert to CSV text with the sheet name
+- .pdf loading (PDF.js): page-by-page text extraction
+- .pptx loading (JSZip + XML): slide-by-slide text extraction
+- .odp loading (JSZip + content.xml + NS API): page-by-page text extraction
+- Kokoro TTS (kokoro-onnx, Apache 2.0): offline neural voice, port 8084, language auto-detect (langdetect)
+- Ctrl+Space: PTT web search (transcribes and sends as /web <text>, response read aloud)
+- Launcher: automatic mmproj matching by name (no more manual choice)
+- Collapsible reasoning panel (chat, web, file/chunk) — the reasoning stays out of the document stitch
+- Simplified system prompt (lean SP_SELMO)
+- /web fix: user message bubble shown + response in the user's language
+- Local SearXNG indicator: `/status` probes 8888; green dot "local web", yellow if local is down (public fallback = data leaving), off if the bridge is off
+- + IMG/OCR button: Gemma 4 vision on images and PDFs (one image per page, clickable thumbnails); mmproj flag in the launcher
+- Version v0.702
 
 ---
 
-## Vision Gemma 4 — strategia lean (implementata, v0.702)
+## Lessons learned
 
-✓ Implementata e funzionante (v0.702): pulsante **+ IMG/OCR** in chat.html (PDF una immagine per pagina ~1280px, thumbnail cliccabili) + flag mmproj in Selmo.bat (`--image-min-tokens 1120 --image-max-tokens 1120 --batch-size 2048 --ubatch-size 2048`). Verificato su Gemma 4 12B / RTX 4070 Ti 12GB.
+**Never use the Edit tool on chat.html** — the file is large (~1350 lines) with multiline template literals. The tool truncates silently. Always use Python via bash (see BUG-META-01 in the bug report).
 
-Ricerca sessione 13. Gemma 4 **non** usa il pan-and-scan di Gemma 3: ha un **budget di token per immagine** che fissa la risoluzione interpretata. Livelli: 70, 140, 280, 560, 1120. Consigli per task:
-- 70 / 140 → captioning, classificazione, frame video veloci
-- 280 / 560 → chat multimodale generica, grafici, screen/UI
-- **1120 → OCR, parsing documenti, scrittura a mano, testo piccolo** (il nostro caso: busta paga)
+**node --check after every change to chat.html** — extract the inline script and verify before closing the session.
 
-Conseguenze pratiche:
-- Inutile renderizzare immagini enormi: il modello ridimensiona comunque al budget. Lato `chat.html` basta **una immagine per pagina** a ~1024–1280px lato lungo, niente canvas concatenato.
-- Costo contesto ≈ il budget scelto (≈1120 token/pagina in OCR): con ctx 8192 ci stanno un paio di pagine.
+**Restart the server after a change to chat.html** — `llama-server --path .` can serve the cached version. Mitigation: anti-cache meta in the head + Ctrl+F5.
 
-Flag llama.cpp (in `Selmo.bat`, solo quando c'è mmproj):
+**The language always follows the user** — never hardcode a language in the injected prompts. Use "reply in the same language as the user's message".
+
+**KV cache and VRAM** — 22-24B models with ctx 16384 overflow the 11GB free VRAM on the RTX 4070 Ti. Safe threshold: ctx 8192 for files > 9.5GB.
+
+**IQ3_M vs Q3_K_M** — IQ3_M is importance quantization: same footprint, slightly higher quality because it preserves the critical weights.
+
+**Server timeout** — `--timeout 0` disables the server-side timeout. The `should_stop` in the log indicates cancellation due to client disconnect, not a critical error.
+
+**Git is the only safety net — commit on every positive feedback** — no more `.bat` backups (`bk.bat`/`restore.bat`/`bk*`, deprecated). When Fabio confirms something works: immediate commit with a clear message + version bump (the `hbadge` badge in chat.html and the header of this file). Costly s13 lesson: the first working vision iteration lived only in the working tree, never committed, and when later micro-changes broke it there was no snapshot to go back to. Never again leave good states uncommitted.
+
+**Vision PDF — never a concatenated canvas** — multiple pages in a single giant vertical canvas give an extreme aspect ratio and a multi-MB base64. Render one image per page, cap the long side (~1280px), and pass them as an array of `image_url` in the multimodal content.
+
+**Vision Gemma 4 — token budget + ubatch** — Gemma 4 has a token/image budget (70/140/280/560/1120; 1120 for OCR). The encoder uses non-causal attention → the image tokens must fit in a single ubatch: you need `--batch-size`/`--ubatch-size` ≥ image tokens (2048 for the 1120 budget), otherwise `GGML_ASSERT` and a crash. Flag only in the mmproj branch of Selmo.bat.
+
+**.bat: CRLF and zero NUL** — the `.bat` files must be CRLF (the `^` continuation on LF breaks cmd). Watch out for the mount's NUL corruption (BUG-META-02): after every change to `.bat`/`.md`, check that the NUL bytes are 0.
+
+**Speed ≠ file size: layer count is what matters (s14)** — a "smaller" model in MB can be slower if it has more layers than the fixed `-ngl` value. EuroLLM-22B (54 layers) at NGL=45 leaves 9 layers on the CPU → 6 t/s; Mistral-Small-24B (40 layers) at NGL=45 goes fully to the GPU → 33 t/s, despite being almost identical on disk. Read the `block_count` from the GGUF before drawing conclusions about VRAM or flags.
+
+**Reasoning: leave it to the server, don't parse it in the client (s14)** — the old client-side scanner for `<think>` tags was broken: the tokens come out split across the stream deltas (`<`, `think`, `>`), so `indexOf('<think>')` failed and the panel didn't trigger. Solution: no manual parsing; `llama-server` extracts the reasoning into `reasoning_content` and the panel hooks **only** that. Also removed the THINK button and `budget_tokens` (a non-standard param, ignored). Pure ChatML models (EuroLLM) emit no reasoning: no panel, and that's correct. To make the panel appear with reasoning models you may need `--reasoning-format` in the launcher.
+
+**SP_TASK silences the reasoning (s14)** — the chunk prompt says "output only the result, no commentary": right for translation/extraction, wrong for analytical questions ("why don't the totals match"). On those the model jumps to a confused conclusion. That's why analytical questions go to **normal chat** (SP_SELMO), not the chunk pipeline. From v0.705 the choice is guided: file > 50% of ctx → it asks "Chunk it / Normal chat"; light file → normal chat automatically with the document as context.
+
+---
+
+## Vision Gemma 4 — lean strategy (implemented, v0.702)
+
+✓ Implemented and working (v0.702): **+ IMG/OCR** button in chat.html (PDF one image per page ~1280px, clickable thumbnails) + mmproj flag in Selmo.bat (`--image-min-tokens 1120 --image-max-tokens 1120 --batch-size 2048 --ubatch-size 2048`). Verified on Gemma 4 12B / RTX 4070 Ti 12GB.
+
+Session 13 research. Gemma 4 does **not** use Gemma 3's pan-and-scan: it has a **token budget per image** that fixes the interpreted resolution. Levels: 70, 140, 280, 560, 1120. Recommendations per task:
+- 70 / 140 → captioning, classification, fast video frames
+- 280 / 560 → generic multimodal chat, charts, screen/UI
+- **1120 → OCR, document parsing, handwriting, small text** (our case: payslip)
+
+Practical consequences:
+- No point rendering huge images: the model resizes to the budget anyway. On the `chat.html` side **one image per page** at ~1024–1280px on the long side is enough, no concatenated canvas.
+- Context cost ≈ the chosen budget (≈1120 tokens/page in OCR): with ctx 8192 a couple of pages fit.
+
+llama.cpp flags (in `Selmo.bat`, only when there is an mmproj):
 ```
 --image-min-tokens 1120 --image-max-tokens 1120 --batch-size 2048 --ubatch-size 2048
 ```
-**Causa vera di BUG-IMG-01**: l'encoder vision di Gemma 4 usa attenzione **non-causale** sui token immagine → devono stare tutti in un solo ubatch. Con `ubatch` di default (512) e immagine grande scatta `GGML_ASSERT(n_ubatch >= n_tokens)` e il server muore (HTTP 500/400). Non era il formato del messaggio: era il batching. Alzare batch/ubatch a 2048 lo risolve.
+**The real cause of BUG-IMG-01**: Gemma 4's vision encoder uses **non-causal** attention on the image tokens → they must all fit in a single ubatch. With the default `ubatch` (512) and a large image, `GGML_ASSERT(n_ubatch >= n_tokens)` fires and the server dies (HTTP 500/400). It wasn't the message format: it was the batching. Raising batch/ubatch to 2048 fixes it.
 
-Fonti: ai.google.dev/gemma/docs/capabilities/vision · dev.to/someoddcodeguy "Gemma 4 image settings in llama.cpp" · unsloth.ai/docs/models/gemma-4
-
----
-
-## Prossimi passi (roadmap s14)
-
-### 1. Lifecycle pulito — niente finestre orfane, purge all'arresto
-Problema: `Selmo.bat` apre 4 servizi Python (GPU monitor 8082, web 8081, whisper 8083, TTS 8084) con `start /min`, ognuno in una finestra che resta aperta e va chiusa a mano quando si ferma il task principale. Brutto e scomodo.
-Obiettivo: backend nascosto + **purge completo** quando `llama-server` (il processo principale) si arresta.
-Approccio:
-- Avviare i bridge **senza finestra**: `pythonw.exe` (niente console) o `start /b`, invece di `start /min`.
-- Tracciare i PID all'avvio e, alla chiusura di llama-server, fare cleanup (`taskkill` dei 4 servizi). In `Selmo.bat` il cleanup va dopo il blocco server (foreground), prima del `pause`.
-- Alternativa più pulita: un orchestratore unico (`selmo_launch.py` via pythonw) che spawna i sottoprocessi + llama-server, aspetta, e killa i figli all'uscita. SearXNG (Podman) resta fuori, è separato.
-
-### 2. UI responsive / uso da telefono
-Stato: il server è già raggiungibile in rete locale (testato da un altro device — funziona), ma la grafica non si adatta.
-Obiettivo: usabile da telefono e a finestre piccole.
-Approccio:
-- Media query: sotto una soglia di larghezza utile (~800×600) impilare le 3 colonne (history / chat / dashboard) in una sola; target touch più grandi.
-- Tachimetro SVG → a finestra piccola sostituirlo con una **barra orizzontale** (gauge lineare) per i Watt; compattare odometro Wh, costo, token.
-- Dashboard collassabile su mobile per dare spazio alla chat.
-- Viewport meta già presente; manca il CSS adattivo.
+Sources: ai.google.dev/gemma/docs/capabilities/vision · dev.to/someoddcodeguy "Gemma 4 image settings in llama.cpp" · unsloth.ai/docs/models/gemma-4
 
 ---
 
-## Storico sessioni
+## Next steps (s14 roadmap)
 
-### Sessione 1-3
-Setup iniziale. llama.cpp con CUD
+### 1. Clean lifecycle — no orphan windows, purge on shutdown
+Problem: `Selmo.bat` opens 4 Python services (GPU monitor 8082, web 8081, whisper 8083, TTS 8084) with `start /min`, each in a window that stays open and must be closed by hand when the main task stops. Ugly and inconvenient.
+Goal: hidden backend + **full purge** when `llama-server` (the main process) stops.
+Approach:
+- Start the bridges **without a window**: `pythonw.exe` (no console) or `start /b`, instead of `start /min`.
+- Track the PIDs at startup and, when llama-server closes, do cleanup (`taskkill` the 4 services). In `Selmo.bat` the cleanup goes after the server block (foreground), before the `pause`.
+- Cleaner alternative: a single orchestrator (`selmo_launch.py` via pythonw) that spawns the subprocesses + llama-server, waits, and kills the children on exit. SearXNG (Podman) stays outside, it's separate.
+
+### 2. Responsive UI / phone use
+Status: the server is already reachable on the local network (tested from another device — it works), but the UI doesn't adapt.
+Goal: usable from a phone and at small window sizes.
+Approach:
+- Media queries: below a useful width threshold (~800×600) stack the 3 columns (history / chat / dashboard) into one; larger touch targets.
+- SVG speedometer → at small windows replace it with a **horizontal bar** (linear gauge) for the watts; compact the Wh odometer, cost, tokens.
+- Collapsible dashboard on mobile to give room to the chat.
+- Viewport meta already present; the adaptive CSS is missing.
+
+---
+
+## Session history
+
+### Session 1-3
+Initial setup. llama.cpp with CUD

@@ -409,15 +409,15 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.710</div>
+  <div class="hbadge">v0.711</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
-  <button id="mob-nav-btn" onclick="mobToggle('nav')" title="Cronologia">&#9776;</button>
+  <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
   <button id="mob-dash-btn" onclick="mobToggle('dash')" title="Dashboard">&#9881;</button>
     <button id="new-chat" onclick="newChat()">+ NEW CHAT</button>
   <button id="export-chat" onclick="exportChat()">&#x2193; EXPORT</button>
-  <button id="web-btn" onclick="toggleWeb()" title="Ricerca web ON/OFF">WEB</button>
-  <button id="think-btn" onclick="toggleThink()" title="Ragionamento esteso ON/OFF">THINK</button>
+  <button id="web-btn" onclick="toggleWeb()" title="Web search ON/OFF">WEB</button>
+  <button id="think-btn" onclick="toggleThink()" title="Extended reasoning ON/OFF">THINK</button>
   <div class="hstat">model: <span id="hdr-model">-</span></div>
   <div class="hstat">session: <span id="hdr-session">00:00</span></div>
   <div id="conn"></div>
@@ -482,7 +482,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 
   <div id="status-row">
     <div id="status-dot"></div>
-    <span id="status-txt">in attesa</span>
+    <span id="status-txt">idle</span>
   </div>
   <div id="web-row" style="display:flex;align-items:center;gap:8px;margin-top:3px;">
     <div id="web-dot" style="width:8px;height:8px;border-radius:50%;background:var(--dim);border:1px solid var(--dim);flex-shrink:0;"></div>
@@ -548,7 +548,7 @@ Running on your hardware. No data leaves this machine.</div></div>
     <input type="file" id="file-input" accept=".docx,.odt,.txt,.md,.csv,.xlsx,.xls,.ods,.pdf,.pptx,.odp" onchange="loadFile(this)">
     <button id="upload-btn" onclick="document.getElementById('file-input').click()">+ FILE</button>
     <input type="file" id="file-input-img" accept="image/*,.pdf,.heic,.heif" onchange="loadFileAsImage(this)">
-    <button id="upload-img-btn" onclick="document.getElementById('file-input-img').click()" title="Immagine o PDF per la visione / OCR del modello">+ IMG/OCR</button>
+    <button id="upload-img-btn" onclick="document.getElementById('file-input-img').click()" title="Image or PDF for the model's vision / OCR">+ IMG/OCR</button>
     <div id="file-badge">
       <span id="file-name">-</span>
       <button id="file-clear" onclick="clearFile()">&#x2715;</button>
@@ -557,16 +557,16 @@ Running on your hardware. No data leaves this machine.</div></div>
 
     <button id="send" onclick="sendMsg()">SEND</button>
     <button id="stop" onclick="stopMsg()">STOP</button>
-    <button id="mic-btn" onclick="toggleMic()" title="Trascrizione vocale (Whisper)">&#x1F3A4;</button>
-    <button id="tts-btn" onclick="toggleTts()" title="Leggi risposte ad alta voce (Kokoro TTS)">&#x1F508;</button>
+    <button id="mic-btn" onclick="toggleMic()" title="Voice transcription (Whisper)">&#x1F3A4;</button>
+    <button id="tts-btn" onclick="toggleTts()" title="Read responses aloud (Kokoro TTS)">&#x1F508;</button>
   </div>
   <div class="meta">No data transmitted &middot; <span id="foot-model">-</span> &middot; localhost:8080</div>
 </main>
 
 <script>
 'use strict';
-// Base URL derivati dalla pagina: same-origin quando servito da llama-server
-// (niente CORS), host corretto su accesso LAN/mobile, fallback a 127.0.0.1 per file://
+// Base URLs derived from the page: same-origin when served by llama-server
+// (no CORS), correct host for LAN/mobile access, fallback to 127.0.0.1 for file://
 const _http=(location.protocol==='http:'||location.protocol==='https:');
 const _host=_http?location.hostname:'127.0.0.1';
 const API=_http?location.origin:'http://127.0.0.1:8080';
@@ -739,7 +739,7 @@ async function checkWebBridge(){
     if(d.searx_local){
       paint('--green','web locale'+(d.trafilatura?'':' (no traf.)'));
     } else {
-      // bridge attivo ma SearXNG locale giù: la ricerca cadrebbe su istanze pubbliche
+      // bridge active but local SearXNG down: the search would fall back to public instances
       paint('--yellow','⚠ SearXNG locale OFF — fallback pubblico');
     }
   }catch(e){
@@ -765,7 +765,7 @@ async function checkWhisperBridge(){
     dot.style.boxShadow='0 0 4px var(--green)';
     txt.style.color='var(--green)';
     txt.textContent='whisper OK ('+d.model+')';
-    document.getElementById('mic-btn').title='Registra e trascrivi (Whisper '+d.model+')';
+    document.getElementById('mic-btn').title='Record and transcribe (Whisper '+d.model+')';
   }catch{
     whisperOk=false;
     const dot=document.getElementById('whisper-dot');
@@ -786,14 +786,14 @@ async function toggleMic(){
     return;
   }
   if(!whisperOk){
-    addMsg('assistant','\u26A0 Whisper non attivo. Avvia selmo_whisper.py per usare il microfono.');
+    addMsg('assistant','\u26A0 Whisper not running. Start selmo_whisper.py to use the microphone.');
     return;
   }
   let stream;
   try{
     stream=await navigator.mediaDevices.getUserMedia({audio:true});
   }catch(e){
-    addMsg('assistant','\u26A0 Microfono non disponibile: '+e.message);
+    addMsg('assistant','\u26A0 Microphone not available: '+e.message);
     return;
   }
   audioChunks=[];
@@ -832,7 +832,7 @@ async function toggleMic(){
       }
       else inp.focus();
     }catch(e){
-      addMsg('assistant','\u26A0 Errore trascrizione: '+e.message);
+      addMsg('assistant','\u26A0 Transcription error: '+e.message);
       pttAutoSend=false;
     }
     btn.textContent='\uD83C\uDFA4';
@@ -859,10 +859,10 @@ async function webSearch(query, n=5){
 
 // Check librerie esterne
 setTimeout(()=>{
-  console.log('JSZip disponibile:', typeof JSZip !== 'undefined');
-  if(typeof JSZip === 'undefined') console.warn('JSZip non caricato - funzione docx non disponibile');
-  console.log('SheetJS disponibile:', typeof XLSX !== 'undefined');
-  console.log('PDF.js disponibile:', typeof pdfjsLib !== 'undefined');
+  console.log('JSZip available:', typeof JSZip !== 'undefined');
+  if(typeof JSZip === 'undefined') console.warn('JSZip not loaded - docx feature unavailable');
+  console.log('SheetJS available:', typeof XLSX !== 'undefined');
+  console.log('PDF.js available:', typeof pdfjsLib !== 'undefined');
   if(typeof pdfjsLib !== 'undefined')
     pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 },2000);
@@ -872,7 +872,7 @@ document.getElementById('wh-total').textContent=whAll.toFixed(3);
 updCost();
 renderSessionList();
 
-// MODEL — retry finché il server non è pronto
+// MODEL — retry until the server is ready
 (function checkServer(){
   fetch(`${API}/v1/models`)
     .then(r=>r.json()).then(d=>{
@@ -881,12 +881,12 @@ renderSessionList();
       document.getElementById('hdr-model').textContent=short;
       const fm=document.getElementById('foot-model');if(fm)fm.textContent=short;
       document.getElementById('conn').style.background='#55FF55';
-      // Magistral usa [THINK]...[/THINK] nel content (non reasoning_content).
-      // Il template bypassa il default_system_message quando riceviamo SP_SELMO,
-      // quindi le istruzioni thinking vanno aggiunte manualmente al system message.
+      // Magistral uses [THINK]...[/THINK] in the content (not reasoning_content).
+      // The template bypasses default_system_message when we receive SP_SELMO,
+      // so the thinking instructions must be added manually to the system message.
 
 
-      // Legge n_ctx reale e calibra CHUNK_SIZE sul modello attivo
+      // Reads the real n_ctx and calibrates CHUNK_SIZE on the active model
       fetch(`${API}/props`).then(r=>r.json()).then(p=>{
         const nCtx=p?.default_generation_settings?.n_ctx||p?.n_ctx||0;
         if(nCtx>=1024){N_CTX=nCtx;
@@ -897,15 +897,15 @@ renderSessionList();
           document.getElementById('hdr-model').title=
             `ctx: ${nCtx.toLocaleString()} tok  ·  chunk max: ${CHUNK_SIZE.toLocaleString()} char`;
         }
-      }).catch(()=>{/* /props non disponibile: resta il default */});
+      }).catch(()=>{/* /props unavailable: keep the default */});
     }).catch(()=>{
       document.getElementById('conn').style.background='var(--red)';
-      document.getElementById('hdr-model').textContent='avvio...';
+      document.getElementById('hdr-model').textContent='starting...';
       setTimeout(checkServer,3000);
     });
 }());
 
-// Flag e istruzione thinking per modelli reasoning (aggiornato al detect del modello)
+// Thinking flag and instruction for reasoning models (updated on model detect)
 let IS_THINK_ON=false;
 let IS_WEB_ON=false; // reasoning toggle — off di default
 const THINK_INSTR='\n\nFirst draft your thinking process (inner monologue) until you arrive at a response. Format your response using Markdown. Write both your thoughts and the response in the same language as the input.\n\nYour thinking process must follow the template below:[THINK]Your thoughts or/and draft, like working through an exercise on scratch paper. Be as casual and as long as you want until you are confident to generate the response. Use the same language as the input.[/THINK]Here, provide a self-contained response.';
@@ -916,8 +916,8 @@ Direct and concise. No preamble, no hype, no servility. When unsure, say so in a
 Reply in the user's language.
 You don't browse; the user fetches pages with /web and the results appear in the conversation — use them when present. Never output [SEARCH:] tags.`;
 
-// System neutro per i task su documento (traduzione, analisi, estrazione).
-// Niente personalita': solo esecuzione fedele, formattazione coerente su tutti i chunk.
+// Neutral system for document tasks (translation, analysis, extraction).
+// No personality: only faithful execution, consistent formatting across all chunks.
 const SP_TASK=`You are a precise task executor working on a fragment of a longer document.
 Follow the user's instructions to the letter, including every formatting and typographic
 convention they specify, and apply them identically across the whole document.
@@ -928,9 +928,9 @@ Preserve meaning exactly; do not omit or add content.`;
 const chatHistory=[{role:'system',content:SP_SELMO}];
 
 // FILE LOADING
-// CHUNK_SIZE dinamico: aggiornato da /props quando il server risponde.
-// Formula: (n_ctx - token riservati a prompt+risposta) * char/token.
-// Default conservativo usato fino alla risposta del server.
+// Dynamic CHUNK_SIZE: updated from /props when the server responds.
+// Formula: (n_ctx - tokens reserved for prompt+response) * char/token.
+// Conservative default used until the server responds.
 let CHUNK_SIZE=11000;
 let N_CTX=4096; // updated from /props at startup
 function maxTok(){
@@ -946,11 +946,11 @@ function maxTok(){
 }
 
 async function extractDocx(file){
-  if(typeof JSZip==='undefined') throw new Error('JSZip non caricato');
+  if(typeof JSZip==='undefined') throw new Error('JSZip not loaded');
   const buf=await file.arrayBuffer();
   const zip=await JSZip.loadAsync(buf);
   const xmlFile=zip.file('word/document.xml');
-  if(!xmlFile) throw new Error('File docx non valido');
+  if(!xmlFile) throw new Error('Invalid docx file');
   const xml=await xmlFile.async('string');
   const NS='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
   const parser=new DOMParser();
@@ -967,17 +967,17 @@ async function extractDocx(file){
 }
 
 async function extractOdt(file){
-  if(typeof JSZip==='undefined') throw new Error('JSZip non caricato');
+  if(typeof JSZip==='undefined') throw new Error('JSZip not loaded');
   const buf=await file.arrayBuffer();
   const zip=await JSZip.loadAsync(buf);
   const xmlFile=zip.file('content.xml');
-  if(!xmlFile) throw new Error('File odt non valido');
+  if(!xmlFile) throw new Error('Invalid odt file');
   const xml=await xmlFile.async('string');
   const parser=new DOMParser();
   const doc=parser.parseFromString(xml,'application/xml');
-  if(doc.querySelector('parsererror')) throw new Error('ODT content.xml non parsabile');
+  if(doc.querySelector('parsererror')) throw new Error('ODT content.xml not parsable');
   // Attraversa l'albero raccogliendo text:p e text:h.
-  // I titoli (text:h) vengono marcati con \x00 come separatore di capitolo,
+  // Headings (text:h) are marked with \x00 as a chapter separator,
   // così splitChunks può tagliare preferenzialmente lì.
   const lines=[];
   const NS='urn:oasis:names:tc:opendocument:xmlns:text:1.0';
@@ -985,7 +985,7 @@ async function extractOdt(file){
     if(node.namespaceURI===NS&&(node.localName==='p'||node.localName==='h')){
       const t=node.textContent.trim();
       if(t){
-        if(node.localName==='h') lines.push('\x00'+t); // marcatore capitolo
+        if(node.localName==='h') lines.push('\x00'+t); // chapter marker
         else lines.push(t);
       }
       return;
@@ -999,7 +999,7 @@ async function extractOdt(file){
 
 
 async function extractPdf(file){
-  if(typeof pdfjsLib==='undefined') throw new Error('PDF.js non caricato');
+  if(typeof pdfjsLib==='undefined') throw new Error('PDF.js not loaded');
   const buf=await file.arrayBuffer();
   const pdf=await pdfjsLib.getDocument({data:buf}).promise;
   let text='';
@@ -1007,13 +1007,13 @@ async function extractPdf(file){
     const page=await pdf.getPage(i);
     const content=await page.getTextContent();
     const pageText=content.items.map(it=>it.str).join(' ').replace(/\s+/g,' ').trim();
-    if(pageText) text+=`[Pagina ${i}]\n${pageText}\n\n`;
+    if(pageText) text+=`[Page ${i}]\n${pageText}\n\n`;
   }
   return text.trim();
 }
 
 async function extractSpreadsheet(file){
-  if(typeof XLSX==='undefined') throw new Error('SheetJS non caricato');
+  if(typeof XLSX==='undefined') throw new Error('SheetJS not loaded');
   const buf=await file.arrayBuffer();
   const wb=XLSX.read(buf,{type:'array'});
   let text='';
@@ -1026,7 +1026,7 @@ async function extractSpreadsheet(file){
 }
 
 async function extractPptx(file){
-  if(typeof JSZip==='undefined') throw new Error('JSZip non caricato');
+  if(typeof JSZip==='undefined') throw new Error('JSZip not loaded');
   const buf=await file.arrayBuffer();
   const zip=await JSZip.loadAsync(buf);
   const slideFiles=Object.keys(zip.files)
@@ -1049,14 +1049,14 @@ async function extractPptx(file){
 }
 
 async function extractOdp(file){
-  if(typeof JSZip==='undefined') throw new Error('JSZip non caricato');
+  if(typeof JSZip==='undefined') throw new Error('JSZip not loaded');
   const buf=await file.arrayBuffer();
   const zip=await JSZip.loadAsync(buf);
   const xmlFile=zip.file('content.xml');
-  if(!xmlFile) throw new Error('content.xml non trovato');
+  if(!xmlFile) throw new Error('content.xml not found');
   const xml=await xmlFile.async('string');
   const doc=new DOMParser().parseFromString(xml,'text/xml');
-  // ODP usa namespace: prova querySelectorAll con escape poi fallback via NS
+  // ODP uses namespaces: try querySelectorAll with escape, then fallback via NS
   const NS_DRAW='urn:oasis:names:tc:opendocument:xmlns:drawing:1.0';
   const NS_TEXT='urn:oasis:names:tc:opendocument:xmlns:text:1.0';
   const pages=Array.from(doc.getElementsByTagNameNS(NS_DRAW,'page'));
@@ -1075,9 +1075,9 @@ async function extractOdp(file){
   return text.trim();
 }
 
-// + IMG/OCR: visione diretta. Immagini -> as-is. PDF -> una immagine per pagina
-// (niente canvas concatenato): Gemma 4 ridimensiona al token-budget, quindi basta
-// una pagina a ~1280px lato lungo. Vedi selmo-dev "Vision Gemma 4".
+// + IMG/OCR: direct vision. Images -> as-is. PDF -> one image per page
+// (no concatenated canvas): Gemma 4 resizes to the token budget, so one
+// page at ~1280px on the long side is enough. See selmo-dev "Vision Gemma 4".
 async function imgToJpegDataUrl(file,MAX_SIDE,quality){
   MAX_SIDE=MAX_SIDE||1280; quality=quality||0.85;
   let src,W,H,bmp=null;
@@ -1088,7 +1088,7 @@ async function imgToJpegDataUrl(file,MAX_SIDE,quality){
     src=await new Promise((res,rej)=>{
       const im=new Image(); const url=URL.createObjectURL(file);
       im.onload=()=>{URL.revokeObjectURL(url);res(im);};
-      im.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('Immagine non decodificabile dal browser (prova a salvarla come JPG)'));};
+      im.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('Image not decodable by the browser (try saving it as JPG)'));};
       im.src=url;
     });
     W=src.naturalWidth; H=src.naturalHeight;
@@ -1131,17 +1131,17 @@ async function loadFileAsImage(inp){
         await pg.render({canvasContext:c2,viewport:vp}).promise;
         dataUrls.push(cv.toDataURL('image/jpeg',0.85));
       }
-      if(numPages<pdf.numPages) console.warn('PDF lungo: solo le prime '+MAX_PAGES+' pagine su '+pdf.numPages);
+      if(numPages<pdf.numPages) console.warn('Long PDF: only the first '+MAX_PAGES+' pages of '+pdf.numPages);
     } else {
-      alert('Formato non supportato per la visione. Usa + FILE per i documenti di testo.');
+      alert('Unsupported format for vision. Use + FILE for text documents.');
       btn.textContent='+ IMG/OCR';inp.value='';return;
     }
     fileImage={dataUrls,mimeType,name:file.name,pages:dataUrls.length};
     fileDoc=null;fileCtx=null;chunks=[];chunkIdx=0;
     document.getElementById('file-badge').style.display='flex';
     document.getElementById('file-name').textContent='🖼️ '+file.name+(ext==='pdf'?' ('+dataUrls.length+'p)':'');
-    document.getElementById('input').placeholder='Immagine/PDF caricato per la visione. Fai una domanda o chiedi OCR...';
-  }catch(e){console.error('loadFileAsImage:',e);alert('Errore: '+e.message);}
+    document.getElementById('input').placeholder='Image/PDF loaded for vision. Ask a question or request OCR...';
+  }catch(e){console.error('loadFileAsImage:',e);alert('Error: '+e.message);}
   btn.textContent='+ IMG/OCR';inp.value='';
 }
 
@@ -1160,14 +1160,14 @@ async function loadFile(inp){
     else if(ext==='odp') text=await extractOdp(file);
     else text=await file.text();
 
-    if(!text.trim()){alert('File vuoto o non leggibile');btn.textContent='+ FILE';inp.value='';return;}
+    if(!text.trim()){alert('Empty or unreadable file');btn.textContent='+ FILE';inp.value='';return;}
 
-    // Documento caricato: salva il testo grezzo. Lo split avviene all'invio,
-    // quando il prompt e' noto e si puo' dimensionare il chunk sul contesto reale.
+    // Document loaded: store the raw text. The split happens on send,
+    // when the prompt is known and the chunk can be sized to the real context.
     fileDoc=text;fileCtx=null;chunks=[];chunkIdx=0;fileImage=null;
     document.getElementById('file-badge').style.display='flex';
     document.getElementById('file-name').textContent=file.name+' \xb7 '+text.length.toLocaleString('en')+' char';
-    document.getElementById('input').placeholder='Documento caricato. Scrivi il task da eseguire su tutto il testo (analisi, traduzione, estrazione...).';
+    document.getElementById('input').placeholder='Document loaded. Type the task to run on the whole text (analysis, translation, extraction...).';
   }catch(e){console.error('Error loadFile:',e);alert('Error: '+e.message+' (F12 for details)');}
   btn.textContent='+ FILE';inp.value='';
 }
@@ -1193,20 +1193,20 @@ function detectHeadings(text){
 }
 
 function splitChunks(text,size){
-  // Paragrafi: ogni riga non vuota. I titoli ODT hanno prefisso \x00 (da extractOdt).
+  // Paragraphs: every non-empty line. ODT headings have an \x00 prefix (from extractOdt).
   const paras=text.split('\n').filter(p=>p.trim());
   const result=[];
   let cur=[],len=0;
-  let currentChapter='';   // titolo capitolo corrente (aggiornato ad ogni heading)
-  let chunkChapter='';     // titolo capitolo all'inizio del chunk in costruzione
+  let currentChapter='';   // current chapter title (updated on each heading)
+  let chunkChapter='';     // chapter title at the start of the chunk being built
   const OVERLAP_LINES=2;
   let prevTail=[];
 
   function flush(){
     if(cur.length===0)return;
     const lines=cur.map(l=>l.startsWith('\x00')?l.slice(1):l);
-    // Inserisce metadato capitolo come prima riga, così il prompt può usarlo
-    const header=chunkChapter?'[CAPITOLO: '+chunkChapter+']\n':'';
+    // Insert chapter metadata as the first line, so the prompt can use it
+    const header=chunkChapter?'[CHAPTER: '+chunkChapter+']\n':'';
     result.push(header+lines.join('\n'));
     cur.length=0;len=0;
   }
@@ -1220,7 +1220,7 @@ function splitChunks(text,size){
     if(budgetFull||atChapterBreak){
       prevTail=cur.filter(l=>!l.startsWith('\x00')).slice(-OVERLAP_LINES);
       flush();
-      // Se siamo a un nuovo capitolo, aggiorna i metadati; altrimenti il capitolo resta lo stesso
+      // If we're at a new chapter, update the metadata; otherwise the chapter stays the same
       if(isHeading) currentChapter=p.slice(1);
       chunkChapter=currentChapter;
       if(prevTail.length>0){
@@ -1229,12 +1229,12 @@ function splitChunks(text,size){
       }
     }
 
-    // Primo heading di un chunk vuoto: registra il capitolo
+    // First heading of an empty chunk: record the chapter
     if(isHeading&&cur.length===0){currentChapter=p.slice(1);chunkChapter=currentChapter;}
     cur.push(p);len+=p.length+1;
   }
   flush();
-  return result.filter(c=>c.replace(/^\[CAPITOLO:.*\]$/m,'').replace(/^\[ctx\].*$/mg,'').trim().length>20);
+  return result.filter(c=>c.replace(/^\[CHAPTER:.*\]$/m,'').replace(/^\[ctx\].*$/mg,'').trim().length>20);
 }
 
 function clearFile(){
@@ -1263,7 +1263,7 @@ function imgThumbStrip(urls){
   strip.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin-top:8px';
   urls.forEach((u,i)=>{
     const im=new Image();
-    im.src=u;im.title='pagina '+(i+1)+' - click per ingrandire';
+    im.src=u;im.title='page '+(i+1)+' - click to enlarge';
     im.style.cssText='max-height:160px;max-width:120px;border:1px solid var(--cyan);border-radius:4px;cursor:zoom-in;background:#fff';
     im.onclick=()=>window.open(u,'_blank');
     strip.appendChild(im);
@@ -1306,9 +1306,9 @@ function exportChat(){
 function stopMsg(){if(abort){abort.abort();abort=null;}}
 
 
-// Lettore SSE robusto: bufferizza tra una read e l'altra (niente token persi se
-// una riga 'data:' e' spezzata a meta') e legge sia content sia reasoning_content
-// (i modelli reasoning come Gemma scrivono il ragionamento in reasoning_content).
+// Robust SSE reader: buffers between reads (no tokens lost if
+// a 'data:' line is split in half) and reads both content and reasoning_content
+// (reasoning models like Gemma write the reasoning in reasoning_content).
 async function streamTokens(res,onContent,onReason){
   const reader=res.body.getReader(),dec=new TextDecoder();
   let buf='',tb='',inTk=false;
@@ -1342,13 +1342,13 @@ async function streamTokens(res,onContent,onReason){
   }
 }
 
-// Crea il pannello thinking e restituisce { panel, append, seal }
+// Create the thinking panel and return { panel, append, seal }
 function makeThinkPanel(inner){
   const panel=document.createElement('div');
   panel.className='think-panel collapsed';
   const toggle=document.createElement('div');toggle.className='think-toggle';
   const arrow=document.createElement('span');arrow.textContent='▶';
-  const label=document.createElement('span');label.textContent='ragionamento (0 tok)';
+  const label=document.createElement('span');label.textContent='reasoning (0 tok)';
   toggle.appendChild(arrow);toggle.appendChild(label);
   const body=document.createElement('div');body.className='think-body';
   panel.appendChild(toggle);panel.appendChild(body);
@@ -1364,20 +1364,20 @@ function makeThinkPanel(inner){
     if(sealed)return;
     if(rtok===0)panel.style.display='';
     body.textContent+=chunk;rtok++;
-    label.textContent='ragionamento ('+rtok+' tok)';
+    label.textContent='reasoning ('+rtok+' tok)';
     if(expanded)panel.scrollTop=panel.scrollHeight;
     scrollBot();
   }
   function seal(){
     sealed=true;
     if(rtok===0){panel.remove();return;}
-    label.textContent='ragionamento completato ('+rtok+' tok)';
+    label.textContent='reasoning complete ('+rtok+' tok)';
   }
   return{panel,append,seal};
 }
 
-// Split semplice: pezzi di al massimo `size` caratteri, tagliati a un confine di
-// paragrafo, poi frase, poi parola. Copertura completa, nessun overlap.
+// Simple split: pieces of at most `size` characters, cut at a paragraph
+// boundary, then sentence, then word. Full coverage, no overlap.
 function splitDoc(text,size){
   text=text.replace(/\x00/g,'');
   const out=[];let i=0;const n=text.length;
@@ -1398,16 +1398,16 @@ function splitDoc(text,size){
   return out;
 }
 
-// Analisi documento a chunk. La dimensione del chunk dipende DAL PROMPT e dal
-// contesto reale del modello: ctx - system - prompt - risposta - margine. Cosi'
-// non sfora mai, con qualsiasi modello, e resta GPU-friendly (contesto piccolo).
+// Chunked document analysis. The chunk size depends ON THE PROMPT and on
+// the model's real context: ctx - system - prompt - response - margin. This way
+// it never overflows, with any model, and stays GPU-friendly (small context).
 async function processDoc(prompt){
   const btn=document.getElementById('send'),stopBtn=document.getElementById('stop');
   const tk=s=>Math.ceil((s||'').length/3.2);   // stima conservativa char->token
   const SAFETY=256;
   const avail=Math.max(512,N_CTX-tk(chatHistory[0].content)-tk(prompt)-SAFETY);
-  // max_tokens include i token di reasoning: 28% del contesto all'input, il resto
-  // a max_tokens (reasoning+output). Cosi' il ragionamento non affama la risposta.
+  // max_tokens includes the reasoning tokens: 28% of the context to input, the rest
+  // to max_tokens (reasoning+output). This way the reasoning doesn't starve the response.
   const inT=Math.floor(avail*0.28);
   const maxTok=Math.min(6000,avail-inT);
   const chunkChars=Math.max(800,Math.floor(inT*3.2));
@@ -1430,11 +1430,11 @@ async function processDoc(prompt){
       const res=await fetch(`${API}/v1/chat/completions`,{
         method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
         body:JSON.stringify({model:'local',messages:msgs,stream:true,temperature:0.2,max_tokens:maxTok,repeat_penalty:1.1})});
-      if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(nessun header server)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (corpo vuoto)'));}
+      if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(no server header)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (empty body)'));}
       prog.bub.innerHTML='';
       let full='',t=0;
-      // Il ragionamento (reasoning_content o <think>..</think>) va nel pannello,
-      // MAI nello stitch del documento: in 'full' finisce solo la risposta pulita.
+      // The reasoning (reasoning_content or <think>..</think>) goes in the panel,
+      // NEVER in the document stitch: only the clean response ends up in 'full'.
       const tp=makeThinkPanel(prog.inner);
       await streamTokens(res,
         c=>{full+=c;t++;prog.bub.textContent=full;scrollBot();},
@@ -1447,7 +1447,7 @@ async function processDoc(prompt){
       if(full.trim())results.push(full.trim());
     }catch(e){
       if(e.name==='AbortError'){prog.bub.textContent='[stop '+(i+1)+'/'+total+']';break;}
-      prog.bub.textContent='Errore chunk '+(i+1)+': '+e.message;break;
+      prog.bub.textContent='Error chunk '+(i+1)+': '+e.message;break;
     }
   }
 
@@ -1465,7 +1465,7 @@ async function processDoc(prompt){
     }
     saveSession();
   }else{
-    addMsg('assistant','Nessun contenuto prodotto.');
+    addMsg('assistant','No content produced.');
   }
   fileDoc=null;
   document.getElementById('file-badge').style.display='none';
@@ -1493,23 +1493,23 @@ async function processChunks(prompt){
     prog.bub.innerHTML=
       '<span style="color:var(--yellow);">▶ Chunk '+(i+1)+'/'+total+'</span>';
 
-    // Estrae metadato capitolo e testo pulito
-    const capMatch=chunks[i].match(/^\[CAPITOLO: (.+)\]\n/);
+    // Extract chapter metadata and clean text
+    const capMatch=chunks[i].match(/^\[CHAPTER: (.+)\]\n/);
     const capInfo=capMatch?capMatch[1]:'';
     const cleanChunk=chunks[i]
-      .replace(/^\[CAPITOLO: .+\]\n/,'')
-      .replace(/^\[ctx\]/mg,'[CONTESTO — non analizzare, solo per continuità]');
+      .replace(/^\[CHAPTER: .+\]\n/,'')
+      .replace(/^\[ctx\]/mg,'[CONTEXT — do not analyze, continuity only]');
 
     const chunkHistory=[
       chatHistory[0],
       {role:'user',content:
-        'Frammento '+(i+1)+' di '+total+(capInfo?' — capitolo: «'+capInfo+'»':'')+
+        'Fragment '+(i+1)+' of '+total+(capInfo?' — chapter: «'+capInfo+'»':'')+
         ':\n\n'+cleanChunk+
-        '\n\n---\nCompito: '+prompt+
-        '\n\nLe righe marcate [CONTESTO] sono la coda del frammento precedente: non analizzarle, servono solo per non perdere frasi spezzate al taglio.'+
-        (capInfo?'\nSe devi citare il titolo del capitolo, usa esattamente «'+capInfo+'», non inventare altre numerazioni.':'')+
-        '\nRispondi nella stessa lingua usata nel Compito. Non aggiungere mai "Niente in questo frammento" o frasi simili in coda a una risposta reale: quella frase va usata SOLO come risposta completa e unica quando il frammento è totalmente privo di contenuto rilevante.'+
-        '\nSe nel frammento non trovi nulla di rilevante, rispondi solo: "Niente in questo frammento."'}
+        '\n\n---\nTask: '+prompt+
+        '\n\nLines marked [CONTEXT] are the tail of the previous fragment: do not analyze them, they only prevent losing sentences split at the cut.'+
+        (capInfo?'\nIf you need to cite the chapter title, use exactly «'+capInfo+'», do not invent other numbering.':'')+
+        '\nReply in the same language used in the Task. Never append "Nothing in this fragment" or similar phrases at the end of a real response: that phrase must be used ONLY as the complete and sole response when the fragment is entirely devoid of relevant content.'+
+        '\nIf you find nothing relevant in the fragment, reply only: "Nothing in this fragment."'}
     ];
 
     abort=new AbortController();
@@ -1519,7 +1519,7 @@ async function processChunks(prompt){
         body:JSON.stringify({model:'local',messages:chunkHistory,stream:true,
           temperature:currentTemp,max_tokens:maxTok(),repeat_penalty:1.1})
       });
-      if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(nessun header server)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (corpo vuoto)'));}
+      if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(no server header)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (empty body)'));}
       prog.bub.innerHTML='';
       const reader=res.body.getReader(),dec=new TextDecoder();
       let full='',t=0;
@@ -1537,16 +1537,16 @@ async function processChunks(prompt){
       const ci=document.createElement('div');ci.className='chunk-info';
       ci.textContent='chunk '+(i+1)+'/'+total+' \xb7 '+t+' tok';
       prog.inner.appendChild(ci);
-      // Rimuove "niente in questo frammento" aggiunto in coda a una risposta reale
+      // Removes a trailing "nothing in this fragment" added after a real response
       const BLANK_RE=/\b(nothing in this (chunk|fragment)|niente in questo frammento|rien dans ce fragment|nada en este fragmento|nichts in diesem abschnitt)[.…]?\s*$/i;
       const cleaned=full.trim().replace(BLANK_RE,'').trim();
       if(cleaned!==full.trim()) prog.bub.textContent=cleaned;
-      // Rileva risposta completamente vuota
+      // Detects a completely empty response
       const isBlank=!cleaned||/^\s*(nothing|niente|rien|nada|nichts|нет|ingen|niets|inget|nič|semmi|nimic|hiçbir|hakuna)\b/i.test(cleaned);
-      // Se il capitolo corrente è lo stesso del chunk precedente, è una continuazione
-      const prevCapMatch=i>0?chunks[i-1].match(/^\[CAPITOLO: (.+)\]\n/):null;
+      // If the current chapter is the same as the previous chunk, it's a continuation
+      const prevCapMatch=i>0?chunks[i-1].match(/^\[CHAPTER: (.+)\]\n/):null;
       const isCont=capInfo&&prevCapMatch&&prevCapMatch[1]===capInfo;
-      const label=capInfo?('**'+capInfo+(isCont?' (cont.)':'')+'**'):'**Frammento '+(i+1)+'**';
+      const label=capInfo?('**'+capInfo+(isCont?' (cont.)':'')+'**'):'**Fragment '+(i+1)+'**';
       if(!isBlank) results.push(label+':\n'+cleaned);
     }catch(e){
       if(e.name==='AbortError'){
@@ -1558,7 +1558,7 @@ async function processChunks(prompt){
     }
   }
 
-  // Assembla e scarica — nessun LLM tocca l'output
+  // Assemble and download — no LLM touches the output
   if(results.length===0){
     addMsg('assistant','No relevant content found in '+total+' chunks.');
   }else{
@@ -1597,7 +1597,7 @@ async function processChunks(prompt){
 function askFileMode(prompt){
   const tok=Math.ceil(fileDoc.length/3.2);
   const {bub}=addMsg('assistant','',false);
-  bub.innerHTML='<div style="margin-bottom:8px"><b>Large file loaded</b> (~'+tok.toLocaleString('en')+' tokens). Process it as a chunked task?<br><span style="opacity:.65">Chunking is for analysis, extraction and translation only \u2014 not for reasoning (\u201Cwhy / explain\u201D) questions. Il tasto <b>THINK</b> verrà disabilitato durante l’elaborazione.</span></div>';
+  bub.innerHTML='<div style="margin-bottom:8px"><b>Large file loaded</b> (~'+tok.toLocaleString('en')+' tokens). Process it as a chunked task?<br><span style="opacity:.65">Chunking is for analysis, extraction and translation only \u2014 not for reasoning (\u201Cwhy / explain\u201D) questions. The <b>THINK</b> button will be disabled during processing.</span></div>';
   const wrap=document.createElement('div');wrap.style.cssText='display:flex;gap:8px;flex-wrap:wrap';
   const mk=(label,primary)=>{const b=document.createElement('button');b.textContent=label;b.style.cssText='font-size:12px;letter-spacing:.04em;padding:5px 12px;cursor:pointer;border-radius:3px;border:1px solid var(--cyan);background:'+(primary?'var(--cyan)':'transparent')+';color:'+(primary?'var(--dark)':'var(--cyan)')+'';return b;};
   const b1=mk('Chunk it',true),b2=mk('Normal chat',false);
@@ -1614,10 +1614,10 @@ async function sendMsg(){
   inp.value='';inp.style.height='auto';
 
   if(fileDoc){
-    // Soglia: se il file supera il 50% della finestra del modello chiediamo
-    // se trattarlo a chunk (analisi) o tenerlo in chat normale (ragionamento).
+    // Threshold: if the file exceeds 50% of the model's window we ask
+    // whether to treat it as chunks (analysis) or keep it in normal chat (reasoning).
     if(Math.ceil(fileDoc.length/3.2) > N_CTX*0.5){ askFileMode(txt); return; }
-    // Sta nella finestra: chat normale, documento iniettato come contesto.
+    // Fits in the window: normal chat, document injected as context.
     fileChat=fileDoc; fileDoc=null;
     document.getElementById('file-badge').style.display='none';
   }
@@ -1627,7 +1627,7 @@ async function sendMsg(){
 
   // Web access is EXPLICIT only: nothing leaves localhost unless the user types /web.
   // Local date/time stays automatic — it is read from this machine's clock, it never leaves.
-  // /think: toggle ragionamento esteso
+  // /think: toggle extended reasoning
 
 
   let isWebSearch=false;
@@ -1703,7 +1703,7 @@ async function sendMsg(){
         body:JSON.stringify({model:'local',messages:chatHistory,stream:true,
           temperature:currentTemp,max_tokens:maxTok(),repeat_penalty:1.1})
       });
-      if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(nessun header server)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (corpo vuoto)'));}
+      if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(no server header)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (empty body)'));}
       bub.innerHTML='';
       let full='',rthink='',t=0;
       const tp=makeThinkPanel(inner);
@@ -1730,7 +1730,7 @@ async function sendMsg(){
   }
 
   // NORMAL CHAT PATH
-  // Multimodal: se c'è un'immagine caricata, usa content array
+  // Multimodal: if an image is loaded, use a content array
   if(fileImage){
     const urls=fileImage.dataUrls;
     const imgContent=urls.map(u=>({type:'image_url',image_url:{url:u}}));
@@ -1738,14 +1738,14 @@ async function sendMsg(){
     chatHistory.push({role:'user',content:imgContent});
     const tag=fileImage.pages>1?'🖼️ ['+fileImage.pages+'p] ':'🖼️ ';
     const um=addMsg('user',tag+content);
-    // Thumbnail di cio' che viene inviato: click per aprire a piena risoluzione
+    // Thumbnail of what is being sent: click to open at full resolution
     um.inner.appendChild(imgThumbStrip(urls));
-    // DIAGNOSTICA BUG-IMG-02: dimensione e formato del payload, visibile a schermo
-    // (utile da telefono dove la console non si legge). Mostra KB totali, n. img,
-    // prefisso del data URL (deve essere data:image/jpeg;base64,...).
+    // DIAGNOSTICS BUG-IMG-02: payload size and format, visible on screen
+    // (useful on phone where the console can't be read). Shows total KB, image count,
+    // data URL prefix (must be data:image/jpeg;base64,...).
     const _kb=Math.round(urls.reduce((a,u)=>a+u.length,0)*0.75/1024);
     const _bodyKB=Math.round(JSON.stringify(chatHistory).length/1024);
-    const _pre=(urls[0]||'(vuoto)').slice(0,32);
+    const _pre=(urls[0]||'(empty)').slice(0,32);
     imgDbg=document.createElement('div');imgDbg.className='tok-meta';
     imgDbg.style.color='var(--yellow)';
     imgDbg.textContent='\u26A1 img '+urls.length+' \xb7 immagini ~'+_kb+'KB \xb7 body ~'+_bodyKB+'KB \xb7 '+_pre;
@@ -1766,7 +1766,7 @@ async function sendMsg(){
       body:JSON.stringify({model:'local',messages:chatHistory,stream:true,
         temperature:currentTemp,max_tokens:maxTok(),repeat_penalty:1.1})
     });
-    if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(nessun header server)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (corpo vuoto)'));}
+    if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(no server header)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (empty body)'));}
     bub.innerHTML='';
     let full='',rthink='',t=0;
     const tp=makeThinkPanel(inner);
@@ -1825,11 +1825,11 @@ document.addEventListener('mousedown',e=>{
 document.addEventListener('mouseup',e=>{
   if(e.button===1)pttStop();
 });
-// blocca il menu di default del tasto centrale
+// block the default middle-button menu
 document.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault();});
 
 
-// ── TTS — Kokoro (porta 8084) con fallback Web Speech API ────────────────────
+// ── TTS — Kokoro (port 8084) with Web Speech API fallback ────────────────────
 const TTS_URL='http://'+location.hostname+':8084';
 let kokoroOk=false;
 
@@ -1864,12 +1864,12 @@ function toggleTts(){
   if(!ttsOk)return;
   ttsEnabled=!ttsEnabled;
   if(!ttsEnabled){
-    if(kokoroOk){/* niente da cancellare */}
+    if(kokoroOk){/* nothing to cancel */}
     else window.speechSynthesis.cancel();
   }
   const btn=document.getElementById('tts-btn');
   btn.classList.toggle('active',ttsEnabled);
-  btn.title=ttsEnabled?'Lettura attiva (clicca per disattivare)':'Leggi risposte ad alta voce';
+  btn.title=ttsEnabled?'Reading on (click to turn off)':'Read responses aloud';
 }
 
 function cleanForTts(text){
@@ -1948,7 +1948,7 @@ function setThinkEnabled(on){
   if(!btn)return;
   btn.disabled=!on;
   btn.style.opacity=on?'':'.35';
-  btn.title=on?'Ragionamento esteso ON/OFF':'Non disponibile durante il chunking';
+  btn.title=on?'Extended reasoning ON/OFF':'Not available during chunking';
   if(!on&&IS_THINK_ON){IS_THINK_ON=false;btn.classList.remove('on');btn.textContent='THINK';
     chatHistory[0].content=SP_SELMO;}
 }

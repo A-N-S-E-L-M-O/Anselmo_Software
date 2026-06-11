@@ -1,105 +1,105 @@
 # Selmo — Manifesto
-*Giugno 2026 · v0.4*
+*June 2026 · v0.4*
 
 ---
 
-## Cos'è Selmo
+## What Selmo is
 
-Un assistente AI locale, privato, europeo, radicato in un universo narrativo che nessun altro ha.
+A local, private, European AI assistant, rooted in a narrative universe no one else has.
 
-Gira sul tuo ferro. I tuoi dati non escono mai dal tuo dispositivo. Supporta qualsiasi modello open source con licenza compatibile. Funziona dal giorno zero, senza dipendere da nessun altro utente.
-
----
-
-## I principi
-
-**AI locale** — llama.cpp sul tuo hardware, inferenza offline, nessun dato inviato a server esterni. La privacy non è una promessa — è una conseguenza dell'architettura.
-
-**Consapevolezza energetica** — ogni risposta ha un costo reale in watt, visibile in tempo reale nell'interfaccia. Non è decorazione: è il secondo principio etico del progetto. L'AI ha un peso sul pianeta; Selmo lo rende visibile invece di nasconderlo.
-
-**Model-agnostic** — l'utente sceglie il modello. Selmo non è legato a nessun fornitore.
-
-**Il P2P è il domani, non il fondamento.** La mesh con economia in watt è la visione a lungo termine. Ma Selmo v1 funziona completo su un singolo dispositivo. La rete cresce con gli utenti, non prima di loro.
+It runs on your own hardware. Your data never leaves your device. It supports any open source model with a compatible license. It works from day zero, without depending on any other user.
 
 ---
 
-## Universo narrativo
+## The principles
 
-Il libro "Dialoghi con la lavatrice". Selmo è un personaggio prima che un prodotto. Mizan è il suo antagonista. L'app e il libro si promuovono a vicenda. La versione inglese è in uscita.
+**Local AI** — llama.cpp on your hardware, offline inference, no data sent to external servers. Privacy is not a promise — it's a consequence of the architecture.
+
+**Energy awareness** — every response has a real cost in watts, visible in real time in the interface. It's not decoration: it's the project's second ethical principle. AI has a weight on the planet; Selmo makes it visible instead of hiding it.
+
+**Model-agnostic** — the user chooses the model. Selmo is not tied to any provider.
+
+**P2P is tomorrow, not the foundation.** The mesh with a watt economy is the long-term vision. But Selmo v1 works fully on a single device. The network grows with its users, not before them.
 
 ---
 
-## Gerarchia modelli
+## Narrative universe
 
-Licenza Apache 2.0 come filtro duro. Niente modelli cinesi, niente Meta.
+The book "Dialoghi con la lavatrice". Selmo is a character before it is a product. Mizan is its antagonist. The app and the book promote each other. The English version is coming.
 
-Tre livelli di scelta, dall'etica alla performance:
+---
 
-**EuroLLM (UE)** — la scelta di principio. Addestrato su MareNostrum 5, dati europei, governance europea. Default ufficiale di Selmo per chi non vuole compromessi.
+## Model hierarchy
 
-**Mistral AI (FR)** — il pragmatismo europeo. Apache 2.0, casa francese, qualità alta. Default di produzione: 32 t/s su RTX 4070 Ti, output eccellente.
+Apache 2.0 license as a hard filter. No Chinese models, no Meta.
 
-**Google / Gemma 4** — il benchmark. Apache 2.0, ma Google rimane fuori dalla distribuzione ufficiale per ragioni politiche. Si usa per misurare il tetto, non si distribuisce.
+Three tiers of choice, from ethics to performance:
 
-| Modello | Ruolo | t/s (RTX 4070 Ti) |
+**EuroLLM (EU)** — the principled choice. Trained on MareNostrum 5, European data, European governance. Selmo's official default for those who want no compromises.
+
+**Mistral AI (FR)** — European pragmatism. Apache 2.0, French house, high quality. Production default: 32 t/s on RTX 4070 Ti, excellent output.
+
+**Google / Gemma 4** — the benchmark. Apache 2.0, but Google stays out of the official distribution for political reasons. Used to measure the ceiling, not distributed.
+
+| Model | Role | t/s (RTX 4070 Ti) |
 |---|---|---|
-| Mistral Small 3.2 24B IQ3_M | Default produzione | 32 |
-| EuroLLM 22B Q3_K_M | Default etico | ~11 |
-| EuroLLM 9B Q4_K_M | Hardware leggero | ~20 |
-| Gemma 4 12B Q6_K | Benchmark qualità | 22 |
-| OLMo 2 7B Q4_K_M | Massima trasparenza dati | — |
+| Mistral Small 3.2 24B IQ3_M | Production default | 32 |
+| EuroLLM 22B Q3_K_M | Ethical default | ~11 |
+| EuroLLM 9B Q4_K_M | Lightweight hardware | ~20 |
+| Gemma 4 12B Q6_K | Quality benchmark | 22 |
+| OLMo 2 7B Q4_K_M | Maximum data transparency | — |
 
 ---
 
 ## Roadmap
 
-### Fase 0 — Fondamenta ✓
-llama.cpp con CUDA, interfaccia chat, wattmetro reale, odometro Wh, launcher universale.
+### Phase 0 — Foundations ✓
+llama.cpp with CUDA, chat interface, real wattmeter, Wh odometer, universal launcher.
 
-### Fase 1 — Stabilità ✓
-Estrazione documenti (.docx, .odt), auto-chunking, toggle Selmo/Mizan, GPU monitor, launcher adattivo.
+### Phase 1 — Stability ✓
+Document extraction (.docx, .odt), auto-chunking, Selmo/Mizan toggle, GPU monitor, adaptive launcher.
 
-### Fase 1.5 — Ricerca web ✓
-Comando `/web` esplicito, SearXNG locale in Podman, DDG fallback, trafilatura, ledger fonti.
+### Phase 1.5 — Web search ✓
+Explicit `/web` command, local SearXNG in Podman, DDG fallback, trafilatura, source ledger.
 
-### Fase 1.6 — App nativa (Tauri)
-PyInstaller sui bridge Python, installer Inno Setup, distribuzione Windows .exe.
+### Phase 1.6 — Native app (Tauri)
+PyInstaller on the Python bridges, Inno Setup installer, Windows .exe distribution.
 
-### Fase 2 — Identità pubblica
-Dominio `selmo-ai.eu`, landing page statica (IT + EN), repository GitHub pubblico, marchio WattMesh (EUIPO), profilo Mastodon `@selmo@fosstodon.org`.
+### Phase 2 — Public identity
+Domain `selmo-ai.eu`, static landing page (IT + EN), public GitHub repository, WattMesh trademark (EUIPO), Mastodon profile `@selmo@fosstodon.org`.
 
-### Fase 3 — Mesh P2P (soglia: ~100k utenti)
-Crediti Wh locali già accumulati da v1. Quando la mesh si accende, diventano retroattivamente valuta. Discovery mDNS, gossip protocol, nodi fissi NixOS/Raspberry Pi.
+### Phase 3 — P2P mesh (threshold: ~100k users)
+Local Wh credits already accumulated from v1. When the mesh switches on, they retroactively become currency. mDNS discovery, gossip protocol, fixed NixOS/Raspberry Pi nodes.
 
-### Fase 4 — Fine-tuning federato (visione Fahrenheit 451)
-Flower (Oxford) + OpenFedLLM. Solo delta dei pesi — i dati non escono mai. Richiede partner istituzionali e finanziamento Horizon.
+### Phase 4 — Federated fine-tuning (Fahrenheit 451 vision)
+Flower (Oxford) + OpenFedLLM. Only weight deltas — the data never leaves. Requires institutional partners and Horizon funding.
 
 ---
 
 ## Nice to have (backlog)
 
-**Visione (immagini) ✓** — *Implementato s9.* Mistral Small 3.2 e Gemma 4 sono già multimodali. Selmo.bat rileva automaticamente `*mmproj*.gguf` in `models/` e aggiunge `--mmproj` al lancio. chat.html accetta jpg/png/gif/webp dallo stesso pulsante `+ FILE`, converte in base64 e invia come content array OpenAI-compatible. Casi d'uso: foto, screenshot, documenti scannerizzati, OCR. Solo analisi — non genera immagini.
-- mmproj Mistral Small 3.2 24B: `mmproj-mistralai_Mistral-Small-3.2-24B-Instruct-2506-f16.gguf` (~878MB) da [bartowski su HuggingFace](https://huggingface.co/bartowski/mistralai_Mistral-Small-3.2-24B-Instruct-2506-GGUF)
-- mmproj Gemma 4 12B: `mmproj-gemma-4-12B-it-bf16.gguf` (~167MB) da [bartowski su HuggingFace](https://huggingface.co/bartowski/gemma-4-12B-it-GGUF)
+**Vision (images) ✓** — *Implemented s9.* Mistral Small 3.2 and Gemma 4 are already multimodal. Selmo.bat automatically detects `*mmproj*.gguf` in `models/` and adds `--mmproj` at launch. chat.html accepts jpg/png/gif/webp from the same `+ FILE` button, converts to base64 and sends as an OpenAI-compatible content array. Use cases: photos, screenshots, scanned documents, OCR. Analysis only — it does not generate images.
+- mmproj Mistral Small 3.2 24B: `mmproj-mistralai_Mistral-Small-3.2-24B-Instruct-2506-f16.gguf` (~878MB) from [bartowski on HuggingFace](https://huggingface.co/bartowski/mistralai_Mistral-Small-3.2-24B-Instruct-2506-GGUF)
+- mmproj Gemma 4 12B: `mmproj-gemma-4-12B-it-bf16.gguf` (~167MB) from [bartowski on HuggingFace](https://huggingface.co/bartowski/gemma-4-12B-it-GGUF)
 
-**Voce (Whisper) ✓** — *Implementato s9.* `selmo_whisper.py` su porta 8083, usa `faster-whisper` (pip). Pulsante 🎤 in chat.html: MediaRecorder → POST `/transcribe` → testo iniettato nell'input. Avvio automatico da Selmo.bat. Prerequisito: `pip install faster-whisper flask --break-system-packages` + modello `small` scaricato al primo avvio (~500MB).
+**Voice (Whisper) ✓** — *Implemented s9.* `selmo_whisper.py` on port 8083, uses `faster-whisper` (pip). 🎤 button in chat.html: MediaRecorder → POST `/transcribe` → text injected into the input. Auto-started by Selmo.bat. Prerequisite: `pip install faster-whisper flask --break-system-packages` + the `small` model downloaded on first launch (~500MB).
 
-**Voce in uscita (TTS) ✓** — *Implementato s9.* `selmo_tts.py` su porta 8084, usa Piper TTS (pip). Pulsante 🔊 in chat.html: toggle autoplay su ogni risposta. Prerequisito: `pip install piper-tts --break-system-packages` + voce .onnx in `voices/`. Voci italiane: [it_IT-paola-medium (F) / it_IT-riccardo-x_low (M)](https://huggingface.co/rhasspy/piper-voices/tree/main/it/it_IT). Il testo viene pulito dal markdown prima della sintesi. Loop completo: microfono → Whisper → Selmo → Piper → altoparlante.
+**Outgoing voice (TTS) ✓** — *Implemented s9.* `selmo_tts.py` on port 8084, uses Piper TTS (pip). 🔊 button in chat.html: autoplay toggle on every response. Prerequisite: `pip install piper-tts --break-system-packages` + a .onnx voice in `voices/`. Italian voices: [it_IT-paola-medium (F) / it_IT-riccardo-x_low (M)](https://huggingface.co/rhasspy/piper-voices/tree/main/it/it_IT). The text is cleaned of markdown before synthesis. Full loop: microphone → Whisper → Selmo → Piper → speaker.
 
-**Generazione immagini** — Richiede architettura diffusion, non LLM. Candidato: `stable-diffusion.cpp` (stesso approccio di llama.cpp, gira bene su 4070 Ti). Si affiancherebbe come `selmo_imggen.py` separato. Non interferisce con la stack attuale.
+**Image generation** — Requires a diffusion architecture, not an LLM. Candidate: `stable-diffusion.cpp` (same approach as llama.cpp, runs well on a 4070 Ti). It would sit alongside as a separate `selmo_imggen.py`. It does not interfere with the current stack.
 
-**Email IMAP** — `selmo_mail.py`. Legge la posta in locale, la passa al modello. Zero cloud.
+**IMAP email** — `selmo_mail.py`. Reads mail locally, passes it to the model. Zero cloud.
 
-**NGL adattivo alla VRAM** — invece di soglie per dimensione file, calcolare quanti layer entrano in VRAM leggendo la memoria libera via nvidia-smi e stimando i byte per layer dal .gguf. Elimina la necessità di tuning manuale al cambio hardware.
+**VRAM-adaptive NGL** — instead of file-size thresholds, compute how many layers fit in VRAM by reading the free memory via nvidia-smi and estimating bytes per layer from the .gguf. Removes the need for manual tuning when the hardware changes.
 
-**Selettore voce TTS in-app** — pannello impostazioni per scegliere la voce Kokoro (im_nicola, if_sara, bm_george, am_michael…) e la lingua preferita per l'interazione vocale. Persistente in localStorage. Elimina la necessità di editare Selmo.bat per cambiare voce.
+**In-app TTS voice selector** — a settings panel to choose the Kokoro voice (im_nicola, if_sara, bm_george, am_michael…) and the preferred language for voice interaction. Persistent in localStorage. Removes the need to edit Selmo.bat to change voice.
 
-**Model switcher in-app** — selettore modello in chat.html senza riavvio manuale. Endpoint `/switch-model` in `selmo_web.py`, UI con indicatore "server in riavvio…".
+**In-app model switcher** — model selector in chat.html without a manual restart. `/switch-model` endpoint in `selmo_web.py`, UI with a "server restarting…" indicator.
 
-**Selmo come orchestratore** — `selmo_master.py` per pipeline multi-step su documenti lunghi (sinossi, analisi, riassemblaggio capitoli).
+**Selmo as orchestrator** — `selmo_master.py` for multi-step pipelines on long documents (synopsis, analysis, chapter reassembly).
 
 ---
 
-## La frase che non cambia
+## The line that doesn't change
 
-*"Mentre dormi, il tuo telefono in carica contribuisce a una rete che non appartiene a nessuno e appartiene a tutti. La terra gira, l'onda segue il vento notturno, Selmo pensa."*
+*"While you sleep, your charging phone contributes to a network that belongs to no one and belongs to everyone. The earth turns, the wave follows the night wind, Selmo thinks."*

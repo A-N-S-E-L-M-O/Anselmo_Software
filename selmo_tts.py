@@ -1,19 +1,19 @@
 """
-selmo_tts.py — TTS locale via Kokoro-ONNX (MIT/Apache 2.0)
-Porta 8084. Pipeline: testo → Kokoro → WAV → risposta HTTP.
+selmo_tts.py — local TTS via Kokoro-ONNX (MIT/Apache 2.0)
+Port 8084. Pipeline: text → Kokoro → WAV → HTTP response.
 
-Installazione (una volta sola):
+Installation (one time only):
     pip install kokoro-onnx soundfile flask --break-system-packages
 
-File modello richiesti (scarica e metti in Selmo\tts\):
+Required model files (download and place in Selmo\tts\):
     kokoro-v1.0.onnx  → https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx
     voices-v1.0.bin   → https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin
 
-Voci italiane disponibili:
-    if_sara   — voce femminile (default)
-    im_nicola — voce maschile
+Available Italian voices:
+    if_sara   — female voice (default)
+    im_nicola — male voice
 
-Uso:
+Usage:
     python selmo_tts.py [--voice if_sara] [--speed 1.0] [--port 8084]
 """
 
@@ -33,57 +33,57 @@ except ImportError:
 try:
     from flask import Flask, request, Response, jsonify
 except ImportError:
-    print("Flask non trovato. Installa con: pip install flask --break-system-packages")
+    print("Flask not found. Install with: pip install flask --break-system-packages")
     sys.exit(1)
 
 try:
     import soundfile as sf
 except ImportError:
-    print("soundfile non trovato. Installa con: pip install soundfile --break-system-packages")
+    print("soundfile not found. Install with: pip install soundfile --break-system-packages")
     sys.exit(1)
 
 try:
     from kokoro_onnx import Kokoro
 except ImportError:
-    print("kokoro-onnx non trovato. Installa con: pip install kokoro-onnx --break-system-packages")
+    print("kokoro-onnx not found. Install with: pip install kokoro-onnx --break-system-packages")
     sys.exit(1)
 
-# ── Argomenti ─────────────────────────────────────────────────────
+# ── Arguments ─────────────────────────────────────────────────────
 parser = argparse.ArgumentParser(description="Selmo TTS bridge (Kokoro-ONNX)")
 parser.add_argument("--voice", default="if_sara",
-                    help="Voce Kokoro: if_sara (F) o im_nicola (M) (default: if_sara)")
+                    help="Kokoro voice: if_sara (F) or im_nicola (M) (default: if_sara)")
 parser.add_argument("--speed", type=float, default=1.0,
-                    help="Velocità parlato (default: 1.0)")
+                    help="Speech speed (default: 1.0)")
 parser.add_argument("--port", type=int, default=8084)
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("selmo_tts")
 
-# ── Percorso modelli ──────────────────────────────────────────────
+# ── Model path ────────────────────────────────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TTS_DIR = os.path.join(SCRIPT_DIR, "tts")
 ONNX_PATH = os.path.join(TTS_DIR, "kokoro-v1.0.onnx")
 VOICES_PATH = os.path.join(TTS_DIR, "voices-v1.0.bin")
 
 if not os.path.exists(ONNX_PATH) or not os.path.exists(VOICES_PATH):
-    log.error("File modello mancanti nella cartella tts/")
-    log.error(f"  Attesi: {ONNX_PATH}")
+    log.error("Model files missing in the tts/ folder")
+    log.error(f"  Expected: {ONNX_PATH}")
     log.error(f"          {VOICES_PATH}")
-    log.error("Scarica da: https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0")
+    log.error("Download from: https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0")
     sys.exit(1)
 
-# ── Caricamento modello ───────────────────────────────────────────
-log.info(f"Caricamento Kokoro ONNX (voce={args.voice})...")
+# ── Model loading ─────────────────────────────────────────────────
+log.info(f"Loading Kokoro ONNX (voice={args.voice})...")
 try:
     kokoro = Kokoro(ONNX_PATH, VOICES_PATH)
-    log.info("Kokoro pronto.")
+    log.info("Kokoro ready.")
 except Exception as e:
-    log.error(f"Errore caricamento Kokoro: {e}")
+    log.error(f"Kokoro loading error: {e}")
     sys.exit(1)
 
 
-# Mappa langdetect → codice lingua Kokoro
+# Map langdetect → Kokoro language code
 LANG_MAP = {
     'it': 'it', 'en': 'en-us', 'fr': 'fr-fr',
     'de': 'de', 'es': 'es', 'pt': 'pt-br',
@@ -131,13 +131,13 @@ def speak():
     speed = float(data.get("speed", args.speed))
 
     if not text:
-        return jsonify({"error": "Campo 'text' mancante o vuoto"}), 400
+        return jsonify({"error": "Field 'text' missing or empty"}), 400
 
     text = clean_text(text)
     if not text:
-        return jsonify({"error": "Testo vuoto dopo pulizia"}), 400
+        return jsonify({"error": "Text empty after cleanup"}), 400
 
-    log.info(f"Sintesi ({voice}, speed={speed}): {text[:80]}...")
+    log.info(f"Synthesis ({voice}, speed={speed}): {text[:80]}...")
     try:
         lang = data.get("lang") or detect_lang(text)
         samples, sample_rate = kokoro.create(text, voice=voice, speed=speed, lang=lang)
@@ -146,7 +146,7 @@ def speak():
         buf.seek(0)
         return Response(buf.read(), mimetype="audio/wav")
     except Exception as e:
-        log.error(f"Errore sintesi: {e}")
+        log.error(f"Synthesis error: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -164,6 +164,6 @@ def cors(resp):
 
 
 if __name__ == "__main__":
-    log.info(f"Selmo TTS (Kokoro-ONNX) in ascolto su http://0.0.0.0:{args.port}")
-    log.info(f"Voce: {args.voice} | Velocità: {args.speed}")
+    log.info(f"Selmo TTS (Kokoro-ONNX) listening on http://0.0.0.0:{args.port}")
+    log.info(f"Voice: {args.voice} | Speed: {args.speed}")
     app.run(host="0.0.0.0", port=args.port, debug=False, threaded=False)

@@ -1,69 +1,69 @@
 # Selmo — Bug Report
-*Documento vivente · aggiornato sessione 15 · Giugno 2026*
+*Living document · updated session 15 · June 2026*
 
 ---
 
-## BUG-META-01 · Mai il tool Edit su chat.html ⚠️ REGOLA PERMANENTE
+## BUG-META-01 · Never use the Edit tool on chat.html ⚠️ PERMANENT RULE
 
-**Sintomo** — Usando il tool `Edit` su `chat.html` il file viene troncato a metà (verificato s4, s5, s7).
+**Symptom** — Using the `Edit` tool on `chat.html` truncates the file halfway (verified s4, s5, s7).
 
-**Regola — MAI DEROGARE**
-- Modificare `chat.html` solo con Python via bash (`open` → `replace` → `write`), mai col tool Edit.
-- Dopo ogni modifica: estrarre lo script inline e `node --check`; verificare con il tool **Read**; il file deve finire con `</script></body></html>`.
-- Riavviare `llama-server` dopo la modifica + Ctrl+F5.
-
----
-
-## BUG-META-02 · Corruzione NUL / line-ending sul mount ⚠️ (sessione 13)
-
-File scritti/modificati via tool su questo mount possono ritrovarsi pieni di byte NUL (`\x00`) e/o con line-ending sbagliati. Capitato in s13 a `Selmo.bat` (593 NUL + LF → il `^` di continuazione rompeva cmd → frammenti eseguiti come comandi → crash all'avvio) e a `selmo-bug-report.md` (3684 NUL → grep lo vedeva "binary"). Il tool **Write** sembra il colpevole; il tool **Edit** e la scrittura Python restano puliti.
-
-**Regola**: dopo ogni modifica a `.bat`/`.md`, controllare `python3 -c "print(open('f','rb').read().count(b'\x00'))"` → deve dare 0. I `.bat` devono essere **CRLF**. Pulizia: rimuovere i NUL e riscrivere (i `.bat` in CRLF), preferibilmente via Python.
+**Rule — NEVER DEVIATE**
+- Edit `chat.html` only with Python via bash (`open` → `replace` → `write`), never with the Edit tool.
+- After every change: extract the inline script and `node --check`; verify with the **Read** tool; the file must end with `</script></body></html>`.
+- Restart `llama-server` after the change + Ctrl+F5.
 
 ---
 
-## BUG-IMG-02 · Visione da telefono → HTTP 400 ⚠️ APERTO (sessione 15)
+## BUG-META-02 · NUL / line-ending corruption on the mount ⚠️ (session 13)
 
-**Sintomo** — Caricando un'immagine dal cellulare (Android) la richiesta multimodale a `llama-server` (8080) torna **HTTP 400**. Il modello in uso (Magistral-Small-2509) ha il mmproj caricato (auto-match su `Magistral-` in `Selmo.bat`), quindi la visione è attiva e da desktop ha funzionato.
+Files written/edited via tools on this mount can end up full of NUL bytes (`\x00`) and/or with wrong line endings. It happened in s13 to `Selmo.bat` (593 NUL + LF → the `^` continuation broke cmd → fragments executed as commands → crash on startup) and to `selmo-bug-report.md` (3684 NUL → grep saw it as "binary"). The **Write** tool seems to be the culprit; the **Edit** tool and Python writes stay clean.
 
-**Già fatto (v0.708, non risolutivo)**
-- Normalizzazione immagini lato client: `createImageBitmap`→canvas→JPEG, cap lato lungo 1280px, `accept="image/*"` (gestisce foto grandi e HEIC iPhone via decode di Safari).
-- `max_tokens` cappato a 1200 quando c'è un'immagine (per non sforare la ctx 8192 coi token immagine).
-- Il client mostra ora il **corpo dell'errore** del server invece di "HTTP 400" secco.
-
-**Prossimo passo** — Leggere il messaggio reale del server (ora visibile nella bolla) e distinguere: overflow ctx, errore di decode immagine, o "multimodal not supported" per Magistral. Se è Magistral a non reggere la visione, ripiegare su Gemma 4 per i task immagine.
+**Rule**: after every change to a `.bat`/`.md`, check `python3 -c "print(open('f','rb').read().count(b'\x00'))"` → it must return 0. The `.bat` files must be **CRLF**. Cleanup: remove the NULs and rewrite (the `.bat` files in CRLF), preferably via Python.
 
 ---
 
-## BUG-IMG-03 · Visione + ricerca web insieme non funziona ⚠️ APERTO (sessione 15)
+## BUG-IMG-02 · Vision from phone → HTTP 400 ⚠️ OPEN (session 15)
 
-**Sintomo** — Con un'immagine caricata **e** WEB attivo (o comando `/web`), l'immagine non viene analizzata.
+**Symptom** — Uploading an image from the phone (Android) makes the multimodal request to `llama-server` (8080) return **HTTP 400**. The model in use (Magistral-Small-2509) has the mmproj loaded (auto-match on `Magistral-` in `Selmo.bat`), so vision is active and worked from the desktop.
 
-**Causa (individuata)** — In `sendMsg`, quando `IS_WEB_ON`/`isWebSearch` è vero, il flusso entra nel ramo web (≈riga 1643) che costruisce un prompt **solo testo** (contesto fonti) e gestisce/chiude la propria fetch **prima** di arrivare al blocco multimodale `if(fileImage)` (≈riga 1706): l'immagine allegata viene quindi ignorata. Inoltre `recentClean` fa `.replace(...)` su `m.content` che, per un messaggio-immagine precedente, è un **array** → possibile eccezione.
+**Already done (v0.708, not a fix)**
+- Client-side image normalization: `createImageBitmap`→canvas→JPEG, long-side cap 1280px, `accept="image/*"` (handles large photos and iPhone HEIC via Safari's decode).
+- `max_tokens` capped at 1200 when there is an image (to avoid overflowing ctx 8192 with the image tokens).
+- The client now shows the **body of the error** from the server instead of a bare "HTTP 400".
 
-**Fix proposto** — Nel ramo web includere anche `imgContent` nel content array (testo contesto + `image_url`), oppure stabilire una priorità esplicita con avviso ("web ignora l'immagine"). Gestire il caso `content` array dentro `recentClean` (saltarlo o serializzarlo).
-
----
-
-## Risolti
-
-### BUG-IMG-01 · Visione + IMG/OCR (immagini/PDF) — ✓ RISOLTO (v0.702)
-
-Tre cause distinte, finalmente isolate:
-1. **Crash runtime mmproj** — l'encoder vision di Gemma 4 usa attenzione non-causale: tutti i token immagine devono stare in un solo ubatch. Con ubatch default (512) e immagine grande scattava `GGML_ASSERT(n_ubatch >= n_tokens)`. Fix: `--batch-size 2048 --ubatch-size 2048`.
-2. **Immagine sovradimensionata/concatenata** — inutile: Gemma 4 ridimensiona al token-budget. Fix: una immagine **per pagina** a ~1280px + budget OCR `--image-min-tokens 1120 --image-max-tokens 1120`.
-3. **Crash all'avvio del launcher (s13)** — NON erano i flag: era `Selmo.bat` corrotto (NUL + LF). Vedi BUG-META-02.
-
-**Implementazione v0.702**
-- `chat.html`: pulsante dedicato **+ IMG/OCR**; `loadFileAsImage` (immagini as-is, PDF una immagine per pagina ~1280px); invio come array multimodale; **thumbnail cliccabili** (apertura a piena risoluzione).
-- `Selmo.bat` (ramo mmproj): `--image-min-tokens 1120 --image-max-tokens 1120 --batch-size 2048 --ubatch-size 2048`.
-- Verificato funzionante su Gemma 4 12B, RTX 4070 Ti 12GB.
-
-### Archiviati
-- **BUG-04** · `/web` TDZ su `chatHistory` — risolto (s13).
-- **BUG-05** · `input()` doppio click in `chunk_pipeline.py` — risolto s9.
-- **BUG-01 / BUG-02 / BUG-03** · vecchi problemi UI s7–s9 — da riverificare solo se si ripresentano.
+**Next step** — Read the real server message (now visible in the bubble) and distinguish: ctx overflow, image decode error, or "multimodal not supported" for Magistral. If it's Magistral that can't handle vision, fall back to Gemma 4 for image tasks.
 
 ---
 
-*Nota mount bash (s9): il mount Linux può restare congelato; verificare con il tool Read. Vedi BUG-META-02 per la corruzione NUL.*
+## BUG-IMG-03 · Vision + web search together doesn't work ⚠️ OPEN (session 15)
+
+**Symptom** — With an image loaded **and** WEB active (or the `/web` command), the image is not analyzed.
+
+**Cause (identified)** — In `sendMsg`, when `IS_WEB_ON`/`isWebSearch` is true, the flow enters the web branch (≈line 1643) which builds a **text-only** prompt (source context) and handles/closes its own fetch **before** reaching the multimodal block `if(fileImage)` (≈line 1706): the attached image is therefore ignored. Also `recentClean` does `.replace(...)` on `m.content` which, for a previous image message, is an **array** → possible exception.
+
+**Proposed fix** — In the web branch include `imgContent` in the content array too (context text + `image_url`), or establish an explicit priority with a warning ("web ignores the image"). Handle the `content` array case inside `recentClean` (skip it or serialize it).
+
+---
+
+## Resolved
+
+### BUG-IMG-01 · Vision + IMG/OCR (images/PDF) — ✓ RESOLVED (v0.702)
+
+Three distinct causes, finally isolated:
+1. **mmproj runtime crash** — Gemma 4's vision encoder uses non-causal attention: all image tokens must fit in a single ubatch. With the default ubatch (512) and a large image, `GGML_ASSERT(n_ubatch >= n_tokens)` would fire. Fix: `--batch-size 2048 --ubatch-size 2048`.
+2. **Oversized/concatenated image** — pointless: Gemma 4 resizes to the token budget. Fix: one image **per page** at ~1280px + OCR budget `--image-min-tokens 1120 --image-max-tokens 1120`.
+3. **Launcher startup crash (s13)** — it was NOT the flags: it was a corrupted `Selmo.bat` (NUL + LF). See BUG-META-02.
+
+**v0.702 implementation**
+- `chat.html`: dedicated **+ IMG/OCR** button; `loadFileAsImage` (images as-is, PDF one image per page ~1280px); sent as a multimodal array; **clickable thumbnails** (open at full resolution).
+- `Selmo.bat` (mmproj branch): `--image-min-tokens 1120 --image-max-tokens 1120 --batch-size 2048 --ubatch-size 2048`.
+- Verified working on Gemma 4 12B, RTX 4070 Ti 12GB.
+
+### Archived
+- **BUG-04** · `/web` TDZ on `chatHistory` — resolved (s13).
+- **BUG-05** · `input()` double click in `chunk_pipeline.py` — resolved s9.
+- **BUG-01 / BUG-02 / BUG-03** · old UI issues s7–s9 — to be re-checked only if they reappear.
+
+---
+
+*Bash mount note (s9): the Linux mount can stay frozen; verify with the Read tool. See BUG-META-02 for the NUL corruption.*

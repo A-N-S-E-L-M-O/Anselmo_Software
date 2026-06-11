@@ -1,11 +1,11 @@
 """
 selmo_server.py — Selmo backend launcher
-Avvia tutti i servizi Python in background (nessuna finestra)
-e llama-server in foreground in questa finestra.
-Chiudendo questa finestra (o Ctrl+C), tutto si spegne.
+Starts all the Python services in the background (no window)
+and llama-server in the foreground in this window.
+Closing this window (or Ctrl+C) shuts everything down.
 
-Uso (chiamato da Selmo.bat):
-  python selmo_server.py --model <path> --ngl <N> --ctx <N> [--mmproj <path>] [--voice <nome>]
+Usage (called by Selmo.bat):
+  python selmo_server.py --model <path> --ngl <N> --ctx <N> [--mmproj <path>] [--voice <name>]
 """
 
 import subprocess
@@ -20,14 +20,14 @@ from pathlib import Path
 BASE   = Path(__file__).parent
 PYTHON = Path(sys.executable)
 
-# Log persistente di llama-server: stdout+stderr finiscono qui oltre che a video.
-# Serve per diagnosticare i 400 multimodali (es. immagine dal telefono) leggendo
-# l'errore reale del server. Vedi BUG-IMG-02.
+# Persistent llama-server log: stdout+stderr go here as well as to the screen.
+# Needed to diagnose multimodal 400s (e.g. image from the phone) by reading
+# the real server error. See BUG-IMG-02.
 LLAMA_LOG = BASE / "selmo-llama.log"
 
 
 def _tee(proc, logpath):
-    """Legge l'output di llama-server e lo scrive sia a video sia su file."""
+    """Read llama-server output and write it both to the screen and to a file."""
     try:
         with open(logpath, "w", encoding="utf-8", errors="replace") as lf:
             for raw in iter(proc.stdout.readline, b""):
@@ -39,25 +39,25 @@ def _tee(proc, logpath):
     except Exception:
         pass
 
-# pythonw.exe = Python senza finestra console (meglio se disponibile)
+# pythonw.exe = Python without a console window (preferred if available)
 PYTHONW = PYTHON.parent / "pythonw.exe"
 if not PYTHONW.exists():
     PYTHONW = PYTHON
 
-# Flag Windows: crea il processo senza finestra console
+# Windows flag: create the process without a console window
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
-# Lista processi figli da terminare all'uscita
+# List of child processes to terminate on exit
 _procs: list[subprocess.Popen] = []
 
 
 # -- Cleanup -------------------------------------------------------------------
 
 def _cleanup():
-    """Termina tutti i processi figli avviati da questo launcher."""
+    """Terminate all child processes started by this launcher."""
     if not _procs:
         return
-    print("\n[Selmo] Arresto servizi...", flush=True)
+    print("\n[Selmo] Stopping services...", flush=True)
     for p in _procs:
         try:
             p.terminate()
@@ -70,13 +70,13 @@ def _cleanup():
                 p.kill()
         except Exception:
             pass
-    print("[Selmo] Tutto fermato.", flush=True)
+    print("[Selmo] Everything stopped.", flush=True)
 
 
 atexit.register(_cleanup)
 
 
-# -- Gestione chiusura finestra (tasto X) su Windows --------------------------
+# -- Window-close (X button) handling on Windows ------------------------------
 
 if sys.platform == "win32":
     import ctypes
@@ -91,10 +91,10 @@ if sys.platform == "win32":
     ctypes.windll.kernel32.SetConsoleCtrlHandler(_ctrl_handler, True)
 
 
-# -- Avvio servizi -------------------------------------------------------------
+# -- Service startup -----------------------------------------------------------
 
 def _start(label: str, args: list) -> subprocess.Popen:
-    """Avvia un servizio Python senza finestra e senza output visibile."""
+    """Start a Python service without a window and without visible output."""
     cmd = [str(PYTHONW)] + args
     print(f"  -> {label}", flush=True)
     p = subprocess.Popen(
@@ -111,39 +111,43 @@ def _start(label: str, args: list) -> subprocess.Popen:
 
 def main():
     parser = argparse.ArgumentParser(description="Selmo Backend Launcher")
-    parser.add_argument("--model",  required=True,  help="Path al file .gguf")
-    parser.add_argument("--ngl",    type=int, default=45,       help="Layer GPU")
+    parser.add_argument("--model",  required=True,  help="Path to the .gguf file")
+    parser.add_argument("--ngl",    type=int, default=45,       help="GPU layers")
     parser.add_argument("--ctx",    type=int, default=8192,     help="Context size")
-    parser.add_argument("--mmproj", default=None,               help="Path mmproj (visione)")
-    parser.add_argument("--voice",  default="im_nicola",        help="Voce TTS")
+    parser.add_argument("--mmproj", default=None,               help="mmproj path (vision)")
+    parser.add_argument("--voice",  default="im_nicola",        help="TTS voice")
     args = parser.parse_args()
 
     model_name = Path(args.model).name
 
+    border = "  +" + "-" * 42 + "+"
+    def boxline(s):
+        return "  |" + s.center(42) + "|"
+
     print()
-    print("  +------------------------------------------+")
-    print("  |  Selmo  --  IA locale, GDPR by design   |")
-    print("  |  I tuoi dati restano sul tuo computer.  |")
-    print("  +------------------------------------------+")
+    print(border)
+    print(boxline("Selmo  --  local AI, GDPR by design"))
+    print(boxline("Your data stays on your computer."))
+    print(border)
     print()
-    print(f"  Modello  : {model_name}")
+    print(f"  Model    : {model_name}")
     print(f"  -ngl     : {args.ngl}   ctx: {args.ctx}")
     if args.mmproj:
-        print(f"  Visione  : attiva  ({Path(args.mmproj).name})")
+        print(f"  Vision   : on  ({Path(args.mmproj).name})")
     else:
-        print("  Visione  : solo testo")
+        print("  Vision   : text only")
     print()
-    print("  Avvio servizi Python (nessuna finestra separata)...")
+    print("  Starting Python services (no separate window)...")
 
-    _start("GPU Monitor   [porta 8082]", [str(BASE / "selmo_gpu_monitor.py")])
-    _start("Web Bridge    [porta 8081]", [str(BASE / "selmo_web.py")])
-    _start("Whisper STT   [porta 8083]", [str(BASE / "selmo_whisper.py")])
-    _start("TTS Kokoro    [porta 8084]", [str(BASE / "selmo_tts.py"), "--voice", args.voice])
+    _start("GPU Monitor   [port 8082]", [str(BASE / "selmo_gpu_monitor.py")])
+    _start("Web Bridge    [port 8081]", [str(BASE / "selmo_web.py")])
+    _start("Whisper STT   [port 8083]", [str(BASE / "selmo_whisper.py")])
+    _start("TTS Kokoro    [port 8084]", [str(BASE / "selmo_tts.py"), "--voice", args.voice])
 
-    # Piccola pausa per dare tempo ai servizi di partire
+    # Small pause to give the services time to start
     time.sleep(2)
 
-    # Apri il browser
+    # Open the browser
     try:
         os.startfile("http://127.0.0.1:8080/chat.html")
     except Exception:
@@ -152,7 +156,7 @@ def main():
             creationflags=NO_WINDOW,
         )
 
-    # -- Costruisci comando llama-server --------------------------------------
+    # -- Build the llama-server command ---------------------------------------
     llama = str(BASE / "bin" / "llama-server.exe")
     cmd = [
         llama,
@@ -163,13 +167,14 @@ def main():
         "-ngl",                 str(args.ngl),
         "--parallel",           "1",
         "--no-warmup",
-        # BUG-IMG-02: --timeout 0 azzera il read-timeout di cpp-httplib. Su
-        # localhost il body arriva tutto subito e va bene, ma da rete (telefono)
-        # un body grande (immagine ~200KB, audio Whisper) arriva in tanti pacchetti
-        # con micro-gap: col timeout a 0 la read fallisce al primo pacchetto non
-        # ancora pronto e httplib risponde 400 a corpo vuoto (no content-type,
-        # len 0) PRIMA dell'handler. Valore generoso: non taglia le generazioni
-        # lunghe (il client aborta a 300s) ma lascia leggere i body lenti.
+        # BUG-IMG-02: --timeout 0 zeroes cpp-httplib's read timeout. On
+        # localhost the body arrives all at once and that's fine, but over the
+        # network (phone) a large body (image ~200KB, Whisper audio) arrives in
+        # many packets with micro-gaps: with the timeout at 0 the read fails on
+        # the first packet that isn't ready yet and httplib replies 400 with an
+        # empty body (no content-type, len 0) BEFORE the handler. A generous
+        # value: it does not cut off long generations (the client aborts at 300s)
+        # but lets slow bodies be read.
         "--timeout",            "600",
         "--metrics",
         "--path",               str(BASE),
@@ -183,23 +188,23 @@ def main():
             "--batch-size",         "2048",
             "--ubatch-size",        "2048",
         ]
-        # --image-min/max-tokens e' un budget di token specifico di Gemma 3/4.
-        # Su un encoder Pixtral (Magistral / Mistral-Small) llama.cpp non lo
-        # supporta e rifiuta la richiesta immagine con HTTP 400 PRIMA di lanciare
-        # lo slot (nessuna inferenza nel log) -> sintomo di BUG-IMG-02. Applichiamo
-        # quei flag solo a Gemma; gli altri modelli vision usano la loro risoluzione
-        # nativa.
+        # --image-min/max-tokens is a token budget specific to Gemma 3/4.
+        # On a Pixtral encoder (Magistral / Mistral-Small) llama.cpp does not
+        # support it and rejects the image request with HTTP 400 BEFORE launching
+        # the slot (no inference in the log) -> symptom of BUG-IMG-02. We apply
+        # those flags only to Gemma; the other vision models use their native
+        # resolution.
         if "gemma" in model_name.lower():
             cmd += ["--image-min-tokens", "1120", "--image-max-tokens", "1120"]
 
     print()
-    print("  Avvio llama-server...")
+    print("  Starting llama-server...")
     print("  -----------------------------------------------------")
-    print("  Ctrl+C  o  chiudi questa finestra  per fermare tutto.")
+    print("  Ctrl+C  or  close this window  to stop everything.")
     print()
 
-    # llama-server in foreground: output a video (via tee) + su selmo-llama.log
-    print(f"  Log llama-server: {LLAMA_LOG.name}")
+    # llama-server in foreground: output to screen (via tee) + to selmo-llama.log
+    print(f"  llama-server log: {LLAMA_LOG.name}")
     print()
     llama_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     _procs.append(llama_proc)
@@ -209,7 +214,7 @@ def main():
         llama_proc.wait()
     except KeyboardInterrupt:
         pass
-    # _cleanup() viene chiamato da atexit
+    # _cleanup() is called by atexit
 
 
 if __name__ == "__main__":

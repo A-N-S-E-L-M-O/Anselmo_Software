@@ -1,6 +1,6 @@
 """
-Selmo GPU Monitor -- legge i watt reali dalla GPU via NVML
-Gira in background e espone i dati su http://localhost:8082
+Selmo GPU Monitor -- reads real watts from the GPU via NVML
+Runs in the background and exposes the data on http://localhost:8082
 """
 import sys
 import json
@@ -8,7 +8,7 @@ import time
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# Installa pynvml se non presente
+# Install pynvml if not present
 try:
     import pynvml
 except ImportError:
@@ -16,7 +16,7 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "pynvml", "--quiet"])
     import pynvml
 
-# Stato globale
+# Global state
 state = {"watts": 0, "vram_used": 0, "vram_total": 0, "gpu_pct": 0, "temp": 0, "ok": False}
 
 def read_gpu():
@@ -49,10 +49,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(json.dumps(state).encode())
-    def log_message(self, *args): pass  # silenzia i log
+    def log_message(self, *args): pass  # silence the logs
 
 if __name__ == "__main__":
     t = threading.Thread(target=read_gpu, daemon=True)
     t.start()
-    print("Selmo GPU Monitor avviato su http://localhost:8082")
-    HTTPServer(("0.0.0.0", 8082), Handler).serve_forever()
+    print("Selmo GPU Monitor started on http://localhost:8082")
+    HTTPServer(("0.0.0.0", 8082), Handler).serve_f

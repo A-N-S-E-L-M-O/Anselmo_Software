@@ -1,21 +1,21 @@
-# Selmo — istruzioni per Claude
+# Selmo — instructions for Claude
 
-Leggi **per primo** `selmo-dev.md` (sezione "Lezioni apprese") e `selmo-bug-report.md`.
+Read **first** `selmo-dev.md` (the "Lessons learned" section) and `selmo-bug-report.md`.
 
-## Workflow git — regola Fabio (sessione 13) · NON DEROGARE
+## Git workflow — Fabio's rule (session 13) · DO NOT DEVIATE
 
-Git è l'**unico** safety net. I backup via `bk.bat` / `restore.bat` / cartelle `bk*` sono **deprecati**: non usarli, non crearne, non proporli.
+Git is the **only** safety net. Backups via `bk.bat` / `restore.bat` / `bk*` folders are **deprecated**: don't use them, don't create them, don't propose them.
 
-A **ogni feedback positivo di Fabio** (es. "funziona", "ok", "perfetto", "ci siamo"):
-1. Committa **subito** la modifica confermata, con messaggio chiaro.
-2. **Avanza la versione** di **+0.001** (millesimi): badge `v0.x` in `chat.html` (cerca `class="hbadge"`, ~riga 421) **e** intestazione di `selmo-dev.md`. Es: v0.7 → v0.701 → v0.702. La **v1.0 è riservata** alla release "vera"; non arrivarci con i bump incrementali.
+On **every positive feedback from Fabio** (e.g. "it works", "ok", "perfect", "we're there"):
+1. Commit the confirmed change **immediately**, with a clear message.
+2. **Bump the version** by **+0.001** (thousandths): the `v0.x` badge in `chat.html` (search for `class="hbadge"`, ~line 421) **and** the header of `selmo-dev.md`. E.g. v0.7 → v0.701 → v0.702. **v1.0 is reserved** for the "real" release; don't reach it with incremental bumps.
 
-Non accumulare modifiche non committate. Ogni stato confermato-buono deve finire in un commit, così non si perde mai (lezione costosa s13: la versione vision che funzionava era solo nel working tree e non è stata committata → persa).
+Don't accumulate uncommitted changes. Every confirmed-good state must end up in a commit, so it's never lost (costly lesson s13: the working vision version lived only in the working tree and was never committed → lost).
 
-Non committare stati **non** confermati: se è un tentativo, dillo e aspetta il test di Fabio prima del commit + bump.
+Don't commit **unconfirmed** states: if it's an attempt, say so and wait for Fabio's test before the commit + bump.
 
-## chat.html — regole permanenti
+## chat.html — permanent rules
 
-- **MAI** il tool Edit su `chat.html` (tronca silenziosamente). Solo Python via bash — vedi BUG-META-01.
-- `node --check` sullo script estratto dopo ogni modifica; verifica con il tool Read, non con `cat`/`wc` da bash.
-- Riavviare `llama-server` dopo modifica (può servire la cache); meta anti-cache + Ctrl+F5.
+- **NEVER** use the Edit tool on `chat.html` (it truncates silently). Python via bash only — see BUG-META-01.
+- `node --check` on the extracted script after every change; verify with the Read tool, not with `cat`/`wc` from bash.
+- Restart `llama-server` after a change (it can serve from cache); a

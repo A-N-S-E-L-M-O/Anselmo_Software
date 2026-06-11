@@ -1,52 +1,52 @@
 """
-chunk_pipeline.py — pipeline generica: ODT/TXT -> chunking -> LLM -> output
+chunk_pipeline.py — generic pipeline: ODT/TXT -> chunking -> LLM -> output
 
-Funziona con qualsiasi prompt e qualsiasi tipo di task:
-  traduzione, ricerca tematica, analisi, estrazione, riscrittura, ecc.
+Works with any prompt and any kind of task:
+  translation, thematic search, analysis, extraction, rewriting, etc.
 
-Due modalità di output (--mode):
-  stitch   [default] : i risultati sono testo continuo.
-                       Ideale per: traduzione, riscrittura, parafrasi.
-  collect            : i risultati di ogni chunk vengono raccolti in sequenza.
-                       Se il modello risponde "NIENTE" o varianti, quel chunk
-                       non viene incluso nell'output.
-                       Ideale per: ricerca, analisi, estrazione.
+Two output modes (--mode):
+  stitch   [default] : results are continuous text.
+                       Ideal for: translation, rewriting, paraphrasing.
+  collect            : the result of each chunk is gathered in sequence.
+                       If the model replies "NOTHING" or variants, that chunk
+                       is not included in the output.
+                       Ideal for: search, analysis, extraction.
 
-Uso:
-    python chunk_pipeline.py <file.odt|file.txt> --prompt "..." [opzioni]
-    python chunk_pipeline.py <file> --prompt-file prompt.txt [opzioni]
+Usage:
+    python chunk_pipeline.py <file.odt|file.txt> --prompt "..." [options]
+    python chunk_pipeline.py <file> --prompt-file prompt.txt [options]
     python chunk_pipeline.py --selftest
 
-Opzioni:
-    --mode stitch|collect     modalità output (default: stitch)
-    --system "..."            system prompt (default: assistente generico)
-    --out FILE                file di output (default: <nome>_out.md)
-    --size N                  forza chunk size in caratteri (default: auto)
-    --thinking-buffer N       token riservati al thinking interno del modello
-                              (default: 0 — modelli instruct; usare 800+ per reasoning)
-    --model URL               endpoint llama.cpp (default: http://127.0.0.1:8080/...)
-    --max-tokens N            token risposta per chunk (default: 2000)
-    --dry-run                 mostra i chunk senza chiamare il modello
-    --selftest                verifica chunking e stitching offline
+Options:
+    --mode stitch|collect     output mode (default: stitch)
+    --system "..."            system prompt (default: generic assistant)
+    --out FILE                output file (default: <name>_out.md)
+    --size N                  force chunk size in characters (default: auto)
+    --thinking-buffer N       tokens reserved for the model's internal thinking
+                              (default: 0 — instruct models; use 800+ for reasoning)
+    --model URL               llama.cpp endpoint (default: http://127.0.0.1:8080/...)
+    --max-tokens N            response tokens per chunk (default: 2000)
+    --dry-run                 show the chunks without calling the model
+    --selftest                verify chunking and stitching offline
 
-Chunk size automatico (default):
-    Prima di iniziare, interroga il server via /props (n_ctx reale) e /tokenize
-    (tokenizer esatto del modello). Calcola il chunk size ottimale per questo
-    specifico modello e questa finestra di contesto. Funziona per qualsiasi modello.
-    Usa --size N per forzare un valore manuale.
+Automatic chunk size (default):
+    Before starting, it queries the server via /props (real n_ctx) and /tokenize
+    (the model's exact tokenizer). It computes the optimal chunk size for this
+    specific model and this context window. Works for any model.
+    Use --size N to force a manual value.
 
-Il prompt riceve il testo del chunk come {text}.
-Se il prompt non contiene {text}, il testo viene aggiunto in fondo automaticamente.
+The prompt receives the chunk text as {text}.
+If the prompt does not contain {text}, the text is appended at the end automatically.
 """
 
 import zipfile, json, urllib.request, urllib.error, time, sys, os, re, argparse
 from xml.etree import ElementTree as ET
 
-# ── Default ───────────────────────────────────────────────────────────────────
+# ── Defaults ──────────────────────────────────────────────────────────────────
 DEFAULT_API      = "http://127.0.0.1:8080/v1/chat/completions"
 DEFAULT_TOKENS   = 2000
-SAFETY_MARGIN    = 200   # token riservati per framing e variazioni tokenizer
-FALLBACK_SIZE    = 3000  # usato se il server non è raggiungibile durante auto-calc
+SAFETY_MARGIN    = 200   # tokens reserved for framing and tokenizer variations
+FALLBACK_SIZE    = 3000  # used if the server is unreachable during auto-calc
 COLLECT_EMPTY_RE = re.compile(r'^\s*(niente|nothing|none|no result|nessun|–|—|-)\s*$', re.I)
 
 DEFAULT_SYSTEM = (
@@ -54,7 +54,7 @@ DEFAULT_SYSTEM = (
     "Output only your answer, no preambles or meta-commentary."
 )
 
-# ── Estrazione testo ──────────────────────────────────────────────────────────
+# ── Text extraction ───────────────────────────────────────────────────────────
 def extract_odt(path):
     with zipfile.ZipFile(path) as z:
         xml = z.read('content.xml').decode('utf-8')
@@ -115,13 +115,13 @@ def prove_coverage(text, ranges):
         assert b == c and b > a
     assert ''.join(text[a:b] for a, b in ranges) == text
 
-# ── Calcolo automatico chunk size ─────────────────────────────────────────────
+# ── Automatic chunk size calculation ──────────────────────────────────────────
 def _api_base(api_url):
-    """Estrae la base URL dall'endpoint completions."""
+    """Extract the base URL from the completions endpoint."""
     return api_url.split('/v1/')[0]
 
 def get_server_props(api_url):
-    """Interroga /props e restituisce il dict, o None se non disponibile."""
+    """Query /props and return the dict, or None if unavailable."""
     url = _api_base(api_url) + '/props'
     req = urllib.request.Request(url, method='GET')
     try:
@@ -131,7 +131,7 @@ def get_server_props(api_url):
         return None
 
 def tokenize_text(text, api_url):
-    """Restituisce il numero di token per `text` usando il tokenizer del modello."""
+    """Return the number of tokens for `text` using the model's tokenizer."""
     url = _api_base(api_url) + '/tokenize'
     payload = json.dumps({'content': text}).encode('utf-8')
     req = urllib.request.Request(url, data=payload,
@@ -145,37 +145,37 @@ def tokenize_text(text, api_url):
 
 def auto_chunk_size(text, system_prompt, api_url, max_tokens, thinking_buffer):
     """
-    Calcola il chunk size ottimale per questo modello e questa finestra di contesto.
+    Compute the optimal chunk size for this model and this context window.
 
-    Usa il tokenizer reale del modello via /tokenize e il n_ctx reale via /props.
-    Funziona per qualsiasi modello indipendentemente da tokenizer e architettura.
+    Uses the model's real tokenizer via /tokenize and the real n_ctx via /props.
+    Works for any model regardless of tokenizer and architecture.
 
-    Restituisce (chunk_size_chars, info_dict) o (None, None) se il server
-    non è raggiungibile o i dati non sono disponibili.
+    Returns (chunk_size_chars, info_dict) or (None, None) if the server
+    is unreachable or the data is not available.
     """
-    # 1. n_ctx reale dal server
+    # 1. Real n_ctx from the server
     props = get_server_props(api_url)
     if props is None:
         return None, None
 
-    # /props può avere n_ctx in posti diversi a seconda della versione llama.cpp
+    # /props may expose n_ctx in different places depending on the llama.cpp version
     n_ctx = (props.get('n_ctx')
              or props.get('default_generation_settings', {}).get('n_ctx')
              or props.get('total_slots', {}) and None)
     if not n_ctx:
         return None, None
 
-    # 2. Token esatti del system prompt con il tokenizer di questo modello
+    # 2. Exact token count of the system prompt with this model's tokenizer
     sys_tokens = tokenize_text(system_prompt, api_url)
     if sys_tokens is None:
         return None, None
 
-    # 3. Token disponibili per il chunk
+    # 3. Tokens available for the chunk
     available_tokens = n_ctx - sys_tokens - max_tokens - thinking_buffer - SAFETY_MARGIN
     if available_tokens <= 100:
         return None, None
 
-    # 4. Calibrazione chars/token sul testo reale (campione di 1500 char)
+    # 4. chars/token calibration on the real text (1500-char sample)
     sample = text[:1500] if len(text) >= 1500 else text
     sample_tokens = tokenize_text(sample, api_url)
     if not sample_tokens:
@@ -196,7 +196,7 @@ def auto_chunk_size(text, system_prompt, api_url, max_tokens, thinking_buffer):
     }
     return chunk_size, info
 
-# ── Chiamata modello ──────────────────────────────────────────────────────────
+# ── Model call ────────────────────────────────────────────────────────────────
 def call_model(user_content, system, api_url, max_tokens):
     messages = [
         {"role": "system", "content": system},
@@ -226,24 +226,24 @@ def build_user_message(prompt_template, chunk_text):
         return prompt_template.format(text=chunk_text)
     return prompt_template + '\n\n' + chunk_text
 
-# ── Modalità stitch (testo continuo) ─────────────────────────────────────────
+# ── Stitch mode (continuous text) ─────────────────────────────────────────────
 def stitch(chunks):
-    """Incolla i chunk in sequenza. Nessuna modifica al testo."""
+    """Paste the chunks in sequence. No modification to the text."""
     return '\n\n'.join(c for c in chunks if c).strip()
 
-# ── Modalità collect (aggregazione risultati) ─────────────────────────────────
+# ── Collect mode (aggregate results) ──────────────────────────────────────────
 def collect(chunk_results):
     parts = []
     for i, (num, text) in enumerate(chunk_results):
         if COLLECT_EMPTY_RE.match(text.strip()):
             continue
         if text.strip().startswith('[ERROR'):
-            parts.append(f"### Chunk {num} — ERRORE\n{text}\n")
+            parts.append(f"### Chunk {num} — ERROR\n{text}\n")
         else:
             parts.append(f"### Chunk {num}\n{text}\n")
     return '\n'.join(parts).strip()
 
-# ── Colori terminale ──────────────────────────────────────────────────────────
+# ── Terminal colors ───────────────────────────────────────────────────────────
 class C:
     R = '\033[91m'; G = '\033[92m'; Y = '\033[93m'; DIM = '\033[2m'; OFF = '\033[0m'
 if os.name == 'nt':
@@ -252,28 +252,28 @@ if os.name == 'nt':
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main():
     ap = argparse.ArgumentParser(
-        description="Pipeline generica: file -> chunking -> LLM -> output"
+        description="Generic pipeline: file -> chunking -> LLM -> output"
     )
     ap.add_argument('file', nargs='?',
                     default=os.path.join(os.path.dirname(__file__),
                                          "Test files", "Dialoghi con la lavatrice.odt"),
-                    help="file .odt o .txt da elaborare")
+                    help="the .odt or .txt file to process")
     ap.add_argument('--prompt',           default=None,
-                    help='prompt da applicare a ogni chunk (usa {text} per il testo)')
+                    help='prompt to apply to each chunk (use {text} for the text)')
     ap.add_argument('--prompt-file',      default=None,
-                    help='file contenente il prompt (alternativa a --prompt)')
+                    help='file containing the prompt (alternative to --prompt)')
     ap.add_argument('--system',           default=DEFAULT_SYSTEM,
                     help='system prompt')
     ap.add_argument('--mode',             default='stitch', choices=['stitch', 'collect'],
-                    help='stitch = testo continuo; collect = aggrega risultati')
+                    help='stitch = continuous text; collect = aggregate results')
     ap.add_argument('--out',              default=None)
     ap.add_argument('--size',             type=int, default=None,
-                    help='forza chunk size in caratteri (default: calcolo automatico)')
+                    help='force chunk size in characters (default: automatic calculation)')
     ap.add_argument('--max-tokens',       type=int, default=DEFAULT_TOKENS, dest='max_tokens')
     ap.add_argument('--thinking',         action='store_true',
-                    help='modello reasoning (es. Gemma): riserva 800 token per il thinking interno')
+                    help='reasoning model (e.g. Gemma): reserve 800 tokens for internal thinking')
     ap.add_argument('--thinking-buffer',  type=int, default=None, dest='thinking_buffer',
-                    help='token riservati al thinking interno (override di --thinking; default 0)')
+                    help='tokens reserved for internal thinking (overrides --thinking; default 0)')
     ap.add_argument('--model',            default=DEFAULT_API)
     ap.add_argument('--dry-run',          action='store_true')
     ap.add_argument('--selftest',         action='store_true')
@@ -283,21 +283,21 @@ def main():
         selftest()
         return
 
-    # ── Rilevamento modalità interattiva (doppio click) ─────────────────────
+    # ── Interactive mode detection (double click) ───────────────────────────
     interactive = not args.prompt and not args.prompt_file and not args.dry_run
 
     if interactive:
         print()
         print(" ╔══════════════════════════════════════════════╗")
-        print(" ║  chunk_pipeline — modalità interattiva       ║")
+        print(" ║  chunk_pipeline — interactive mode           ║")
         print(" ╚══════════════════════════════════════════════╝")
         print()
 
-    # ── Thinking model? — riserva token per il reasoning interno ──────────────
-    # Priorità: --thinking-buffer esplicito > --thinking > domanda interattiva > 0.
-    # La domanda compare SOLO con terminale interattivo (stdin.isatty): evita
-    # l'EOFError e la finestra che si chiude al doppio click windowless, e non
-    # blocca le esecuzioni da script con --prompt.
+    # ── Thinking model? — reserve tokens for internal reasoning ───────────────
+    # Priority: explicit --thinking-buffer > --thinking > interactive prompt > 0.
+    # The prompt appears ONLY on an interactive terminal (stdin.isatty): this avoids
+    # the EOFError and the window closing on a windowless double click, and does not
+    # block script runs that use --prompt.
     if args.thinking_buffer is not None:
         thinking_buffer = args.thinking_buffer
     elif args.thinking:
@@ -319,20 +319,20 @@ def main():
         prompt_template = args.prompt
     else:
         print()
-        print(" Inserisci il prompt da applicare a ogni chunk.")
-        print(" Usa {text} dove vuoi il testo (o lascia vuoto: verrà aggiunto in fondo).")
+        print(" Enter the prompt to apply to each chunk.")
+        print(" Use {text} where you want the text (or leave empty: it will be appended at the end).")
         print()
         try:
             prompt_template = input(" Prompt: ").strip()
         except EOFError:
             prompt_template = ''
         if not prompt_template:
-            print(f"\n Prompt vuoto. Uscita.")
-            input("\n Premi ENTER per chiudere...")
+            print(f"\n Empty prompt. Exiting.")
+            input("\n Press ENTER to close...")
             sys.exit(1)
 
     if not os.path.exists(args.file):
-        print(f"{C.R}File non trovato: {args.file}{C.OFF}")
+        print(f"{C.R}File not found: {args.file}{C.OFF}")
         sys.exit(1)
 
     suffix = '_out.md'
@@ -340,12 +340,12 @@ def main():
 
     text = extract(args.file)
 
-    # ── Calcolo chunk size ────────────────────────────────────────────────────
+    # ── Chunk size calculation ────────────────────────────────────────────────
     if args.size is not None:
         chunk_size = args.size
-        size_source = f"manuale ({chunk_size:,} char)"
+        size_source = f"manual ({chunk_size:,} char)"
     else:
-        print(f"\n chunk_pipeline — calibrazione modello…")
+        print(f"\n chunk_pipeline — calibrating model…")
         cs, info = auto_chunk_size(text, args.system, args.model,
                                    args.max_tokens, thinking_buffer)
         if cs is not None:
@@ -353,40 +353,40 @@ def main():
             size_source = (
                 f"auto ({chunk_size:,} char · n_ctx={info['n_ctx']} · "
                 f"{info['chars_per_token']} char/tok · "
-                f"disponibili={info['available_tokens']} tok"
+                f"available={info['available_tokens']} tok"
                 + (f" · thinking={info['thinking_buffer']}" if info['thinking_buffer'] else "")
                 + ")"
             )
         else:
             chunk_size = FALLBACK_SIZE
-            size_source = f"fallback ({chunk_size:,} char — server non raggiungibile per calibrazione)"
-            print(f" {C.Y}Server non raggiungibile per auto-calibrazione, uso fallback {FALLBACK_SIZE:,} char{C.OFF}")
+            size_source = f"fallback ({chunk_size:,} char — server unreachable for calibration)"
+            print(f" {C.Y}Server unreachable for auto-calibration, using fallback {FALLBACK_SIZE:,} char{C.OFF}")
 
     print(f"\n chunk_pipeline")
     print(f" {'─' * 50}")
     print(f" File   : {os.path.basename(args.file)}")
-    print(f" Modo   : {args.mode}")
+    print(f" Mode   : {args.mode}")
     print(f" Chunk  : {size_source}")
     print(f" Token  : {args.max_tokens}   thinking-buffer: {thinking_buffer}")
     print(f" Output : {os.path.basename(out_path)}\n")
 
-    print(f" Estratti {len(text):,} caratteri")
+    print(f" Extracted {len(text):,} characters")
 
     ranges = build_chunks(text, chunk_size)
     try:
         prove_coverage(text, ranges)
     except AssertionError as e:
-        print(f"{C.R}COPERTURA FALLITA: {e}{C.OFF}")
+        print(f"{C.R}COVERAGE FAILED: {e}{C.OFF}")
         sys.exit(2)
 
     biggest = max(b - a for a, b in ranges)
-    print(f" {C.G}Copertura OK{C.OFF} · {len(ranges)} chunk · max {biggest:,} char\n")
+    print(f" {C.G}Coverage OK{C.OFF} · {len(ranges)} chunk · max {biggest:,} char\n")
 
     if args.dry_run:
         for i, (a, b) in enumerate(ranges):
             snippet = text[a:b].replace('\n', ' ')[:80]
             print(f" [{i+1:3d}/{len(ranges)}] {snippet}…")
-        print(f"\n{C.Y}--dry-run: nessuna chiamata al modello.{C.OFF}")
+        print(f"\n{C.Y}--dry-run: no call to the model.{C.OFF}")
         return
 
     results = []
@@ -406,93 +406,93 @@ def main():
 
         is_error = answer.startswith('[ERROR')
         is_empty = COLLECT_EMPTY_RE.match(answer.strip()) is not None
-        tag = (f"{C.R}ERRORE{C.OFF}" if is_error
-               else f"{C.DIM}vuoto{C.OFF}" if is_empty
+        tag = (f"{C.R}ERROR{C.OFF}" if is_error
+               else f"{C.DIM}empty{C.OFF}" if is_empty
                else f"{C.G}{dt:.1f}s{C.OFF} → {len(answer):,} char")
         print(tag)
 
         results.append((n, answer))
 
-    print(f"\n Elaborazione completata in {total_time:.0f}s")
+    print(f"\n Processing completed in {total_time:.0f}s")
 
     if args.mode == 'stitch':
         print(f" Stitching {len(results)} chunk…")
         final = stitch([r for _, r in results])
     else:
-        print(f" Aggregazione risultati (modalità collect)…")
+        print(f" Aggregating results (collect mode)…")
         final = collect(results)
 
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write(final)
 
-    print(f" {C.G}Salvato{C.OFF}: {out_path}  ({len(final):,} char)\n")
+    print(f" {C.G}Saved{C.OFF}: {out_path}  ({len(final):,} char)\n")
 
     if interactive:
-        input(" Premi ENTER per chiudere...")
+        input(" Press ENTER to close...")
 
 # ── Selftest ───────────────────────────────────────────────────────────────────
 def selftest():
     print("\n SELFTEST\n " + "─" * 40)
     ok = True
 
-    # 1. Copertura chunking
-    text = "Primo paragrafo.\n\nSecondo, più lungo, con due frasi. Eccola.\n\nTerzo."
+    # 1. Chunking coverage
+    text = "First paragraph.\n\nSecond, longer, with two sentences. Here it is.\n\nThird."
     ranges = build_chunks(text, 40)
     try:
         prove_coverage(text, ranges); g = True
     except AssertionError as e:
         g = False; print("  ", e)
-    print(f" [1] copertura char-esatta              : {'OK' if g else 'FAIL'}")
+    print(f" [1] char-exact coverage                : {'OK' if g else 'FAIL'}")
     ok &= g
 
-    # 2. Stitch: chunk presenti e in ordine
+    # 2. Stitch: chunks present and in order
     a = "First chunk."
     b = "Second chunk."
     r = stitch([a, b])
     g2 = a in r and b in r and r.index(a) < r.index(b)
-    print(f" [2] stitch: chunk presenti e in ordine : {'OK' if g2 else 'FAIL'}")
+    print(f" [2] stitch: chunks present and ordered : {'OK' if g2 else 'FAIL'}")
     if not g2: print(f"     got: {r!r}")
     ok &= g2
 
-    # 3. Stitch: chunk vuoti ignorati
+    # 3. Stitch: empty chunks ignored
     r2 = stitch(["First.", "", "Last."])
     g3 = "First." in r2 and "Last." in r2
-    print(f" [3] stitch: chunk vuoti ignorati       : {'OK' if g3 else 'FAIL'}")
+    print(f" [3] stitch: empty chunks ignored       : {'OK' if g3 else 'FAIL'}")
     ok &= g3
 
-    # 4. Collect scarta "NIENTE"
-    cr = collect([(1, "Found something."), (2, "NIENTE"), (3, "Also this.")])
+    # 4. Collect discards "NOTHING"
+    cr = collect([(1, "Found something."), (2, "NOTHING"), (3, "Also this.")])
     g4 = 'Chunk 2' not in cr and 'Chunk 1' in cr and 'Chunk 3' in cr
-    print(f" [4] collect scarta risposta vuota      : {'OK' if g4 else 'FAIL'}")
+    print(f" [4] collect discards empty answer      : {'OK' if g4 else 'FAIL'}")
     if not g4: print(f"     got: {cr!r}")
     ok &= g4
 
-    # 5. build_user_message con e senza {text}
-    msg1 = build_user_message("Translate: {text}", "ciao")
-    g5a = msg1 == "Translate: ciao"
-    msg2 = build_user_message("Find themes.", "ciao")
-    g5b = msg2.endswith("ciao")
+    # 5. build_user_message with and without {text}
+    msg1 = build_user_message("Translate: {text}", "hello")
+    g5a = msg1 == "Translate: hello"
+    msg2 = build_user_message("Find themes.", "hello")
+    g5b = msg2.endswith("hello")
     g5 = g5a and g5b
     print(f" [5] build_user_message {{text}}/auto    : {'OK' if g5 else 'FAIL'}")
     ok &= g5
 
-    # 6. auto_chunk_size: logica di calcolo con dati mockati
+    # 6. auto_chunk_size: calculation logic with mocked data
     class _FakeModule:
-        """Simula le risposte del server per testare auto_chunk_size offline."""
+        """Simulates the server responses to test auto_chunk_size offline."""
         @staticmethod
         def mock(n_ctx, sys_tok, sample_tok):
-            # Calcolo atteso: disponibili = n_ctx - sys_tok - 2000 - 0 - 200
+            # Expected calculation: available = n_ctx - sys_tok - 2000 - 0 - 200
             available = n_ctx - sys_tok - 2000 - 0 - SAFETY_MARGIN
             cpt = 1500 / sample_tok
             return max(500, int(available * cpt))
 
     expected = _FakeModule.mock(8192, 50, 375)   # 8192 ctx, 50 sys tok, 1500 char = 375 tok → 4 char/tok
-    # disponibili = 8192 - 50 - 2000 - 0 - 200 = 5942 tok × 4 char/tok = 23768 char
+    # available = 8192 - 50 - 2000 - 0 - 200 = 5942 tok × 4 char/tok = 23768 char
     g6 = expected == max(500, int((8192 - 50 - 2000 - 0 - 200) * (1500 / 375)))
-    print(f" [6] auto_chunk_size: formula corretta  : {'OK' if g6 else 'FAIL'} (atteso {expected:,} char)")
+    print(f" [6] auto_chunk_size: formula correct   : {'OK' if g6 else 'FAIL'} (expected {expected:,} char)")
     ok &= g6
 
-    print("\n " + (f"{C.G}SELFTEST OK{C.OFF}" if ok else f"{C.R}SELFTEST FALLITO{C.OFF}"))
+    print("\n " + (f"{C.G}SELFTEST OK{C.OFF}" if ok else f"{C.R}SELFTEST FAILED{C.OFF}"))
     sys.exit(0 if ok else 1)
 
 if __name__ == '__main__':
