@@ -1,5 +1,5 @@
 # Selmo — Bug Report
-*Documento vivente · aggiornato sessione 13 · Giugno 2026*
+*Documento vivente · aggiornato sessione 15 · Giugno 2026*
 
 ---
 
@@ -19,6 +19,29 @@
 File scritti/modificati via tool su questo mount possono ritrovarsi pieni di byte NUL (`\x00`) e/o con line-ending sbagliati. Capitato in s13 a `Selmo.bat` (593 NUL + LF → il `^` di continuazione rompeva cmd → frammenti eseguiti come comandi → crash all'avvio) e a `selmo-bug-report.md` (3684 NUL → grep lo vedeva "binary"). Il tool **Write** sembra il colpevole; il tool **Edit** e la scrittura Python restano puliti.
 
 **Regola**: dopo ogni modifica a `.bat`/`.md`, controllare `python3 -c "print(open('f','rb').read().count(b'\x00'))"` → deve dare 0. I `.bat` devono essere **CRLF**. Pulizia: rimuovere i NUL e riscrivere (i `.bat` in CRLF), preferibilmente via Python.
+
+---
+
+## BUG-IMG-02 · Visione da telefono → HTTP 400 ⚠️ APERTO (sessione 15)
+
+**Sintomo** — Caricando un'immagine dal cellulare (Android) la richiesta multimodale a `llama-server` (8080) torna **HTTP 400**. Il modello in uso (Magistral-Small-2509) ha il mmproj caricato (auto-match su `Magistral-` in `Selmo.bat`), quindi la visione è attiva e da desktop ha funzionato.
+
+**Già fatto (v0.708, non risolutivo)**
+- Normalizzazione immagini lato client: `createImageBitmap`→canvas→JPEG, cap lato lungo 1280px, `accept="image/*"` (gestisce foto grandi e HEIC iPhone via decode di Safari).
+- `max_tokens` cappato a 1200 quando c'è un'immagine (per non sforare la ctx 8192 coi token immagine).
+- Il client mostra ora il **corpo dell'errore** del server invece di "HTTP 400" secco.
+
+**Prossimo passo** — Leggere il messaggio reale del server (ora visibile nella bolla) e distinguere: overflow ctx, errore di decode immagine, o "multimodal not supported" per Magistral. Se è Magistral a non reggere la visione, ripiegare su Gemma 4 per i task immagine.
+
+---
+
+## BUG-IMG-03 · Visione + ricerca web insieme non funziona ⚠️ APERTO (sessione 15)
+
+**Sintomo** — Con un'immagine caricata **e** WEB attivo (o comando `/web`), l'immagine non viene analizzata.
+
+**Causa (individuata)** — In `sendMsg`, quando `IS_WEB_ON`/`isWebSearch` è vero, il flusso entra nel ramo web (≈riga 1643) che costruisce un prompt **solo testo** (contesto fonti) e gestisce/chiude la propria fetch **prima** di arrivare al blocco multimodale `if(fileImage)` (≈riga 1706): l'immagine allegata viene quindi ignorata. Inoltre `recentClean` fa `.replace(...)` su `m.content` che, per un messaggio-immagine precedente, è un **array** → possibile eccezione.
+
+**Fix proposto** — Nel ramo web includere anche `imgContent` nel content array (testo contesto + `image_url`), oppure stabilire una priorità esplicita con avviso ("web ignora l'immagine"). Gestire il caso `content` array dentro `recentClean` (saltarlo o serializzarlo).
 
 ---
 

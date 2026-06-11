@@ -280,7 +280,7 @@ if __name__ == "__main__":
     print(f"  http://localhost:{PORT}/fetch?url=...")
     print(f"  trafilatura: {'OK' if HAS_TRAF else 'not installed (pip install trafilatura)'}")
     print()
-    server = HTTPServer(("127.0.0.1", PORT), Handler)
+    server = HTTPServer(("0.0.0.0", PORT), Handler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

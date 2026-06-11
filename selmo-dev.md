@@ -1,5 +1,15 @@
 # Selmo — Documentazione di sviluppo
-*Aggiornato sessione 14 · 2026-06-10 · v0.706*
+*Aggiornato sessione 15 · 2026-06-11 · v0.708*
+
+---
+
+## v0.708 — UI ricostruita + multi-device (sessione 15)
+
+Riprogettata da zero la veste grafica di `chat.html` (solo CSS + ritocchi markup; nessuna logica toccata): estetica retro-terminal rifinita, palette vintage invariata, pannelli e bolle arrotondati, vignette CRT. Layout responsive vero: desktop a 3 colonne; ≤1024px history e dashboard diventano drawer richiamabili dai pulsanti header; ≤640px input a tutta larghezza con target touch 44–46px, `100dvh` (input non più nascosto dalla barra del browser), `overflow-x:hidden` (niente scroll orizzontale dal drawer off-canvas), header che non sfora (<400px nasconde THINK e accorcia il logo). Tipografia ricalibrata e dashboard compattata per non sforare in verticale (odometro a 36px per cella — vincolo JS).
+
+Fix accesso remoto/telefono: `selmo_web.py` (8081) e `selmo_gpu_monitor.py` (8082) ora in ascolto su `0.0.0.0` (prima `127.0.0.1`, irraggiungibili da LAN); `TTS_URL` lato client usa `location.hostname` invece di `127.0.0.1` cablato. Whisper e TTS erano già su `0.0.0.0`.
+
+Visione: normalizzazione immagini lato client (createImageBitmap→canvas→JPEG, cap 1280px) per foto grandi e HEIC iPhone; `max_tokens` ridotto a 1200 quando c'è un'immagine (riserva ctx ai token immagine); il client mostra ora il corpo dell'errore del server invece di "HTTP 400" secco. **Due bug ancora aperti** — vedi BUG-IMG-02 e BUG-IMG-03 nel bug report.
 
 ---
 
