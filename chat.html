@@ -409,7 +409,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.708</div>
+  <div class="hbadge">v0.709</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="Cronologia">&#9776;</button>
@@ -1258,6 +1258,18 @@ function addMsg(role,text,streaming){
   document.getElementById('messages').appendChild(wrap);scrollBot();
   return{bub,inner,wrap};
 }
+function imgThumbStrip(urls){
+  const strip=document.createElement('div');
+  strip.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin-top:8px';
+  urls.forEach((u,i)=>{
+    const im=new Image();
+    im.src=u;im.title='pagina '+(i+1)+' - click per ingrandire';
+    im.style.cssText='max-height:160px;max-width:120px;border:1px solid var(--cyan);border-radius:4px;cursor:zoom-in;background:#fff';
+    im.onclick=()=>window.open(u,'_blank');
+    strip.appendChild(im);
+  });
+  return strip;
+}
 function newChat(){
   if(gen)stopMsg();
   saveSession();
@@ -1641,7 +1653,7 @@ async function sendMsg(){
   }
 
   if(isWebSearch){
-    addMsg('user',txt);
+    const um=addMsg('user',(fileImage?(fileImage.pages>1?'\uD83D\uDDBC\uFE0F ['+fileImage.pages+'p] ':'\uD83D\uDDBC\uFE0F '):'')+txt);
     const{bub,inner}=addMsg('assistant','',true);
     const whStart=wh;
     bub.innerHTML=`<span style="color:var(--yellow)">&#x1F50D; Searching: <em>${webQuery}</em>...</span>`;
@@ -1661,13 +1673,28 @@ async function sendMsg(){
         .slice(-4)
         .map(m=>{
           const role=m.role==='user'?'User':'Selmo';
-          const c=(m._orig||m.content||'').replace(/\[THINK\][\s\S]*?\[\/THINK\]/g,'').trim().slice(0,400);
+          let raw=m._orig;
+          if(raw==null){
+            raw=m.content;
+            if(Array.isArray(raw)) raw=raw.filter(p=>p&&p.type==='text').map(p=>p.text).join(' ');
+          }
+          const c=String(raw||'').replace(/\[THINK\][\s\S]*?\[\/THINK\]/g,'').trim().slice(0,400);
           return role+': '+c;
         }).join('\n');
       const ctxMsg=(recentClean?'Recent conversation:\n'+recentClean+'\n\n':'')
         +'Web search results for: '+webQuery+'\n\n'+formatted
         +'\n\nBased on the conversation context and search results above, answer the user\'s latest message directly in the same language. Be specific and useful. Cite sources as [1], [2], etc.';
-      chatHistory.push({role:'user',content:ctxMsg,_orig:txt});
+      if(fileImage){
+        const urls=fileImage.dataUrls;
+        const imgContent=urls.map(u=>({type:'image_url',image_url:{url:u}}));
+        imgContent.push({type:'text',text:ctxMsg});
+        chatHistory.push({role:'user',content:imgContent,_orig:txt});
+        um.inner.appendChild(imgThumbStrip(urls));
+        fileImage=null;
+        document.getElementById('file-badge').style.display='none';
+      }else{
+        chatHistory.push({role:'user',content:ctxMsg,_orig:txt});
+      }
       bub.innerHTML='<span style="opacity:.5">&#x25CA;</span>';
       abort=new AbortController();
       const res=await fetch(`${API}/v1/chat/completions`,{
@@ -1711,16 +1738,7 @@ async function sendMsg(){
     const tag=fileImage.pages>1?'🖼️ ['+fileImage.pages+'p] ':'🖼️ ';
     const um=addMsg('user',tag+content);
     // Thumbnail di cio' che viene inviato: click per aprire a piena risoluzione
-    const strip=document.createElement('div');
-    strip.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin-top:8px';
-    urls.forEach((u,i)=>{
-      const im=new Image();
-      im.src=u;im.title='pagina '+(i+1)+' - click per ingrandire';
-      im.style.cssText='max-height:160px;max-width:120px;border:1px solid var(--cyan);border-radius:4px;cursor:zoom-in;background:#fff';
-      im.onclick=()=>window.open(u,'_blank');
-      strip.appendChild(im);
-    });
-    um.inner.appendChild(strip);
+    um.inner.appendChild(imgThumbStrip(urls));
     fileImage=null;
     document.getElementById('file-badge').style.display='none';
   } else {

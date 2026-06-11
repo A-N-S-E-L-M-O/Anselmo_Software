@@ -1,5 +1,5 @@
 # Selmo — Documentazione di sviluppo
-*Aggiornato sessione 15 · 2026-06-11 · v0.708*
+*Aggiornato sessione 15 · 2026-06-11 · v0.709*
 
 ---
 
