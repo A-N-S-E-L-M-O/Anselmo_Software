@@ -13,11 +13,31 @@ import sys
 import os
 import atexit
 import time
+import threading
 import argparse
 from pathlib import Path
 
 BASE   = Path(__file__).parent
 PYTHON = Path(sys.executable)
+
+# Log persistente di llama-server: stdout+stderr finiscono qui oltre che a video.
+# Serve per diagnosticare i 400 multimodali (es. immagine dal telefono) leggendo
+# l'errore reale del server. Vedi BUG-IMG-02.
+LLAMA_LOG = BASE / "selmo-llama.log"
+
+
+def _tee(proc, logpath):
+    """Legge l'output di llama-server e lo scrive sia a video sia su file."""
+    try:
+        with open(logpath, "w", encoding="utf-8", errors="replace") as lf:
+            for raw in iter(proc.stdout.readline, b""):
+                s = raw.decode("utf-8", errors="replace")
+                sys.stdout.write(s)
+                sys.stdout.flush()
+                lf.write(s)
+                lf.flush()
+    except Exception:
+        pass
 
 # pythonw.exe = Python senza finestra console (meglio se disponibile)
 PYTHONW = PYTHON.parent / "pythonw.exe"
@@ -31,7 +51,7 @@ NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 _procs: list[subprocess.Popen] = []
 
 
-# ── Cleanup ──────────────────────────────────────────────────────────────────
+# -- Cleanup -------------------------------------------------------------------
 
 def _cleanup():
     """Termina tutti i processi figli avviati da questo launcher."""
@@ -56,7 +76,7 @@ def _cleanup():
 atexit.register(_cleanup)
 
 
-# ── Gestione chiusura finestra (tasto X) su Windows ─────────────────────────
+# -- Gestione chiusura finestra (tasto X) su Windows --------------------------
 
 if sys.platform == "win32":
     import ctypes
@@ -71,12 +91,12 @@ if sys.platform == "win32":
     ctypes.windll.kernel32.SetConsoleCtrlHandler(_ctrl_handler, True)
 
 
-# ── Avvio servizi ────────────────────────────────────────────────────────────
+# -- Avvio servizi -------------------------------------------------------------
 
 def _start(label: str, args: list) -> subprocess.Popen:
     """Avvia un servizio Python senza finestra e senza output visibile."""
     cmd = [str(PYTHONW)] + args
-    print(f"  → {label}", flush=True)
+    print(f"  -> {label}", flush=True)
     p = subprocess.Popen(
         cmd,
         creationflags=NO_WINDOW,
@@ -87,7 +107,7 @@ def _start(label: str, args: list) -> subprocess.Popen:
     return p
 
 
-# ── Main ─────────────────────────────────────────────────────────────────────
+# -- Main ----------------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(description="Selmo Backend Launcher")
@@ -132,7 +152,7 @@ def main():
             creationflags=NO_WINDOW,
         )
 
-    # ── Costruisci comando llama-server ──────────────────────────────────────
+    # -- Costruisci comando llama-server --------------------------------------
     llama = str(BASE / "bin" / "llama-server.exe")
     cmd = [
         llama,
@@ -143,7 +163,14 @@ def main():
         "-ngl",                 str(args.ngl),
         "--parallel",           "1",
         "--no-warmup",
-        "--timeout",            "0",
+        # BUG-IMG-02: --timeout 0 azzera il read-timeout di cpp-httplib. Su
+        # localhost il body arriva tutto subito e va bene, ma da rete (telefono)
+        # un body grande (immagine ~200KB, audio Whisper) arriva in tanti pacchetti
+        # con micro-gap: col timeout a 0 la read fallisce al primo pacchetto non
+        # ancora pronto e httplib risponde 400 a corpo vuoto (no content-type,
+        # len 0) PRIMA dell'handler. Valore generoso: non taglia le generazioni
+        # lunghe (il client aborta a 300s) ma lascia leggere i body lenti.
+        "--timeout",            "600",
         "--metrics",
         "--path",               str(BASE),
         "--temp",               "0.75",
@@ -153,21 +180,30 @@ def main():
     if args.mmproj:
         cmd += [
             "--mmproj",             args.mmproj,
-            "--image-min-tokens",   "1120",
-            "--image-max-tokens",   "1120",
             "--batch-size",         "2048",
             "--ubatch-size",        "2048",
         ]
+        # --image-min/max-tokens e' un budget di token specifico di Gemma 3/4.
+        # Su un encoder Pixtral (Magistral / Mistral-Small) llama.cpp non lo
+        # supporta e rifiuta la richiesta immagine con HTTP 400 PRIMA di lanciare
+        # lo slot (nessuna inferenza nel log) -> sintomo di BUG-IMG-02. Applichiamo
+        # quei flag solo a Gemma; gli altri modelli vision usano la loro risoluzione
+        # nativa.
+        if "gemma" in model_name.lower():
+            cmd += ["--image-min-tokens", "1120", "--image-max-tokens", "1120"]
 
     print()
     print("  Avvio llama-server...")
-    print("  ─────────────────────────────────────────────────────")
+    print("  -----------------------------------------------------")
     print("  Ctrl+C  o  chiudi questa finestra  per fermare tutto.")
     print()
 
-    # llama-server in foreground: output visibile in questa finestra
-    llama_proc = subprocess.Popen(cmd)
+    # llama-server in foreground: output a video (via tee) + su selmo-llama.log
+    print(f"  Log llama-server: {LLAMA_LOG.name}")
+    print()
+    llama_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     _procs.append(llama_proc)
+    threading.Thread(target=_tee, args=(llama_proc, LLAMA_LOG), daemon=True).start()
 
     try:
         llama_proc.wait()

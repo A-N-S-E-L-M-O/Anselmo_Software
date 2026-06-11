@@ -409,7 +409,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.709</div>
+  <div class="hbadge">v0.710</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="Cronologia">&#9776;</button>
@@ -1430,7 +1430,7 @@ async function processDoc(prompt){
       const res=await fetch(`${API}/v1/chat/completions`,{
         method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
         body:JSON.stringify({model:'local',messages:msgs,stream:true,temperature:0.2,max_tokens:maxTok,repeat_penalty:1.1})});
-      if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}throw new Error('HTTP '+res.status+(_d?' \u2014 '+_d:''));}
+      if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(nessun header server)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (corpo vuoto)'));}
       prog.bub.innerHTML='';
       let full='',t=0;
       // Il ragionamento (reasoning_content o <think>..</think>) va nel pannello,
@@ -1519,7 +1519,7 @@ async function processChunks(prompt){
         body:JSON.stringify({model:'local',messages:chunkHistory,stream:true,
           temperature:currentTemp,max_tokens:maxTok(),repeat_penalty:1.1})
       });
-      if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}throw new Error('HTTP '+res.status+(_d?' \u2014 '+_d:''));}
+      if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(nessun header server)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (corpo vuoto)'));}
       prog.bub.innerHTML='';
       const reader=res.body.getReader(),dec=new TextDecoder();
       let full='',t=0;
@@ -1641,6 +1641,7 @@ async function sendMsg(){
 
   let content=txt;
   let proactiveSources=[];
+  let imgDbg=null;
 
   function endTurn(){gen=false;btn.style.display='inline-block';stopBtn.style.display='none';abort=null;inp.focus();}
 
@@ -1702,7 +1703,7 @@ async function sendMsg(){
         body:JSON.stringify({model:'local',messages:chatHistory,stream:true,
           temperature:currentTemp,max_tokens:maxTok(),repeat_penalty:1.1})
       });
-      if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}throw new Error('HTTP '+res.status+(_d?' \u2014 '+_d:''));}
+      if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(nessun header server)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (corpo vuoto)'));}
       bub.innerHTML='';
       let full='',rthink='',t=0;
       const tp=makeThinkPanel(inner);
@@ -1739,6 +1740,16 @@ async function sendMsg(){
     const um=addMsg('user',tag+content);
     // Thumbnail di cio' che viene inviato: click per aprire a piena risoluzione
     um.inner.appendChild(imgThumbStrip(urls));
+    // DIAGNOSTICA BUG-IMG-02: dimensione e formato del payload, visibile a schermo
+    // (utile da telefono dove la console non si legge). Mostra KB totali, n. img,
+    // prefisso del data URL (deve essere data:image/jpeg;base64,...).
+    const _kb=Math.round(urls.reduce((a,u)=>a+u.length,0)*0.75/1024);
+    const _bodyKB=Math.round(JSON.stringify(chatHistory).length/1024);
+    const _pre=(urls[0]||'(vuoto)').slice(0,32);
+    imgDbg=document.createElement('div');imgDbg.className='tok-meta';
+    imgDbg.style.color='var(--yellow)';
+    imgDbg.textContent='\u26A1 img '+urls.length+' \xb7 immagini ~'+_kb+'KB \xb7 body ~'+_bodyKB+'KB \xb7 '+_pre;
+    um.inner.appendChild(imgDbg);
     fileImage=null;
     document.getElementById('file-badge').style.display='none';
   } else {
@@ -1755,7 +1766,7 @@ async function sendMsg(){
       body:JSON.stringify({model:'local',messages:chatHistory,stream:true,
         temperature:currentTemp,max_tokens:maxTok(),repeat_penalty:1.1})
     });
-    if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}throw new Error('HTTP '+res.status+(_d?' \u2014 '+_d:''));}
+    if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(nessun header server)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (corpo vuoto)'));}
     bub.innerHTML='';
     let full='',rthink='',t=0;
     const tp=makeThinkPanel(inner);
@@ -1773,7 +1784,10 @@ async function sendMsg(){
     saveSession();
     speakText(full);
   }catch(e){
-    if(e.name!=='AbortError'){bub.textContent='Error: '+e.message;bub.style.borderColor='var(--red)';bub.style.color='var(--red)';chatHistory.pop();}
+    if(e.name!=='AbortError'){
+      bub.textContent='Error: '+e.message;bub.style.borderColor='var(--red)';bub.style.color='var(--red)';chatHistory.pop();
+      if(imgDbg){imgDbg.textContent+='  \u2192 fetch fallita: '+e.message;}
+    }
     else{bub.textContent=bub.textContent||'[stopped]';}
   }
   endTurn();
