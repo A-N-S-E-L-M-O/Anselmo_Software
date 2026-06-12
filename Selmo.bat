@@ -62,7 +62,7 @@ for %%F in ("models\*mmproj*.gguf") do (
 
 :: No forcing: offload all layers to GPU; ctx 0 = let the model decide (training ctx)
 set NGL=99
-set CTX=0
+set CTX=8192
 
 :: Avvio backend -- unica finestra, tutto muore alla chiusura
 if defined MMPROJ_FILE (

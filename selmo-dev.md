@@ -1,5 +1,17 @@
 # Selmo — Development documentation
-*Updated session 16 · 2026-06-12 · v0.713*
+*Updated session 16 · 2026-06-12 · v0.714*
+
+---
+
+## v0.714 — Phone UI fixes + chunking lessons (session 16)
+
+**Phone header (≤400px):** THINK button was hidden (`display:none`); replaced with compact padding so it stays visible. NEW CHAT label collapsed to "CHAT" via CSS `::before` pseudo-element (no HTML change).
+
+**Mobile keyboard:** added `interactive-widget=resizes-content` to the viewport meta (Android Chrome) and a `visualViewport` resize listener that sets `body.style.height` dynamically — keeps the input area above the software keyboard on both Android and iOS.
+
+**llama-server OOM on Magistral:** `CTX=0` (model training context, 32K+) caused a 20 GB KV-cache allocation on a 12 GB GPU. Fixed by setting `CTX=8192` in `Selmo.bat`. `--fit on` was tried but discarded — it fell back to CPU and reduced throughput to ~3 chunks vs the normal ~39.
+
+**Chunking / verbatim-copy behaviour:** the model (Magistral-Small) starts copying source text verbatim after summarising the first few paragraphs of a chunk. Root cause is instruction-following drift over long generations — the instruction loses weight as more source tokens are processed. Reversing prompt/content order made things worse. **Workaround (confirmed working): cap the output via the user prompt** — e.g. "make a 2–3 sentence abstract". Concise output targets keep the model on task. `SP_TASK` simplified: removed the formatting-consistency clause (manageable from user prompt) and softened the fidelity rule to "do not omit or add content *unless the prompt requires it*" so summarisation tasks are not treated as copy tasks.
 
 ---
 

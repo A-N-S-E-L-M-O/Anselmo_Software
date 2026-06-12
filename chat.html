@@ -39,6 +39,8 @@
   --shadow:0 8px 28px rgba(0,0,0,.45);
   --ease:cubic-bezier(.4,0,.2,1);
   --header-h:58px;
+  --topbar-h:16px;
+  --topbar-h:16px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;overflow-x:hidden;}
@@ -328,6 +330,14 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 #watt-bar-track{width:100%;height:22px;background:#00040f;border:1px solid var(--steel);border-radius:var(--radius-xs);position:relative;overflow:hidden;}
 #watt-bar-fill{height:100%;width:0%;background:var(--green);transition:width .4s,background .4s;box-shadow:0 0 8px var(--glow-g);}
 #watt-bar-label{font-size:13px;color:var(--white);text-align:center;margin-top:4px;letter-spacing:.06em;}
+/* ── full-width GPU topbar (phone only) ── */
+#gpu-topbar{display:none;grid-column:1/-1;grid-row:2;position:relative;
+  background:#00040f;border-bottom:1px solid var(--steel);overflow:hidden;}
+#gpu-topbar-fill{position:absolute;top:0;left:0;bottom:0;width:0%;
+  background:var(--green);transition:width .5s,background .5s;box-shadow:0 0 8px var(--glow-g);}
+#gpu-topbar-lbl{position:absolute;right:10px;top:50%;transform:translateY(-50%);
+  font-size:10px;font-family:var(--mono);color:#fff;letter-spacing:.06em;white-space:nowrap;
+  text-shadow:0 0 4px rgba(0,0,0,.9);}
 
 /* mobile overlay backdrop */
 #mob-overlay{display:none;position:fixed;inset:0;z-index:190;background:rgba(0,0,0,.55);backdrop-filter:blur(2px);}
@@ -337,7 +347,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
    TABLET + PHONE  (≤ 1024px) — side panels become drawers
    ═══════════════════════════════════════════════════════ */
 @media (max-width:1024px){
-  body{grid-template-columns:1fr;grid-template-rows:var(--header-h) minmax(0,1fr);height:100dvh;}
+  body{grid-template-columns:1fr;grid-template-rows:var(--header-h) var(--topbar-h) minmax(0,1fr);height:100dvh;}
   header{padding:0 12px;gap:9px;}
   .hstat,#conn{display:none;}
 
@@ -351,16 +361,16 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
   #mob-nav-btn.open,#mob-dash-btn.open{border-color:var(--cyan);color:var(--cyan);}
 
   nav{
-    position:fixed;left:0;top:var(--header-h);bottom:0;width:280px;z-index:200;
+    position:fixed;left:0;top:calc(var(--header-h) + var(--topbar-h));bottom:0;width:280px;z-index:200;
     transform:translateX(-100%);transition:transform .25s var(--ease);
     box-shadow:6px 0 24px rgba(0,0,0,.6);
   }
   nav.open{transform:translateX(0);}
 
-  main{grid-column:1;grid-row:2;}
+  main{grid-column:1;grid-row:3;}
 
   aside{
-    position:fixed;right:0;top:var(--header-h);bottom:0;width:min(320px,88vw);z-index:200;
+    position:fixed;right:0;top:calc(var(--header-h) + var(--topbar-h));bottom:0;width:min(320px,88vw);z-index:200;
     transform:translateX(100%);transition:transform .25s var(--ease);
     box-shadow:-6px 0 24px rgba(0,0,0,.6);
   }
@@ -380,6 +390,8 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
   #mob-nav-btn,#mob-dash-btn{width:34px;height:34px;font-size:16px;}
   #new-chat{padding:6px 9px;font-size:11px;}
   #web-btn,#think-btn{padding:6px 8px;font-size:11px;}
+  #gpu-topbar{display:block;}
+  #gpu-topbar{display:block;}
 
   #messages{padding:14px 12px;gap:13px;}
   .msg{max-width:100%;}
@@ -409,7 +421,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.713</div>
+  <div class="hbadge">v0.714</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -422,6 +434,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
   <div class="hstat">session: <span id="hdr-session">00:00</span></div>
   <div id="conn"></div>
 </header>
+<div id="gpu-topbar"><div id="gpu-topbar-fill"></div><span id="gpu-topbar-lbl">-- %</span></div>
 
 <nav>
   <div class="panel-label">history</div>
@@ -634,6 +647,8 @@ function setGauge(pct,watts,real){
     barLabel.textContent=real?(Math.round(pct)+'%  '+Math.round(watts)+'W'):Math.round(watts)+'W';
     barLabel.style.color=col;
   }
+  const tbFill=document.getElementById('gpu-topbar-fill');
+  if(tbFill){tbFill.style.width=Math.min(pct,100)+'%';tbFill.style.background=col;tbFill.style.boxShadow='0 0 6px '+col;}
 }
 
 // ODOMETER
@@ -709,6 +724,8 @@ async function poll(){
   }
   setOdo(wh);
   document.getElementById('wh-s').textContent=wh.toFixed(3);
+  const _tbLbl=document.getElementById('gpu-topbar-lbl');
+  if(_tbLbl)_tbLbl.textContent=(real?Math.round(dp)+'%':'~'+Math.round(dp)+'%')+'  ·  '+wh.toFixed(3)+' Wh';
   document.getElementById('wh-total').textContent=whAll.toFixed(3);
   updCost();
   document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
@@ -918,11 +935,8 @@ You don't browse; the user fetches pages with /web and the results appear in the
 
 // Neutral system for document tasks (translation, analysis, extraction).
 // No personality: only faithful execution, consistent formatting across all chunks.
-const SP_TASK=`You are a precise task executor working on a fragment of a longer document.
-Follow the user's instructions to the letter, including every formatting and typographic
-convention they specify, and apply them identically across the whole document.
-Output only the result: no preface, no commentary, no first person, no meta-remarks.
-Preserve meaning exactly; do not omit or add content.`;
+const SP_TASK=`You are a precise task executor working on a fragment of a longer document. Follow the user's instructions to the letter. Output only the result: no preface, no commentary, no first person, no meta-remarks.
+Preserve meaning exactly; do not omit or add content unless the prompt requires it.`;
 
 // HISTORY
 const chatHistory=[{role:'system',content:SP_SELMO}];
