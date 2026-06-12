@@ -671,7 +671,7 @@ function setOdo(v){
 }
 
 // STATE
-let gen=false,abort=null,tokSec=0,wh=0,whAll=parseFloat(localStorage.getItem('swh')||'0'),
+let gen=false,abort=null,tokSec=0,_genT0=0,_genTok=0,wh=0,whAll=parseFloat(localStorage.getItem('swh')||'0'),
     chunks=[],chunkIdx=0,
     price=parseFloat(localStorage.getItem('sprice')||'0.28'),
     toks=parseInt(localStorage.getItem('stoks')||'0'),
@@ -702,12 +702,8 @@ function resetToks(){if(!confirm('Reset total token counter?'))return;toks=0;loc
 
 // POLL
 async function poll(){
-  try{
-    const r=await fetch(`${API}/metrics`,{signal:AbortSignal.timeout(700)});
-    const t=await r.text();
-    const m=t.match(/llamacpp:tokens_per_second\S*\s+([\d.]+)/);
-    if(m)tokSec=parseFloat(m[1]);
-  }catch{tokSec=0;}
+  // tok/sec: client-side from stream timing (reliable across llama.cpp versions)
+  tokSec=gen&&_genT0>0?_genTok/((Date.now()-_genT0)/1000):0;
 
   let dp,dw,real;
   if(gpuOk){dp=gpuP;dw=gpuW;real=true;}
@@ -1429,7 +1425,7 @@ async function processDoc(prompt){
   const total=parts.length;
   console.log('Selmo chunking: ctx='+N_CTX+' chunk='+chunkChars+'char x'+total+' max_tokens='+maxTok);
 
-  gen=true;btn.style.display='none';stopBtn.style.display='inline-block';
+  gen=true;_genT0=Date.now();_genTok=0;btn.style.display='none';stopBtn.style.display='inline-block';
   addMsg('user',prompt+'  ('+total+' chunk \xb7 '+fileDoc.length.toLocaleString('en')+' char)');
   chatHistory.push({role:'user',content:prompt+' ('+total+' chunks)'});
 
@@ -1451,7 +1447,7 @@ async function processDoc(prompt){
       // NEVER in the document stitch: only the clean response ends up in 'full'.
       const tp=makeThinkPanel(prog.inner);
       await streamTokens(res,
-        c=>{full+=c;t++;prog.bub.textContent=full;scrollBot();},
+        c=>{full+=c;t++;_genTok++;prog.bub.textContent=full;scrollBot();},
         r=>{tp.append(r);});
       tp.seal();
       toks+=t;localStorage.setItem('stoks',toks);
@@ -1492,7 +1488,7 @@ async function processChunks(prompt){
   const btn=document.getElementById('send');
   const stopBtn=document.getElementById('stop');
   const total=chunks.length;
-  gen=true;btn.style.display='none';stopBtn.style.display='inline-block';
+  gen=true;_genT0=Date.now();_genTok=0;btn.style.display='none';stopBtn.style.display='inline-block';
 
   addMsg('user',prompt+' ('+total+' chunks)');
   chatHistory.push({role:'user',content:prompt+' ('+total+' chunks)'});
@@ -1543,7 +1539,7 @@ async function processChunks(prompt){
           if(!line.startsWith('data: '))continue;
           const raw=line.slice(6).trim();if(raw==='[DONE]')continue;
           try{const d=JSON.parse(raw).choices?.[0]?.delta?.content||'';
-            if(d){full+=d;t++;prog.bub.textContent=full;scrollBot();}}catch{}
+            if(d){full+=d;t++;_genTok++;prog.bub.textContent=full;scrollBot();}}catch{}
         }
       }
       toks+=t;localStorage.setItem('stoks',toks);
@@ -1636,7 +1632,7 @@ async function sendMsg(){
     document.getElementById('file-badge').style.display='none';
   }
 
-  gen=true;btn.style.display='none';stopBtn.style.display='inline-block';
+  gen=true;_genT0=Date.now();_genTok=0;btn.style.display='none';stopBtn.style.display='inline-block';
   abort=new AbortController();
 
   // Web access is EXPLICIT only: nothing leaves localhost unless the user types /web.
@@ -1722,7 +1718,7 @@ async function sendMsg(){
       let full='',rthink='',t=0;
       const tp=makeThinkPanel(inner);
       await streamTokens(res,
-        c=>{full+=c;t++;bub.textContent=full;scrollBot();},
+        c=>{full+=c;t++;_genTok++;bub.textContent=full;scrollBot();},
         r=>{rthink+=r;tp.append(r);});
       tp.seal();
       bub.innerHTML=marked.parse(full);
@@ -1785,7 +1781,7 @@ async function sendMsg(){
     let full='',rthink='',t=0;
     const tp=makeThinkPanel(inner);
     await streamTokens(res,
-      c=>{full+=c;t++;bub.textContent=full;scrollBot();},
+      c=>{full+=c;t++;_genTok++;bub.textContent=full;scrollBot();},
       r=>{rthink+=r;tp.append(r);});
     tp.seal();
     bub.innerHTML=marked.parse(full);
