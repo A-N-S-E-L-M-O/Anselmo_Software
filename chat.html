@@ -421,7 +421,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.715</div>
+  <div class="hbadge">v0.716</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -581,10 +581,11 @@ Running on your hardware. No data leaves this machine.</div></div>
 // Base URLs derived from the page: same-origin when served by llama-server
 // (no CORS), correct host for LAN/mobile access, fallback to 127.0.0.1 for file://
 const _http=(location.protocol==='http:'||location.protocol==='https:');
+const _https=(location.protocol==='https:');
 const _host=_http?location.hostname:'127.0.0.1';
 const API=_http?location.origin:'http://127.0.0.1:8080';
-const GMON='http://'+_host+':8082';
-const WEB='http://'+_host+':8081';
+const GMON=_https?'/proxy/8082':'http://'+_host+':8082';
+const WEB=_https?'/proxy/8081':'http://'+_host+':8081';
 let webOk=false;
 // Session constants must be declared early — renderSessionList() is called at init
 // before the session block at the bottom of the file. TDZ would silently kill getSessions().
@@ -767,7 +768,7 @@ checkWebBridge();
 setInterval(checkWebBridge, 30000);
 
 // ── Whisper bridge ────────────────────────────────────────────────────────────
-const WHISPER='http://'+location.hostname+':8083';
+const WHISPER=_https?'/proxy/8083':'http://'+location.hostname+':8083';
 
 async function checkWhisperBridge(){
   try{
@@ -1843,7 +1844,7 @@ document.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault();});
 
 
 // ── TTS — Kokoro (port 8084) with Web Speech API fallback ────────────────────
-const TTS_URL='http://'+location.hostname+':8084';
+const TTS_URL=_https?'/proxy/8084':'http://'+location.hostname+':8084';
 let kokoroOk=false;
 
 async function checkKokoroBridge(){

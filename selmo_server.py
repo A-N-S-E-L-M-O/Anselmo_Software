@@ -144,6 +144,7 @@ def main():
     _start("Web Bridge    [port 8081]", [str(BASE / "selmo_web.py")])
     _start("Whisper STT   [port 8083]", [str(BASE / "selmo_whisper.py")])
     _start("TTS Kokoro    [port 8084]", [str(BASE / "selmo_tts.py"), "--voice", args.voice])
+    _start("HTTPS Proxy   [port 8443]", [str(BASE / "selmo_https_proxy.py")])
 
     # Small pause to give the services time to start
     time.sleep(2)
