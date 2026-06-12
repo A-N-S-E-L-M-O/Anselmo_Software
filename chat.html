@@ -671,7 +671,7 @@ function setOdo(v){
 }
 
 // STATE
-let gen=false,abort=null,tokSec=0,_genT0=0,_genTok=0,wh=0,whAll=parseFloat(localStorage.getItem('swh')||'0'),
+let gen=false,abort=null,tokSec=0,_genT0=0,_genTok=0,_tokScale=20,wh=0,whAll=parseFloat(localStorage.getItem('swh')||'0'),
     chunks=[],chunkIdx=0,
     price=parseFloat(localStorage.getItem('sprice')||'0.28'),
     toks=parseInt(localStorage.getItem('stoks')||'0'),
@@ -725,7 +725,10 @@ async function poll(){
   document.getElementById('wh-total').textContent=whAll.toFixed(3);
   updCost();
   document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
-  document.getElementById('speed-fill').style.width=Math.min((tokSec/40)*100,100)+'%';
+  if(gen&&tokSec>_tokScale*.95)_tokScale=Math.ceil(tokSec*1.2/10)*10;
+  {const sf=document.getElementById('speed-fill');
+  sf.style.width=Math.min((tokSec/_tokScale)*100,100)+'%';
+  sf.style.background=tokSec>0?(tokSec<10?'#ff4444':tokSec<20?'#ffcc00':'var(--cyan)'):'var(--cyan)';}
   document.getElementById('tok-sec').textContent=tokSec>0?tokSec.toFixed(1):'-';
   const dot=document.getElementById('status-dot'),stxt=document.getElementById('status-txt');
   if(gen){dot.className='on';stxt.textContent='running';}
