@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -398,9 +398,9 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 
 @media (max-width:400px){
   .wm em{display:none;}
-  #think-btn{display:none;}
+  #think-btn{padding:4px 6px;font-size:10px;}
   header{gap:5px;padding:0 7px;}
-  #new-chat{padding:6px 8px;}
+  #new-chat{padding:6px 8px;font-size:0;}  #new-chat::before{content:'CHAT';font-size:11px;}
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -409,7 +409,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.712</div>
+  <div class="hbadge">v0.713</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -2055,6 +2055,20 @@ function closeOverlays(){
   document.getElementById('mob-nav-btn').classList.remove('open');
   document.getElementById('mob-dash-btn').classList.remove('open');
 }
+
+// Mobile keyboard: keep layout above the virtual keyboard
+if(window.visualViewport){
+  function _onVVResize(){
+    if(window.innerWidth<=1024){
+      document.body.style.height=window.visualViewport.height+'px';
+    } else {
+      document.body.style.height='';
+    }
+  }
+  window.visualViewport.addEventListener('resize',_onVVResize);
+  window.visualViewport.addEventListener('scroll',_onVVResize);
+}
+
 
 </script>
 </body>

@@ -55,4 +55,4 @@ if __name__ == "__main__":
     t = threading.Thread(target=read_gpu, daemon=True)
     t.start()
     print("Selmo GPU Monitor started on http://localhost:8082")
-    HTTPServer(("0.0.0.0", 8082), Handler).serve_f
+    HTTPServer(("0.0.0.0", 8082), Handler).serve_forever()

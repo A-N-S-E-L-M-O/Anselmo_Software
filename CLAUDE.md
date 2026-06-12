@@ -18,4 +18,4 @@ Don't commit **unconfirmed** states: if it's an attempt, say so and wait for Fab
 
 - **NEVER** use the Edit tool on `chat.html` (it truncates silently). Python via bash only — see BUG-META-01.
 - `node --check` on the extracted script after every change; verify with the Read tool, not with `cat`/`wc` from bash.
-- Restart `llama-server` after a change (it can serve from cache); a
+- Restart `llama-server` after a change (it can serve from cache); anti-cache meta + Ctrl+F5.

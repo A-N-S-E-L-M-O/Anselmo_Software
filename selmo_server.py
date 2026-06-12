@@ -165,7 +165,7 @@ def main():
         "--host",               "0.0.0.0",
         "--port",               "8080",
         "--ctx-size",           str(args.ctx),
-        "-ngl",                 str(args.ngl),
+        "--fit",                "on",
         "--parallel",           "1",
         "--no-warmup",
         # BUG-IMG-02: --timeout 0 zeroes cpp-httplib's read timeout. On
