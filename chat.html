@@ -212,6 +212,16 @@ aside{
 }
 .price-input:focus{outline:none;border-color:var(--yellow);box-shadow:0 0 0 2px var(--glow-y);}
 
+/* ── mini gauges (VRAM / RAM) — same family as the power gauge ── */
+.mini-gauge{width:100%;max-width:190px;height:auto;overflow:visible;background:radial-gradient(circle at 50% 40%, #001046 0%, var(--ink) 78%);border:1px solid var(--steel);border-radius:var(--radius);box-shadow:var(--shadow), inset 0 0 22px rgba(0,0,0,.6);}
+.mini-mount{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;}
+#mem-row{display:flex;gap:8px;width:100%;max-width:190px;}
+#sbadges{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;width:100%;margin:2px 0;}
+.sbadge{display:flex;align-items:center;gap:4px;padding:4px 7px;border:1px solid var(--steel-soft);border-radius:var(--radius-xs);background:#000a3e;cursor:default;font-size:14px;line-height:1;}
+#status-dot,#web-dot,#whisper-dot,#tts-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+#web-dot,#whisper-dot,#tts-dot{background:var(--dim);border:1px solid var(--dim);}
+.sbtxt{display:none;}
+
 /* ── MAIN CHAT ── */
 main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden;background:var(--chat-bg);}
 #messages{
@@ -428,7 +438,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.807</div>
+  <div class="hbadge">v0.808</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -494,27 +504,22 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
     <text x="110" y="22" text-anchor="middle" fill="#AAAAAA" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace">50</text>
   </svg>
 
+  <div id="mem-row">
+    <div id="vram-gauge" class="mini-mount"></div>
+    <div id="ram-gauge" class="mini-mount"></div>
+  </div>
+
   <div id="watt-bar-wrap">
     <div class="panel-label" style="margin-bottom:4px;">instant power draw</div>
     <div id="watt-bar-track"><div id="watt-bar-fill"></div></div>
     <div id="watt-bar-label">-- W</div>
   </div>
 
-  <div id="status-row">
-    <div id="status-dot"></div>
-    <span id="status-txt">idle</span>
-  </div>
-  <div id="web-row" style="display:flex;align-items:center;gap:8px;margin-top:3px;">
-    <div id="web-dot" style="width:8px;height:8px;border-radius:50%;background:var(--dim);border:1px solid var(--dim);flex-shrink:0;"></div>
-    <span id="web-txt" style="font-size:13px;color:var(--dim);letter-spacing:.06em;">web off</span>
-  </div>
-  <div id="whisper-row" style="display:flex;align-items:center;gap:8px;margin-top:3px;">
-    <div id="whisper-dot" style="width:8px;height:8px;border-radius:50%;background:var(--dim);border:1px solid var(--dim);flex-shrink:0;"></div>
-    <span id="whisper-txt" style="font-size:13px;color:var(--dim);letter-spacing:.06em;">whisper off</span>
-  </div>
-  <div id="tts-row" style="display:flex;align-items:center;gap:8px;margin-top:3px;">
-    <div id="tts-dot" style="width:8px;height:8px;border-radius:50%;background:var(--dim);border:1px solid var(--dim);flex-shrink:0;"></div>
-    <span id="tts-txt" style="font-size:13px;color:var(--dim);letter-spacing:.06em;">tts off</span>
+  <div id="sbadges">
+    <span class="sbadge" id="status-chip" title="idle"><span class="sbi">&#9889;</span><span id="status-dot"></span><span id="status-txt" class="sbtxt">idle</span></span>
+    <span class="sbadge" id="web-chip" title="web off"><span class="sbi">&#127760;</span><span id="web-dot"></span><span id="web-txt" class="sbtxt">web off</span></span>
+    <span class="sbadge" id="whisper-chip" title="whisper off"><span class="sbi">&#127908;</span><span id="whisper-dot"></span><span id="whisper-txt" class="sbtxt">whisper off</span></span>
+    <span class="sbadge" id="tts-chip" title="tts off"><span class="sbi">&#128266;</span><span id="tts-dot"></span><span id="tts-txt" class="sbtxt">tts off</span></span>
   </div>
 
   <div class="divider"></div>
@@ -625,6 +630,60 @@ for(let i=0;i<=20;i++){
     tx.setAttribute('fill','#FFFF00');tx.setAttribute('font-size','9');tx.setAttribute('font-family','Share Tech Mono,Lucida Console,Courier New,monospace');
     tx.textContent=v;tg.appendChild(tx);}
 }
+let setVram=null,setRam=null;
+function makeGauge(mount,labelText){
+  const NS='http://www.w3.org/2000/svg';
+  mount.innerHTML='<svg class="mini-gauge" viewBox="0 0 220 190">'
+    +'<circle cx="110" cy="100" r="88" fill="url(#bz)"/>'
+    +'<circle cx="110" cy="100" r="81" fill="#000033" stroke="#555" stroke-width="1"/>'
+    +'<circle cx="110" cy="100" r="76" fill="url(#dF)"/>'
+    +'<path class="zz1" fill="none" stroke="#004400" stroke-width="7" stroke-linecap="round"/>'
+    +'<path class="zz2" fill="none" stroke="#444400" stroke-width="7" stroke-linecap="round"/>'
+    +'<path class="zz3" fill="none" stroke="#440000" stroke-width="7" stroke-linecap="round"/>'
+    +'<path class="garc" fill="none" stroke="#55FF55" stroke-width="5" stroke-linecap="round" style="transition:stroke .4s;"/>'
+    +'<g class="gticks"></g>'
+    +'<text class="glab" x="110" y="140" text-anchor="middle" fill="#AAAAAA" font-size="11" font-family="Share Tech Mono,Lucida Console,Courier New,monospace" letter-spacing=".18em">'+labelText+'</text>'
+    +'<text class="gv" x="110" y="160" text-anchor="middle" fill="#55FF55" font-size="22" font-family="Share Tech Mono,Lucida Console,Courier New,monospace" font-weight="bold" style="transition:fill .3s;">0%</text>'
+    +'<text class="gsb" x="110" y="178" text-anchor="middle" fill="#AAAAAA" font-size="12" font-family="Share Tech Mono,Lucida Console,Courier New,monospace"></text>'
+    +'<polygon class="gn" fill="url(#ng)" style="transform-origin:110px 100px;transition:transform .4s cubic-bezier(.4,0,.2,1);filter:drop-shadow(0 0 3px rgba(255,0,0,.5));"/>'
+    +'<polygon class="gnw" fill="#770000" style="transform-origin:110px 100px;transition:transform .4s cubic-bezier(.4,0,.2,1);"/>'
+    +'<circle cx="110" cy="100" r="8" fill="#222" stroke="#888" stroke-width="1.5"/>'
+    +'<circle cx="110" cy="100" r="5" fill="#111"/>'
+    +'<circle cx="110" cy="100" r="2.5" fill="#AAAAAA"/>'
+    +'</svg>';
+  const q=s=>mount.querySelector(s);
+  q('.zz1').setAttribute('d',ap(-135,-10,R-2));
+  q('.zz2').setAttribute('d',ap(-10,70,R-2));
+  q('.zz3').setAttribute('d',ap(70,135,R-2));
+  const tg=q('.gticks');
+  for(let i=0;i<=20;i++){
+    const a=-135+(i/20)*270,maj=i%4===0;
+    const p1=pt(a,R*(maj?.82:.89)),p2=pt(a,R*.95);
+    const ln=document.createElementNS(NS,'line');
+    ln.setAttribute('x1',p1[0]);ln.setAttribute('y1',p1[1]);ln.setAttribute('x2',p2[0]);ln.setAttribute('y2',p2[1]);
+    ln.setAttribute('stroke',maj?'#FFFF00':'#555577');ln.setAttribute('stroke-width',maj?2:1);
+    tg.appendChild(ln);
+  }
+  const arc=q('.garc'),gv=q('.gv'),gsb=q('.gsb'),needle=q('.gn'),needlew=q('.gnw');
+  return function(pct,sub){
+    pct=Math.max(0,Math.min(pct,100));
+    const a=-135+(pct/100)*270,col=pct<30?'#55FF55':pct<70?'#FFFF00':'#FF5555';
+    const aRad=a*Math.PI/180;
+    if(pct>0.5){arc.setAttribute('d',ap(-135,a,R-2));arc.style.stroke=col;arc.style.filter='drop-shadow(0 0 3px '+col+')';}
+    else arc.setAttribute('d','');
+    const tipR=R*.76,tx=CX+tipR*Math.sin(aRad),ty=CY-tipR*Math.cos(aRad);
+    const bw=5,al=(a-90)*Math.PI/180,ar=(a+90)*Math.PI/180;
+    const b1x=CX+bw*Math.sin(al),b1y=CY-bw*Math.cos(al),b2x=CX+bw*Math.sin(ar),b2y=CY-bw*Math.cos(ar);
+    needle.setAttribute('points',tx+','+ty+' '+b1x+','+b1y+' '+b2x+','+b2y);
+    const wRad=((a+180)*Math.PI)/180,wx=CX+R*.22*Math.sin(wRad),wy=CY-R*.22*Math.cos(wRad);
+    needlew.setAttribute('points',b1x+','+b1y+' '+b2x+','+b2y+' '+wx+','+wy);
+    gv.textContent=Math.round(pct)+'%';gv.style.fill=col;gv.style.filter='drop-shadow(0 0 5px '+col+'60)';
+    gsb.textContent=sub||'';
+  };
+}
+setVram=makeGauge(document.getElementById('vram-gauge'),'VRAM');
+setRam=makeGauge(document.getElementById('ram-gauge'),'RAM');
+
 function setGauge(pct,watts,real){
   pct=Math.max(0,Math.min(pct,100));
   const a=-135+(pct/100)*270,col=pct<30?'#55FF55':pct<70?'#FFFF00':'#FF5555';
@@ -698,6 +757,8 @@ setInterval(async()=>{
     const d=await r.json();
     gpuOk=d.ok||false;gpuP=d.gpu_pct||0;gpuW=d.watts||0;gpuT=d.temp||0;
     if(gpuOk)document.getElementById('hw-mode').textContent=`GPU ${gpuP}% - ${gpuT}C`;
+    if(setVram&&d.vram_total>0)setVram(d.vram_used/d.vram_total*100,d.vram_used.toFixed(1)+' / '+d.vram_total.toFixed(1)+' GB');
+    if(setRam&&d.ram_total>0)setRam(d.ram_used/d.ram_total*100,d.ram_used.toFixed(1)+' / '+d.ram_total.toFixed(1)+' GB');
   }catch{gpuOk=false;}
 },1500);
 
@@ -747,6 +808,7 @@ async function poll(){
   document.getElementById('hdr-session').textContent=String(Math.floor(el/60)).padStart(2,'0')+':'+String(el%60).padStart(2,'0');
 }
 setInterval(poll,1000);poll();
+setInterval(function(){['status','web','whisper','tts'].forEach(function(k){var t=document.getElementById(k+'-txt'),c=document.getElementById(k+'-chip');if(t&&c)c.title=t.textContent;});},800);
 
 // ── Web bridge ────────────────────────────────────────────────────────────────
 async function checkWebBridge(){

@@ -16,8 +16,27 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "pynvml", "--quiet"])
     import pynvml
 
+# Install psutil if not present (system RAM gauge)
+try:
+    import psutil
+except ImportError:
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "psutil", "--quiet"])
+    import psutil
+
 # Global state
-state = {"watts": 0, "vram_used": 0, "vram_total": 0, "gpu_pct": 0, "temp": 0, "ok": False}
+state = {"watts": 0, "vram_used": 0, "vram_total": 0, "gpu_pct": 0, "temp": 0,
+         "ram_used": 0, "ram_total": 0, "ok": False}
+
+
+def read_ram():
+    """System RAM, independent of the GPU loop so it works even without NVML."""
+    try:
+        vm = psutil.virtual_memory()
+        state["ram_used"]  = round(vm.used / 1024**3, 2)
+        state["ram_total"] = round(vm.total / 1024**3, 2)
+    except Exception:
+        pass
 
 def read_gpu():
     try:
@@ -44,6 +63,7 @@ def read_gpu():
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        read_ram()  # refresh RAM on each poll (cheap, GPU-independent)
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")

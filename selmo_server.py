@@ -114,6 +114,7 @@ def main():
     parser.add_argument("--model",  required=True,  help="Path to the .gguf file")
     parser.add_argument("--ngl",    type=int, default=99,       help="GPU layers (99 = offload all, let llama.cpp fit what it can)")
     parser.add_argument("--ctx",    type=int, default=0,        help="Context size (0 = use the model's training context, let the model decide)")
+    parser.add_argument("--cpumoe", type=int, default=0,        help="MoE experts kept on CPU/RAM (--n-cpu-moe N). 0 = off (all on GPU per -ngl)")
     parser.add_argument("--mmproj", default=None,               help="mmproj path (vision)")
     parser.add_argument("--voice",  default="im_nicola",        help="TTS voice")
     args = parser.parse_args()
@@ -133,6 +134,8 @@ def main():
     ctx_label = "model default" if args.ctx == 0 else str(args.ctx)
     print(f"  Model    : {model_name}")
     print(f"  -ngl     : {args.ngl}   ctx: {ctx_label}")
+    if args.cpumoe > 0:
+        print(f"  n-cpu-moe: {args.cpumoe} expert layers on RAM (MoE offload)")
     if args.mmproj:
         print(f"  Vision   : on  ({Path(args.mmproj).name})")
     else:
@@ -186,6 +189,11 @@ def main():
         # so the reasoning window keeps working.
         "--reasoning-format",   "deepseek",
     ]
+    if args.cpumoe > 0:
+        # MoE expert offload: keep the experts of N layers in system RAM while the
+        # dense backbone (attention/router) stays on the GPU. Only a few experts
+        # activate per token, so a big MoE (e.g. Qwen3-30B-A3B) runs on 12GB VRAM.
+        cmd += ["--n-cpu-moe", str(args.cpumoe)]
     if args.mmproj:
         cmd += [
             "--mmproj",             args.mmproj,

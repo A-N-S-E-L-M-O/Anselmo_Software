@@ -1,5 +1,19 @@
 # Selmo — Development documentation
-*Updated session 16 · 2026-06-13 · v0.807*
+*Updated session 16 · 2026-06-13 · v0.808*
+
+---
+
+## v0.808 — VRAM/RAM gauges + MoE offload (--n-cpu-moe) (session 16 cont.)
+
+Goal: run a "premium" big MoE (Qwen3.6-35B-A3B, ~3B active) on the 12GB 4070 Ti by keeping the dense backbone on the GPU and the experts in RAM.
+
+- **`--n-cpu-moe` wired end-to-end.** New `cpumoe` key in `selmo-models.ini` (read by the bat like `ngl`/`ctx`, proposed at a third prompt, blank/0 = off). New `[Qwen3]` section (ngl=99, ctx=16384, cpumoe=28). `selmo_server.py` gains `--cpumoe N` → passes `--n-cpu-moe N` to llama-server. Tuning: lower N to push more experts onto the GPU (faster) while VRAM holds.
+- **Two memory gauges** in the aside, side by side under the power gauge, same SVG family (`makeGauge()` builder, shares the `#bz`/`#dF`/`#ng` defs). Fed by the existing 8082 poll. `selmo_gpu_monitor.py` now also serves `ram_used`/`ram_total` via psutil (auto-installed); VRAM was already exposed.
+- **Server status compacted** from four text rows into one row of four icon chips with hover tooltips (the old label text — Whisper model, SearXNG state — moves into the chip `title`, synced on an 800ms interval). Frees vertical space so the stat panel fits without scrolling.
+
+chat.html edited via Python only; `node --check` passes. **Lesson (this session):** `set /p "A=.." & set /p "B=.."` on one line does NOT run the second prompt in cmd — chained `set /p` after `&` is unreliable. Each `set /p` must be on its own line.
+
+**BUG-META-02 active this session:** the sandbox mount served truncated views of `Selmo.bat`/`selmo_server.py` and a 0-byte `.git/index`. The real files (verified via the file tools) are intact; byte-level CRLF/NUL checks on the bat could not be run through the mount, and git was not committable from the sandbox.
 
 ---
 
