@@ -1,5 +1,5 @@
 # Selmo — Development documentation
-*Updated session 16 · 2026-06-13 · v0.809*
+*Updated session 16 · 2026-06-13 · v0.810*
 
 ---
 
@@ -471,4 +471,24 @@ Sources: ai.google.dev/gemma/docs/capabilities/vision · dev.to/someoddcodeguy "
 **Goal:** natural voice conversation — tap mic once, speak, VAD detects end of speech, sends to Whisper, model replies via TTS Kokoro, returns to listening.
 
 **Approach:** [`@ricky0123/vad`](https://www.npmjs.com/package/@ricky0123/vad) — Silero VAD compiled to ONNX, runs entirely in the browser via WebAssembly (onnxruntime-web).
-- Load lib from CDN + `silero_vad.onnx` (~2MB) serve
+- Load lib from CDN + `silero_vad.onnx` (~2MB) served locally.
+
+---
+
+### Multi-document loading (next dev step)
+
+**Current state:** `fileDoc` is a single variable — a second upload silently replaces the first. No concatenation, no multi-document awareness.
+
+**Goal:** load N documents and choose the processing strategy:
+
+- **Serial / batch analysis** — chunks from all documents processed in sequence, results aggregated into one reply. Natural for "process all these contracts" or "summarise this folder". Each document stays isolated so the model never sees two documents at once (avoids cross-contamination and confusion).
+- **Parallel / comparative** — same prompt applied independently to each document, results shown side-by-side. Natural for "compare these two CVs" or "which of these reports mentions X?". Scales to 2–4 documents before the UI becomes unwieldy.
+
+**Constraints:**
+- Each single document is still limited by the context window (unchanged chunking logic).
+- UI: a file list badge replacing the current single-file badge; click to remove individual files.
+- Mode selector (serial / parallel) shown only when N ≥ 2.
+
+**Literature note:** this maps cleanly onto two established RAG patterns:
+- *Sequential multi-document QA* (serial): each doc processed independently, answers merged by a final synthesis step — used in LangChain's `load_summarize_chain(chain_type="map_reduce")` and similar map-reduce pipelines.
+- *Cross-document comparison* (parallel): independent map step per document, explicit compare step — described in the RAG survey (Gao et al., 2023) as "comparative retrieval". The key insight from the literature is that **cross-document attention is only safe at the synthesis step**, not during chunk extraction — otherwise the model hallucinates mixing between sources. Selmo's architecture (isolated per-chunk requests, aggregated result) already follows this principle.

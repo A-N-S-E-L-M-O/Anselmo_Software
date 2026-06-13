@@ -15,6 +15,7 @@ import atexit
 import time
 import threading
 import argparse
+import json
 from pathlib import Path
 
 BASE   = Path(__file__).parent
@@ -114,10 +115,17 @@ def main():
     parser.add_argument("--model",  required=True,  help="Path to the .gguf file")
     parser.add_argument("--ngl",    type=int, default=99,       help="GPU layers (99 = offload all, let llama.cpp fit what it can)")
     parser.add_argument("--ctx",    type=int, default=0,        help="Context size (0 = use the model's training context, let the model decide)")
-    parser.add_argument("--cpumoe", type=int, default=0,        help="MoE experts kept on CPU/RAM (--n-cpu-moe N). 0 = off (all on GPU per -ngl)")
-    parser.add_argument("--mmproj", default=None,               help="mmproj path (vision)")
-    parser.add_argument("--voice",  default="im_nicola",        help="TTS voice")
+    parser.add_argument("--cpumoe",      type=int,   default=0,    help="MoE experts kept on CPU/RAM (--n-cpu-moe N). 0 = off (all on GPU per -ngl)")
+    parser.add_argument("--mmproj",      default=None,             help="mmproj path (vision)")
+    parser.add_argument("--voice",       default="im_nicola",      help="TTS voice")
+    parser.add_argument("--chunk-ratio", type=float, default=0.25, help="Fraction of ctx used for input per chunk (rest = reasoning+output budget)")
+    parser.add_argument("--chunk-maxtok",type=int,   default=6000, help="Hard cap on output tokens per chunk (reasoning included)")
     args = parser.parse_args()
+
+    # Write selmo-config.json so chat.html can read per-model chunking params at startup.
+    # llama-server serves static files from --path BASE, so /selmo-config.json is reachable.
+    config = {"chunk_ratio": args.chunk_ratio, "chunk_maxtok": args.chunk_maxtok}
+    (BASE / "selmo-config.json").write_text(json.dumps(config), encoding="utf-8")
 
     model_name = Path(args.model).name
 
