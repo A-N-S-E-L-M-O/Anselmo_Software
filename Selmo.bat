@@ -4,7 +4,39 @@ title Selmo -- Local AI
 
 cd /d "%~dp0"
 
-:: Scan models (exclude mmproj)
+:: ---- Load per-model defaults from selmo-models.ini ----
+set "INI=%~dp0selmo-models.ini"
+set "secN=0"
+set "def_ngl=99" & set "def_ctx=8192" & set "def_max=unknown" & set "def_note=Unknown/untested: try your settings"
+set "curIdx="
+if exist "%INI%" (
+    for /f "usebackq eol=; tokens=* delims=" %%L in ("%INI%") do (
+        set "ln=%%L"
+        if defined ln (
+            if "!ln:~0,1!"=="[" (
+                set "sname=!ln:~1!"
+                set "sname=!sname:]=!"
+                if /i "!sname!"=="default" ( set "curIdx=0" ) else ( set /a secN+=1 & set "curIdx=!secN!" & set "sname_!secN!=!sname!" )
+            ) else (
+                for /f "tokens=1* delims==" %%A in ("!ln!") do (
+                    if "!curIdx!"=="0" (
+                        if /i "%%A"=="ngl"  set "def_ngl=%%B"
+                        if /i "%%A"=="ctx"  set "def_ctx=%%B"
+                        if /i "%%A"=="max"  set "def_max=%%B"
+                        if /i "%%A"=="note" set "def_note=%%B"
+                    ) else if defined curIdx (
+                        if /i "%%A"=="ngl"  set "sngl_!curIdx!=%%B"
+                        if /i "%%A"=="ctx"  set "sctx_!curIdx!=%%B"
+                        if /i "%%A"=="max"  set "smax_!curIdx!=%%B"
+                        if /i "%%A"=="note" set "snote_!curIdx!=%%B"
+                    )
+                )
+            )
+        )
+    )
+)
+
+:: ---- Scan models (exclude mmproj), resolve each one from the ini ----
 set count=0
 for %%F in ("models\*.gguf") do (
     echo %%~nxF | findstr /i "mmproj" >nul
@@ -12,6 +44,7 @@ for %%F in ("models\*.gguf") do (
         set /a count+=1
         set "model_!count!=%%~nxF"
         set "modelpath_!count!=%%~fF"
+        call :lookup "%%~nxF" !count!
     )
 )
 
@@ -31,7 +64,8 @@ if %count%==1 (
     echo  Available models:
     echo.
     for /l %%i in (1,1,%count%) do (
-        echo    [%%i] !model_%%i!
+        set "row=!model_%%i!                                           "
+        echo    [%%i] !row:~0,42!  --  !note_%%i!
     )
     echo.
     set /p "selected=  Choose the model [1-%count%]: "
@@ -60,11 +94,17 @@ for %%F in ("models\*mmproj*.gguf") do (
     )
 )
 
-:: Runtime parameters -- defaults are pre-filled; press ENTER to keep or type a new value
-set NGL=99
+:: Per-model defaults (resolved from selmo-models.ini; lower -ngl if VRAM is short)
+set "NGL=!ngl_%selected%!"
+set "CTX=!ctx_%selected%!"
+if "!NGL!"=="" set "NGL=%def_ngl%"
+if "!CTX!"=="" set "CTX=%def_ctx%"
+
+echo.
+
+:: Defaults are pre-filled; press ENTER to keep or type a new value
 set /p "NGL=  GPU layers (-ngl) [!NGL!]: "
-set CTX=8192
-set /p "CTX=  Context window (--ctx) [!CTX!]: "
+set /p "CTX=  Context window (--ctx) [!CTX!]  (native max !max_%selected%!): "
 echo.
 echo  Starting: NGL=!NGL!  CTX=!CTX!
 echo.
@@ -82,3 +122,20 @@ if errorlevel 1 (
     echo  ERROR - press a key to close.
     pause >nul
 )
+goto :eof
+
+:: ---- Resolve ngl / ctx / note for a model from the parsed ini ----
+::   %~1 = model file name   %~2 = menu index   (first matching section wins)
+:lookup
+set "li=%~2"
+set "ngl_%li%=!def_ngl!"
+set "ctx_%li%=!def_ctx!"
+set "max_%li%=!def_max!"
+set "note_%li%=!def_note!"
+set "hit=0"
+for /l %%s in (1,1,%secN%) do (
+    if "!hit!"=="0" (
+        echo %~1| findstr /i /c:"!sname_%%s!" >nul && ( set "ngl_%li%=!sngl_%%s!" & set "ctx_%li%=!sctx_%%s!" & set "max_%li%=!smax_%%s!" & set "note_%li%=!snote_%%s!" & set "hit=1" )
+    )
+)
+goto :eof

@@ -1,5 +1,15 @@
 # Selmo — Development documentation
-*Updated session 16 · 2026-06-13 · v0.806*
+*Updated session 16 · 2026-06-13 · v0.807*
+
+---
+
+## v0.807 — INI-driven launcher: per-model defaults out of the bat (session 16 cont.)
+
+The launcher no longer hard-codes any model logic. `Selmo.bat` is now a generic reader of a new editable config file, `selmo-models.ini`. Each `[section]` is a case-insensitive substring matched against the model file name; **first match wins** (so more specific names go higher, e.g. `[LFM2.5]` above `[LFM2]`), with `[default]` as fallback. Keys read by the bat: `ngl`, `ctx`, `max` (native context, shown next to the `--ctx` prompt as "native max N"), `note` (shown in the menu). The `use` key (use-case + compliance tag: disclosed / undisclosed / ethical) is parsed-over and ignored by the bat — documentation for the user only. The bat still only **proposes** values at the prompts; nothing is forced.
+
+Implementation notes: INI parsed once with `for /f "eol=; tokens=* delims="`, sections/keys into indexed vars; a `:lookup` subroutine resolves each scanned model to `ngl_/ctx_/max_/note_` with a `hit` flag for first-match-wins. Post-selection Model/Note/Native recap was dropped (confusing); native context now appears only at the `--ctx` prompt.
+
+Per-model values live in the INI, not here. EuroLLM ctx kept at empirical **8192**: it claims 32k native but loses coherence on long inputs, and a 14k test (≈45% of native, the chunk-input rule misapplied to launch ctx) made translation worse. Lesson: the 45% rule is about chunk-input vs the *running* context, not the launch ctx, and only holds for models that actually hold their nominal context.
 
 ---
 
