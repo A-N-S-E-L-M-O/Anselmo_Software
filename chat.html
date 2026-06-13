@@ -428,7 +428,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.804</div>
+  <div class="hbadge">v0.805</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -2104,6 +2104,12 @@ function modelInfoLine(){
   const mode=THINK_CAPABLE?'reasoning: on':'reasoning: off';
   return MODEL_FULL+'  ·  '+ctx+'  ·  '+mode;
 }
+function traceLine(){
+  const info=document.createElement('div');
+  info.style.cssText='margin:4px 0 10px;font-size:11px;opacity:.55;text-align:center';
+  info.textContent=modelInfoLine();
+  return info;
+}
 let _startupTraced=false;
 function showStartupTrace(){
   if(_startupTraced)return; _startupTraced=true;
@@ -2144,6 +2150,24 @@ function saveSession(){
   renderSessionList();
 }
 
+// Saved assistant turns are stored as [THINK]reasoning[/THINK]answer. On reload
+// put the reasoning back into a collapsible panel instead of the main bubble.
+function renderStored(m){
+  if(m.role==='assistant' && typeof m.content==='string' && m.content.indexOf('[THINK]')!==-1){
+    const text=m.content, a=text.indexOf('[THINK]'), b=text.indexOf('[/THINK]');
+    if(b>a){
+      const reason=text.slice(a+7,b);
+      const answer=(text.slice(0,a)+text.slice(b+8)).trim();
+      const r=addMsg('assistant','',false);
+      const tp=makeThinkPanel(r.inner);
+      if(reason)tp.append(reason);
+      tp.seal();
+      r.bub.textContent=answer;
+      return;
+    }
+  }
+  addMsg(m.role,m.content,false);
+}
 function loadSession(id){
   if(gen)return;
   saveSession();
@@ -2155,7 +2179,8 @@ function loadSession(id){
   currentTemp=0.75;
   syncThinkPrompt();
   document.getElementById('messages').innerHTML='';
-  s.history.forEach(m=>addMsg(m.role,m.content,false));
+  document.getElementById('messages').appendChild(traceLine()); // keep the model/params trace when viewing history
+  s.history.forEach(renderStored);
   wh=0;sessStart=Date.now();clearFile();updCost();
   scrollBot();
   renderSessionList();

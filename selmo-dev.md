@@ -1,5 +1,16 @@
 # Selmo — Development documentation
-*Updated session 16 · 2026-06-13 · v0.804*
+*Updated session 16 · 2026-06-13 · v0.805*
+
+---
+
+## v0.805 — reasoning panel preserved in loaded history (session 16 cont.)
+
+Two fixes for viewing saved sessions:
+
+- **Model trace in history.** `loadSession` clears `#messages` (wiping the welcome + its startup trace), so it now appends a centered dim `traceLine()` (model · ctx · reasoning state) at the top of the loaded conversation. The trace is never lost.
+- **Reasoning re-split (the Olmo bug).** Assistant turns are saved as `[THINK]reasoning[/THINK]answer`. `loadSession` used to re-render them with `addMsg`, which dumps the raw string into the main bubble — so a reloaded Olmo turn showed its `[THINK]…` reasoning inline in the content window instead of the reasoning panel (most visible on Olmo, which always reasons). New `renderStored(m)` re-splits the saved `[THINK]…[/THINK]` on load: the reasoning goes back into a collapsible `makeThinkPanel`, only the answer stays in the bubble. `loadSession` now maps history through `renderStored`.
+
+Verified with `node --check`.
 
 ---
 
