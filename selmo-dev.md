@@ -3,6 +3,25 @@
 
 ---
 
+## v0.716 — tok/sec bar + HTTPS proxy for mobile mic (session 16 cont.)
+
+**tok/sec bar — dynamic scale with colour coding:**
+The fondoscala is no longer fixed. `_tokScale` starts at 20 tok/s (realistic for Magistral 24B Q3).
+If tokSec exceeds 95% of the current scale, the scale auto-expands to the next multiple of 10 above `tokSec × 1.2`.
+Colour: **cyan** ≥ 20 tok/s · **yellow** 10–20 · **red** < 10. The bar never pegs; no "casino" effect.
+
+**HTTPS proxy for mobile microphone (`selmo_https_proxy.py`, port 8443):**
+Mobile browsers block `getUserMedia()` on non-secure HTTP origins — so Whisper was always broken on the phone.
+`selmo_https_proxy.py` is a lightweight Python HTTPS reverse proxy:
+- Generates a self-signed TLS cert (`selmo.crt` / `selmo.key`) on first run, with the machine's LAN IP in the SAN.
+- Listens on `:8443` and routes `/proxy/808X/path` → the matching local service; everything else → llama-server (8080).
+- `chat.html` detects `location.protocol === 'https:'` and switches all service URLs to `/proxy/808X` paths (avoids mixed-content blocks).
+- The proxy is started automatically by `selmo_server.py` alongside the other services.
+
+**Usage from phone:** `https://192.168.x.x:8443/chat.html` — Firefox shows a cert warning once, user clicks "Accept the risk" — done. Desktop continues to use `http://127.0.0.1:8080` unchanged.
+
+**Lesson:** delete `selmo.crt` / `selmo.key` if the machine's LAN IP changes (the cert embeds the IP in the SAN). The proxy regenerates them on the next startup.
+
 ## v0.714 — Phone UI fixes + chunking lessons (session 16)
 
 **Phone header (≤400px):** THINK button was hidden (`display:none`); replaced with compact padding so it stays visible. NEW CHAT label collapsed to "CHAT" via CSS `::before` pseudo-element (no HTML change).
@@ -102,6 +121,7 @@ Kokoro link: https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-file
 | 8082 | selmo_gpu_monitor.py (GPU watts) |
 | 8083 | selmo_whisper.py (STT) |
 | 8084 | selmo_tts.py (TTS Kokoro) |
+| 8443 | selmo_https_proxy.py (HTTPS reverse proxy for mobile mic) |
 | 8888 | SearXNG (Podman container) |
 
 ---
@@ -200,6 +220,7 @@ The Selmo/Mizan toggle changes the system prompt + temperature + color palette (
 
 **Desktop** — `http://127.0.0.1:8080/chat.html`
 **Local network** — `http://192.168.x.x:8080/chat.html` (Windows firewall asks for confirmation on first launch)
+**HTTPS (mobile mic)** — `https://192.168.x.x:8443/chat.html` via selmo_https_proxy.py; accept the self-signed cert warning once in the browser.
 **Remote** — VPN on the home router → the phone re-enters the local network, zero extra config
 
 ---
@@ -300,6 +321,21 @@ llama.cpp flags (in `Selmo.bat`, only when there is an mmproj):
 **The real cause of BUG-IMG-01**: Gemma 4's vision encoder uses **non-causal** attention on the image tokens → they must all fit in a single ubatch. With the default `ubatch` (512) and a large image, `GGML_ASSERT(n_ubatch >= n_tokens)` fires and the server dies (HTTP 500/400). It wasn't the message format: it was the batching. Raising batch/ubatch to 2048 fixes it.
 
 Sources: ai.google.dev/gemma/docs/capabilities/vision · dev.to/someoddcodeguy "Gemma 4 image settings in llama.cpp" · unsloth.ai/docs/models/gemma-4
+
+---
+
+## Nice to have
+
+### VAD — conversational voice (local, no cloud)
+**Goal:** natural voice conversation — tap mic once, speak, VAD detects end of speech, sends to Whisper, model replies via TTS Kokoro, returns to listening.
+
+**Approach:** [`@ricky0123/vad`](https://www.npmjs.com/package/@ricky0123/vad) — Silero VAD compiled to ONNX, runs entirely in the browser via WebAssembly (onnxruntime-web).
+- Load lib from CDN + `silero_vad.onnx` (~2MB) served by Selmo.
+- Callbacks: `onSpeechStart` / `onSpeechEnd(blob)` → blob sent directly to Whisper port 8083.
+- Silero VAD: 88% TPR at 5% FPR vs 50% for browser-native WebRTC VAD.
+- After transcription → auto-send → Kokoro TTS reads reply → back to listening.
+- Requires the HTTPS proxy to be active (getUserMedia needs secure context on mobile).
+- Latency budget: Whisper ~500ms on short clips (4070 Ti) — acceptable for conversation.
 
 ---
 
