@@ -1,5 +1,21 @@
 # Selmo — Development documentation
-*Updated session 16 · 2026-06-13 · v0.716*
+*Updated session 16 · 2026-06-13 · v0.800*
+
+---
+
+## v0.800 — VAD: conversazione a mani libere (session 16 cont.)
+
+Modalità hands-free con rilevamento delle pause via **Silero VAD** (`@ricky0123/vad-web` v5, ONNX in-browser). Nuovo bottone 🗣 (`#vad-btn`) accanto al mic.
+
+Flusso: clic una volta → il VAD ascolta → `onSpeechEnd` restituisce un `Float32Array` a 16 kHz → conversione client-side a WAV (`f32ToWav`) → POST a Whisper `/transcribe` (nessuna modifica server: accetta già `.wav`) → testo nell'input → auto-send. In hands-free il TTS della risposta è forzato (`pttForceTts`).
+
+**Anti-eco:** durante trascrizione + generazione + TTS il VAD è in pausa (`vadInstance.pause()`), così non si ascolta da solo. Riprende a fine risposta. Il resume è agganciato alla fine del TTS: `speakText` ora fa fire di un callback (`src.onended` per Kokoro, `utt.onend` per Web Speech) → `vadAfterSpeak()` → `vadResume()`. Fallback in `endTurn` con `_ttsPending`/`vadAwaitingReply` per il caso in cui la generazione vada in errore e `speakText` non venga mai chiamato.
+
+**Push-to-talk bypassa il VAD** (richiesta esplicita): `pttStart` mette in pausa il VAD e usa il percorso `MediaRecorder`; dopo la risposta il VAD riprende.
+
+Stati bottone: ciano = in ascolto, verde lampeggiante = utente parla, giallo lampeggiante = busy.
+
+**Lib da CDN jsdelivr** (onnxruntime-web 1.22.0 + vad-web 0.0.29), come jszip/pdf.js: serve rete al **primo** avvio del VAD, poi cache. Per offline totale: servire `.onnx`/`.wasm`/worklet da Selmo e puntare `baseAssetPath`/`onnxWASMBasePath` in locale. `redemptionMs` su default 1400 ms (durata pausa che fa scattare il fine-frase).
 
 ---
 

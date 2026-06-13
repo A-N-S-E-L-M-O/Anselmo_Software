@@ -23,6 +23,12 @@ __pycache__/
 # Lock
 *.lock
 
+# Certificati TLS del proxy HTTPS (rigenerati, contengono l'IP LAN)
+selmo.crt
+selmo.key
+*.crt
+*.key
+
 # File di test pesanti
 Test files/
 chat.fab
