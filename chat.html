@@ -428,7 +428,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.803</div>
+  <div class="hbadge">v0.804</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -561,7 +561,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
     <div class="msg assistant">
       <div class="av">&#x26A1;</div>
       <div><div class="bubble">Hi. I'm Selmo.
-Running on your hardware. No data leaves this machine.</div></div>
+Running on your hardware. Only explicit web searches leave this machine.</div></div>
     </div>
   </div>
   <div class="input-area">
@@ -581,7 +581,7 @@ Running on your hardware. No data leaves this machine.</div></div>
     <button id="vad-btn" onclick="toggleVad()" title="Conversazione a mani libere (VAD) — rileva le pause e invia da solo">&#x1F5E3;</button>
     <button id="tts-btn" onclick="toggleTts()" title="Read responses aloud (Kokoro TTS)">&#x1F508;</button>
   </div>
-  <div class="meta">No data transmitted &middot; <span id="foot-model">-</span> &middot; localhost:8080</div>
+  <div class="meta">Only web searches transmitted &middot; <span id="foot-model">-</span> &middot; localhost:8080</div>
 </main>
 
 <script>
@@ -903,6 +903,7 @@ renderSessionList();
   fetch(`${API}/v1/models`)
     .then(r=>r.json()).then(d=>{
       const n=(d.data&&d.data[0]&&d.data[0].id)||'locale';
+      MODEL_FULL=n.split(/[\\/]/).pop()||n;
       const short=n.length>22?n.slice(0,22)+'...':n;
       document.getElementById('hdr-model').textContent=short;
       const fm=document.getElementById('foot-model');if(fm)fm.textContent=short;
@@ -916,8 +917,10 @@ renderSessionList();
       fetch(`${API}/props`).then(r=>r.json()).then(p=>{
         const _ct=(typeof p?.chat_template==='string')?p.chat_template:'';
         REASON_FIRST=_ct.includes('<think>')&&_ct.lastIndexOf('<think>')>_ct.lastIndexOf('</think>');
-        console.log('Selmo reasoning-first:',REASON_FIRST);
-        if(REASON_FIRST)applyReasonLock();
+        THINK_CAPABLE=_ct.toLowerCase().includes('think'); // any thinking model -> button shown, on by default
+        INSTRUCTED=THINK_CAPABLE&&!REASON_FIRST&&!_ct.includes('<|think|>'); // only Magistral-style needs the [THINK] instruction
+        console.log('Selmo think-capable:',THINK_CAPABLE,'| reasoning-first:',REASON_FIRST,'| instructed:',INSTRUCTED);
+        applyThinkMode();
         const nCtx=p?.default_generation_settings?.n_ctx||p?.n_ctx||0;
         if(nCtx>=1024){N_CTX=nCtx;
           const RESERVED=400;       // system prompt tokens
@@ -927,6 +930,7 @@ renderSessionList();
           document.getElementById('hdr-model').title=
             `ctx: ${nCtx.toLocaleString()} tok  ·  chunk max: ${CHUNK_SIZE.toLocaleString()} char`;
         }
+        showStartupTrace(); // append model + params under the welcome message
       }).catch(()=>{/* /props unavailable: keep the default */});
     }).catch(()=>{
       document.getElementById('conn').style.background='var(--red)';
@@ -939,6 +943,9 @@ renderSessionList();
 let IS_THINK_ON=false;
 let IS_WEB_ON=false; // reasoning toggle — off di default
 let REASON_FIRST=false; // model opens <think> in its prompt template (Olmo): stream starts in reasoning
+let THINK_CAPABLE=true;  // template references thinking -> THINK shown and ON by default; else hidden
+let INSTRUCTED=false;    // model needs the manual [THINK] instruction (Magistral); native reasoners (Olmo/Gemma) do not
+let MODEL_FULL='local';  // active model name, shown in the conversation trace
 const THINK_INSTR='\n\nFirst draft your thinking process (inner monologue) until you arrive at a response. Format your response using Markdown. Write both your thoughts and the response in the same language as the input.\n\nYour thinking process must follow the template below:[THINK]Your thoughts or/and draft, like working through an exercise on scratch paper. Be as casual and as long as you want until you are confident to generate the response. Use the same language as the input.[/THINK]Here, provide a self-contained response.';
 
 // SYSTEM PROMPTS
@@ -1306,7 +1313,7 @@ function newChat(){
   chatHistory.splice(1);
   wh=0;sessStart=Date.now();
   clearFile();updCost();
-  addMsg('assistant','New conversation.');
+  announceModel(false);
   document.getElementById('input').focus();
   renderSessionList();
 }
@@ -2070,30 +2077,56 @@ function toggleWeb(){
 function setThinkEnabled(on){
   const btn=document.getElementById('think-btn');
   if(!btn)return;
+  if(!THINK_CAPABLE){btn.style.display='none';return;}   // non-thinking model: stays hidden
   btn.disabled=!on;
   btn.style.opacity=on?'':'.35';
   btn.title=on?'Extended reasoning ON/OFF':'Not available during chunking';
-  if(!on&&IS_THINK_ON){IS_THINK_ON=false;btn.classList.remove('on');btn.textContent='THINK';
-    chatHistory[0].content=SP_SELMO;}
-  if(on&&REASON_FIRST)applyReasonLock();   // keep the lock after chunking re-enables the button
 }
-// Reasoning-first models (Olmo Think) always reason: force the THINK toggle
-// visibly active (●) but greyed and locked — clicking does nothing.
-function applyReasonLock(){
+// Inject the [THINK] instruction only for models that need it (Magistral);
+// native reasoners (Olmo/Gemma) reason on their own, so we never push it to them.
+function syncThinkPrompt(){
+  if(chatHistory[0])chatHistory[0].content=(IS_THINK_ON&&INSTRUCTED)?(SP_SELMO+THINK_INSTR):SP_SELMO;
+}
+// Simple rule: 'think' in template -> THINK shown and ON by default; else hidden.
+function applyThinkMode(){
   const btn=document.getElementById('think-btn');
-  if(!btn||!REASON_FIRST)return;
-  IS_THINK_ON=false;                 // no THINK_INSTR: Olmo reasons natively in <think>, not [THINK]
-  btn.classList.remove('on');        // grey/locked look, not the cyan active glow
-  btn.textContent='THINK ●';
-  btn.disabled=true;
-  btn.style.opacity='.5';
-  btn.style.cursor='not-allowed';
-  btn.title='This model always reasons';
+  if(!btn)return;
+  if(!THINK_CAPABLE){btn.style.display='none';IS_THINK_ON=false;syncThinkPrompt();return;}
+  btn.style.display='';
+  IS_THINK_ON=true;                  // on by default for any thinking model
+  btn.disabled=false;btn.style.opacity='';btn.style.cursor='';
+  btn.classList.add('on');btn.textContent='THINK ●';
+  btn.title='Extended reasoning ON/OFF';
+  syncThinkPrompt();
+}
+function modelInfoLine(){
+  const ctx=N_CTX?('ctx '+N_CTX.toLocaleString('en')+' tok'):'ctx ?';
+  const mode=THINK_CAPABLE?'reasoning: on':'reasoning: off';
+  return MODEL_FULL+'  ·  '+ctx+'  ·  '+mode;
+}
+let _startupTraced=false;
+function showStartupTrace(){
+  if(_startupTraced)return; _startupTraced=true;
+  const bub=document.querySelector('#messages .msg.assistant .bubble');
+  const host=bub?bub.parentNode:null;
+  if(!host)return;
+  const info=document.createElement('div');
+  info.style.cssText='margin-top:5px;font-size:11px;opacity:.6';
+  info.textContent=modelInfoLine();
+  host.appendChild(info);
+}
+function announceModel(startupOnly){
+  const box=document.getElementById('messages');
+  if(startupOnly&&box&&box.children.length>0)return; // chat not empty: skip the startup trace
+  const r=addMsg('assistant','New conversation.');
+  const info=document.createElement('div');
+  info.style.cssText='margin-top:5px;font-size:11px;opacity:.6';
+  info.textContent=modelInfoLine();
+  r.inner.appendChild(info);
 }
 function toggleThink(){
-  if(REASON_FIRST)return;            // locked on for reasoning-first models
   IS_THINK_ON=!IS_THINK_ON;
-  chatHistory[0].content=IS_THINK_ON?(SP_SELMO+THINK_INSTR):SP_SELMO;
+  syncThinkPrompt();
   const btn=document.getElementById('think-btn');
   if(btn){btn.classList.toggle('on',IS_THINK_ON);btn.textContent=IS_THINK_ON?'THINK ●':'THINK';}
 }
@@ -2120,7 +2153,7 @@ function loadSession(id){
   chatHistory.length=1;
   s.history.forEach(m=>chatHistory.push(m));
   currentTemp=0.75;
-  chatHistory[0].content=IS_THINK_ON?(SP_SELMO+THINK_INSTR):SP_SELMO;
+  syncThinkPrompt();
   document.getElementById('messages').innerHTML='';
   s.history.forEach(m=>addMsg(m.role,m.content,false));
   wh=0;sessStart=Date.now();clearFile();updCost();

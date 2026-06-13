@@ -1,5 +1,24 @@
 # Selmo — Development documentation
-*Updated session 16 · 2026-06-13 · v0.803*
+*Updated session 16 · 2026-06-13 · v0.804*
+
+---
+
+## v0.804 — THINK auto-detected from the template + model trace (session 16 cont.)
+
+**THINK button driven by the chat template** (read from `/props`, no hardcoded model list). Rule (Fabio's call): the lowercased template contains `think` → button shown and **ON by default**; absent → button **hidden**. This supersedes the v0.803 grey-locked "always-on" state: even a pure-reasoning model keeps reasoning if THINK is toggled off, which is acceptable. Generalises to any future model.
+
+Two internal flags, invisible to the user:
+
+- `REASON_FIRST` (parser only, unchanged from v0.802): the model's template opens `<think>` in the generation prompt (Olmo). Sets `inTk` so the reasoning lands in the panel. Not the button.
+- `INSTRUCTED` = `THINK_CAPABLE && !REASON_FIRST && !template.includes('<|think|>')`: only Magistral-style models receive the manual `[THINK]` system instruction (`THINK_INSTR`). Native reasoners (Olmo `<think>`, Gemma 4 `<|think|>`) never get it — pushing a `[THINK]` instruction at them risks literal `[THINK]` leaking into the answer. A single `syncThinkPrompt()` is the only place that sets the system prompt's thinking clause.
+
+Classification verified by reading the GGUF templates directly: EuroLLM-9B (no `think` → hidden), Magistral-Small-2509 (`[THINK]` → instructed), Olmo-3-7B-Think (`<think>` → parser + native), Gemma-4-12B-it (`<|think|>` → native; Google docs: thinking on by default).
+
+**Conversation trace.** Model name · ctx · reasoning state is shown at startup (appended under the "Hi. I'm Selmo" welcome, once) and on every New conversation (`announceModel`/`showStartupTrace`, `modelInfoLine`). Note: `-ngl` is not exposed by llama-server (`/props`/`/v1/models`), so it is not in the trace.
+
+**Copy fix.** "No data leaves this machine" → "Only explicit web searches leave this machine"; footer "No data transmitted" → "Only web searches transmitted" (web search does leave the machine, so the old claim was inaccurate).
+
+All changes verified with `node --check` on the extracted script.
 
 ---
 
