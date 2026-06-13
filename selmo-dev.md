@@ -3,19 +3,19 @@
 
 ---
 
-## v0.800 — VAD: conversazione a mani libere (session 16 cont.)
+## v0.800 — VAD: hands-free conversation (session 16 cont.)
 
-Modalità hands-free con rilevamento delle pause via **Silero VAD** (`@ricky0123/vad-web` v5, ONNX in-browser). Nuovo bottone 🗣 (`#vad-btn`) accanto al mic.
+Hands-free mode with pause detection via **Silero VAD** (`@ricky0123/vad-web` v5, ONNX in-browser). New 🗣 button (`#vad-btn`) next to the mic.
 
-Flusso: clic una volta → il VAD ascolta → `onSpeechEnd` restituisce un `Float32Array` a 16 kHz → conversione client-side a WAV (`f32ToWav`) → POST a Whisper `/transcribe` (nessuna modifica server: accetta già `.wav`) → testo nell'input → auto-send. In hands-free il TTS della risposta è forzato (`pttForceTts`).
+Flow: tap once → the VAD listens → `onSpeechEnd` returns a `Float32Array` at 16 kHz → client-side conversion to WAV (`f32ToWav`) → POST to Whisper `/transcribe` (no server change: it already accepts `.wav`) → text into the input → auto-send. In hands-free mode the reply TTS is forced (`pttForceTts`).
 
-**Anti-eco:** durante trascrizione + generazione + TTS il VAD è in pausa (`vadInstance.pause()`), così non si ascolta da solo. Riprende a fine risposta. Il resume è agganciato alla fine del TTS: `speakText` ora fa fire di un callback (`src.onended` per Kokoro, `utt.onend` per Web Speech) → `vadAfterSpeak()` → `vadResume()`. Fallback in `endTurn` con `_ttsPending`/`vadAwaitingReply` per il caso in cui la generazione vada in errore e `speakText` non venga mai chiamato.
+**Anti-echo:** during transcription + generation + TTS the VAD is paused (`vadInstance.pause()`), so it doesn't listen to itself. It resumes when the reply is done. The resume is hooked to the end of TTS: `speakText` now fires a completion callback (`src.onended` for Kokoro, `utt.onend` for Web Speech) → `vadAfterSpeak()` → `vadResume()`. Fallback in `endTurn` via `_ttsPending`/`vadAwaitingReply` for the case where generation errors out and `speakText` is never called.
 
-**Push-to-talk bypassa il VAD** (richiesta esplicita): `pttStart` mette in pausa il VAD e usa il percorso `MediaRecorder`; dopo la risposta il VAD riprende.
+**Push-to-talk bypasses the VAD** (explicit requirement): `pttStart` pauses the VAD and uses the `MediaRecorder` path; after the reply the VAD resumes.
 
-Stati bottone: ciano = in ascolto, verde lampeggiante = utente parla, giallo lampeggiante = busy.
+Button states: cyan = listening, blinking green = user speaking, blinking yellow = busy.
 
-**Lib da CDN jsdelivr** (onnxruntime-web 1.22.0 + vad-web 0.0.29), come jszip/pdf.js: serve rete al **primo** avvio del VAD, poi cache. Per offline totale: servire `.onnx`/`.wasm`/worklet da Selmo e puntare `baseAssetPath`/`onnxWASMBasePath` in locale. `redemptionMs` su default 1400 ms (durata pausa che fa scattare il fine-frase).
+**Library from the jsdelivr CDN** (onnxruntime-web 1.22.0 + vad-web 0.0.29), like jszip/pdf.js: needs network on the **first** VAD start, then cached. For fully offline use: serve the `.onnx`/`.wasm`/worklet files from Selmo and point `baseAssetPath`/`onnxWASMBasePath` locally. `redemptionMs` left at the default 1400 ms (the pause length that triggers end-of-utterance).
 
 ---
 

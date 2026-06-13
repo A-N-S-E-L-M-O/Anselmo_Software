@@ -3,6 +3,11 @@
 
 ---
 
+> **Project language (strict / mandatory): ENGLISH.**
+> All documentation, code comments, commit messages, and in-file content are written in English — no exceptions. This applies to every file in the project (`selmo-dev.md`, `selmo-bug-report.md`, this manifesto, code comments, etc.). Conversation with Fabio can be in any language; the project artifacts are always English.
+
+---
+
 ## What Selmo is
 
 A local, private, European AI assistant, rooted in a narrative universe no one else has.
