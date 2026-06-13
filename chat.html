@@ -428,7 +428,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.802</div>
+  <div class="hbadge">v0.803</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -917,6 +917,7 @@ renderSessionList();
         const _ct=(typeof p?.chat_template==='string')?p.chat_template:'';
         REASON_FIRST=_ct.includes('<think>')&&_ct.lastIndexOf('<think>')>_ct.lastIndexOf('</think>');
         console.log('Selmo reasoning-first:',REASON_FIRST);
+        if(REASON_FIRST)applyReasonLock();
         const nCtx=p?.default_generation_settings?.n_ctx||p?.n_ctx||0;
         if(nCtx>=1024){N_CTX=nCtx;
           const RESERVED=400;       // system prompt tokens
@@ -2074,8 +2075,23 @@ function setThinkEnabled(on){
   btn.title=on?'Extended reasoning ON/OFF':'Not available during chunking';
   if(!on&&IS_THINK_ON){IS_THINK_ON=false;btn.classList.remove('on');btn.textContent='THINK';
     chatHistory[0].content=SP_SELMO;}
+  if(on&&REASON_FIRST)applyReasonLock();   // keep the lock after chunking re-enables the button
+}
+// Reasoning-first models (Olmo Think) always reason: force the THINK toggle
+// visibly active (●) but greyed and locked — clicking does nothing.
+function applyReasonLock(){
+  const btn=document.getElementById('think-btn');
+  if(!btn||!REASON_FIRST)return;
+  IS_THINK_ON=false;                 // no THINK_INSTR: Olmo reasons natively in <think>, not [THINK]
+  btn.classList.remove('on');        // grey/locked look, not the cyan active glow
+  btn.textContent='THINK ●';
+  btn.disabled=true;
+  btn.style.opacity='.5';
+  btn.style.cursor='not-allowed';
+  btn.title='This model always reasons';
 }
 function toggleThink(){
+  if(REASON_FIRST)return;            // locked on for reasoning-first models
   IS_THINK_ON=!IS_THINK_ON;
   chatHistory[0].content=IS_THINK_ON?(SP_SELMO+THINK_INSTR):SP_SELMO;
   const btn=document.getElementById('think-btn');

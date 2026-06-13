@@ -1,5 +1,11 @@
 # Selmo — Development documentation
-*Updated session 16 · 2026-06-13 · v0.802*
+*Updated session 16 · 2026-06-13 · v0.803*
+
+---
+
+## v0.803 — THINK toggle locked for reasoning-first models (session 16 cont.)
+
+For reasoning-first models (`REASON_FIRST`, e.g. Olmo 3 Think) the THINK button is forced visibly active (`THINK ●`) but greyed and non-clickable: the model always reasons, so the toggle has nothing to switch. `applyReasonLock()` sets the locked look (no cyan `.on` glow, `opacity .5`, `cursor:not-allowed`, `disabled`) and keeps `IS_THINK_ON=false`, so `THINK_INSTR` — which targets Magistral's `[THINK]` format — is never injected; Olmo reasons natively in `<think>`. `toggleThink()` early-returns when `REASON_FIRST`, and `setThinkEnabled` re-applies the lock after a chunking run re-enables the button. Normal models are unchanged: `REASON_FIRST` false → fully toggleable as before.
 
 ---
 
