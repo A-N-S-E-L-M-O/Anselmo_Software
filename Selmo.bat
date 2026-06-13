@@ -36,14 +36,17 @@ if exist "%INI%" (
     )
 )
 
-:: ---- Scan models (exclude mmproj), resolve each one from the ini ----
+:: ---- Scan models recursively (subfolders, LM Studio style), exclude mmproj ----
+::   each model remembers its own folder, so its mmproj is just the
+::   *mmproj*.gguf sitting next to it -- no name matching, nothing to rename.
 set count=0
-for %%F in ("models\*.gguf") do (
+for /r "%~dp0models" %%F in (*.gguf) do (
     echo %%~nxF | findstr /i "mmproj" >nul
     if errorlevel 1 (
         set /a count+=1
         set "model_!count!=%%~nxF"
         set "modelpath_!count!=%%~fF"
+        set "modeldir_!count!=%%~dpF"
         call :lookup "%%~nxF" !count!
     )
 )
@@ -79,19 +82,10 @@ if "!MODELFILE!"=="" (
     exit /b 1
 )
 
-:: mmproj auto-detection (multimodal vision)
+:: mmproj auto-detection: the *mmproj*.gguf in the SAME folder as the model
 set "MMPROJ_FILE="
-for %%F in ("models\*mmproj*.gguf") do (
-    if not defined MMPROJ_FILE (
-        set "mp_name=%%~nxF"
-        set "mp_path=%%~fF"
-        set "mp_key=!mp_name:mmproj-=!"
-        set "mp_key=!mp_key:~0,10!"
-        echo !MODELNAME! | findstr /i /c:"!mp_key!" >nul
-        if not errorlevel 1 (
-            set "MMPROJ_FILE=!mp_path!"
-        )
-    )
+for %%F in ("!modeldir_%selected%!*mmproj*.gguf") do (
+    if not defined MMPROJ_FILE if exist "%%~fF" set "MMPROJ_FILE=%%~fF"
 )
 
 :: Per-model defaults (resolved from selmo-models.ini; lower -ngl if VRAM is short)

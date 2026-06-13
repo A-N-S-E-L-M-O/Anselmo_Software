@@ -1,5 +1,14 @@
 # Selmo — Development documentation
-*Updated session 16 · 2026-06-13 · v0.808*
+*Updated session 16 · 2026-06-13 · v0.809*
+
+---
+
+## v0.809 — model folders (LM Studio style) + vision output no longer capped at 1200 (session 16 cont.)
+
+- **Models by folder.** `Selmo.bat` now scans `models\` **recursively** (`for /r`), and each model remembers its own folder (`modeldir_N`). The mmproj is auto-detected as the `*mmproj*.gguf` in the **same folder** as the chosen model (guarded by `if exist`), replacing the old name-key heuristic that broke on generic names like `mmproj-BF16.gguf`. Drop a model + its mmproj in a subfolder (e.g. `models\Qwen3.6-35B-A3B\`) and vision works with no renaming. Flat models in `models\` still work.
+- **Vision output cap fixed.** `maxTok()` returned a flat `1200` whenever the message was multimodal — so vision answers truncated at exactly 1200 tokens (`finish_reason: length`, mistaken for a freeze). Now it reserves ~1300 tok per image + 800 headroom and gives the rest of the context to the answer, capped at 8000. With ctx 16384 + one image the answer can reach 8000 instead of 1200. Image content shape confirmed: `[{type:'image_url',...}, {type:'text',...}]`.
+
+chat.html via Python only; `node --check` passes. **Qwen vision note:** Qwen3.6-35B-A3B is natively multimodal — the mmproj (`mmproj-BF16.gguf`) is in the same unsloth repo as the GGUF, no separate VL model needed. llama.cpp vision for it is still fresh (a segfault-on-image report exists upstream), so test before trusting.
 
 ---
 

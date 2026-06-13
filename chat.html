@@ -438,7 +438,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.808</div>
+  <div class="hbadge">v0.809</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -1034,7 +1034,12 @@ function maxTok(){
   try{
     for(let i=chatHistory.length-1;i>=0;i--){
       if(chatHistory[i].role==='user'){
-        if(Array.isArray(chatHistory[i].content)) return 1200; // vision: reserve ctx for image tokens
+        if(Array.isArray(chatHistory[i].content)){
+          // vision: reserve ~1300 tok per image (encoder budget) + prompt headroom,
+          // give the rest of the context to the answer (was a flat 1200 cap)
+          const imgs=chatHistory[i].content.filter(p=>p&&p.type==='image_url').length||1;
+          return Math.min(8000,Math.max(1024,Math.floor(N_CTX-imgs*1300-800)));
+        }
         break;
       }
     }
