@@ -428,7 +428,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.801</div>
+  <div class="hbadge">v0.802</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -914,6 +914,9 @@ renderSessionList();
 
       // Reads the real n_ctx and calibrates CHUNK_SIZE on the active model
       fetch(`${API}/props`).then(r=>r.json()).then(p=>{
+        const _ct=(typeof p?.chat_template==='string')?p.chat_template:'';
+        REASON_FIRST=_ct.includes('<think>')&&_ct.lastIndexOf('<think>')>_ct.lastIndexOf('</think>');
+        console.log('Selmo reasoning-first:',REASON_FIRST);
         const nCtx=p?.default_generation_settings?.n_ctx||p?.n_ctx||0;
         if(nCtx>=1024){N_CTX=nCtx;
           const RESERVED=400;       // system prompt tokens
@@ -934,6 +937,7 @@ renderSessionList();
 // Thinking flag and instruction for reasoning models (updated on model detect)
 let IS_THINK_ON=false;
 let IS_WEB_ON=false; // reasoning toggle — off di default
+let REASON_FIRST=false; // model opens <think> in its prompt template (Olmo): stream starts in reasoning
 const THINK_INSTR='\n\nFirst draft your thinking process (inner monologue) until you arrive at a response. Format your response using Markdown. Write both your thoughts and the response in the same language as the input.\n\nYour thinking process must follow the template below:[THINK]Your thoughts or/and draft, like working through an exercise on scratch paper. Be as casual and as long as you want until you are confident to generate the response. Use the same language as the input.[/THINK]Here, provide a self-contained response.';
 
 // SYSTEM PROMPTS
@@ -1334,18 +1338,23 @@ function stopMsg(){if(abort){abort.abort();abort=null;}}
 // (reasoning models like Gemma write the reasoning in reasoning_content).
 async function streamTokens(res,onContent,onReason){
   const reader=res.body.getReader(),dec=new TextDecoder();
-  let buf='',tb='',inTk=false;
-  const OPEN='[THINK]',CLOSE='[/THINK]',ML=CLOSE.length;
+  // inTk starts true for reasoning-first models (Olmo opens <think> in its
+  // prompt template, so the stream begins inside the reasoning block and only
+  // ever emits the closing tag). REASON_FIRST is detected from /props.
+  let buf='',tb='',inTk=REASON_FIRST;
+  // Two tag families: Magistral [THINK]/[/THINK], Olmo <think>/</think>.
+  const OPENS=['[THINK]','<think>'],CLOSES=['[/THINK]','</think>'],HOLD=7; // longest tag is 8 chars
+  function firstOf(str,arr){let bi=-1,bl=0;for(const t of arr){const i=str.indexOf(t);if(i!==-1&&(bi===-1||i<bi)){bi=i;bl=t.length;}}return{i:bi,len:bl};}
   function flush(){
     while(tb.length>0){
       if(!inTk){
-        const i=tb.indexOf(OPEN);
-        if(i===-1){const s=tb.slice(0,Math.max(0,tb.length-(ML-1)));if(s){onContent(s);tb=tb.slice(s.length);}break;}
-        if(i>0)onContent(tb.slice(0,i));tb=tb.slice(i+OPEN.length);inTk=true;
+        const m=firstOf(tb,OPENS);
+        if(m.i===-1){const s=tb.slice(0,Math.max(0,tb.length-HOLD));if(s){onContent(s);tb=tb.slice(s.length);}break;}
+        if(m.i>0)onContent(tb.slice(0,m.i));tb=tb.slice(m.i+m.len);inTk=true;
       }else{
-        const i=tb.indexOf(CLOSE);
-        if(i===-1){const s=tb.slice(0,Math.max(0,tb.length-(ML-1)));if(s&&onReason){onReason(s);tb=tb.slice(s.length);}break;}
-        if(i>0&&onReason)onReason(tb.slice(0,i));tb=tb.slice(i+CLOSE.length);inTk=false;
+        const m=firstOf(tb,CLOSES);
+        if(m.i===-1){const s=tb.slice(0,Math.max(0,tb.length-HOLD));if(s&&onReason){onReason(s);tb=tb.slice(s.length);}break;}
+        if(m.i>0&&onReason)onReason(tb.slice(0,m.i));tb=tb.slice(m.i+m.len);inTk=false;
       }
     }
   }
@@ -1358,7 +1367,7 @@ async function streamTokens(res,onContent,onReason){
       if(!line.startsWith('data:'))continue;
       const raw=line.slice(5).trim();if(!raw||raw==='[DONE]')continue;
       try{const dl=JSON.parse(raw).choices?.[0]?.delta||{};
-        if(dl.reasoning_content&&onReason){onReason(dl.reasoning_content);}  // Gemma: reasoning_content
+        if(dl.reasoning_content&&onReason){inTk=false;onReason(dl.reasoning_content);}  // Gemma: reasoning_content (disarm implicit-open)
         else if(dl.content){tb+=dl.content;flush();}                          // Magistral: [THINK]...[/THINK] nel content
       }catch{}
     }

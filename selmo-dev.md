@@ -1,5 +1,15 @@
 # Selmo — Development documentation
-*Updated session 16 · 2026-06-13 · v0.801*
+*Updated session 16 · 2026-06-13 · v0.802*
+
+---
+
+## v0.802 — reasoning panel for Olmo Think / `<think>` tags (session 16 cont.)
+
+`streamTokens` now separates the reasoning for **two tag families**: Magistral's `[THINK]…[/THINK]` (unchanged) and Olmo's `<think>…</think>`. It also handles **reasoning-first** models: Olmo 3 Think's chat template opens `<think>` in the generation prompt, so the stream begins *inside* the reasoning block and only ever emits the closing `</think>` (confirmed in `selmo-llama.log`: `example_format` ends with `<think>`). A `REASON_FIRST` flag, detected at startup from the chat template exposed by `/props` (true when the template has an unclosed `<think>` opening: `lastIndexOf('<think>') > lastIndexOf('</think>')`), makes the parser start in reasoning state. A `console.log('Selmo reasoning-first:', …)` reports the detected value.
+
+The flush state machine was generalised: `OPENS=['[THINK]','<think>']`, `CLOSES=['[/THINK]','</think>']`, picking whichever marker appears first, with a 7-char hold-back (longest tag is 8 chars) to survive a tag split across SSE chunks.
+
+**Safeguards — Magistral and Gemma untouched.** Magistral's template uses `[THINK]` so `REASON_FIRST` stays false and the initial state is identical to before. Gemma streams its reasoning out-of-band in `reasoning_content`; receiving that delta now also forces `inTk=false`, disarming the implicit-open so Gemma's final answer can never land in the panel. Verified with `node --check`.
 
 ---
 
