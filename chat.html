@@ -428,7 +428,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.805</div>
+  <div class="hbadge">v0.806</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -1749,7 +1749,7 @@ async function sendMsg(){
       const tp=makeThinkPanel(inner);
       await streamTokens(res,
         c=>{full+=c;t++;_genTok++;bub.textContent=full;scrollBot();},
-        r=>{rthink+=r;tp.append(r);});
+        r=>{if(!rthink)markThinking();rthink+=r;tp.append(r);});
       tp.seal();
       bub.innerHTML=marked.parse(full);
       toks+=t;localStorage.setItem('stoks',toks);
@@ -1812,7 +1812,7 @@ async function sendMsg(){
     const tp=makeThinkPanel(inner);
     await streamTokens(res,
       c=>{full+=c;t++;_genTok++;bub.textContent=full;scrollBot();},
-      r=>{rthink+=r;tp.append(r);});
+      r=>{if(!rthink)markThinking();rthink+=r;tp.append(r);});
     tp.seal();
     bub.innerHTML=marked.parse(full);
     toks+=t;localStorage.setItem('stoks',toks);
@@ -2129,6 +2129,14 @@ function announceModel(startupOnly){
   info.style.cssText='margin-top:5px;font-size:11px;opacity:.6';
   info.textContent=modelInfoLine();
   r.inner.appendChild(info);
+}
+// The model started reasoning during the stream: the model is in charge, so
+// reflect it on the button even if the user had turned THINK off (or we hid it).
+function markThinking(){
+  THINK_CAPABLE=true; IS_THINK_ON=true;
+  const btn=document.getElementById('think-btn');
+  if(btn){btn.style.display='';btn.classList.add('on');btn.textContent='THINK ●';}
+  syncThinkPrompt();
 }
 function toggleThink(){
   IS_THINK_ON=!IS_THINK_ON;

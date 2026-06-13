@@ -1,5 +1,11 @@
 # Selmo — Development documentation
-*Updated session 16 · 2026-06-13 · v0.805*
+*Updated session 16 · 2026-06-13 · v0.806*
+
+---
+
+## v0.806 — THINK button follows the model's reasoning (session 16 cont.)
+
+If the model starts emitting reasoning mid-stream, the THINK button now re-activates itself even if the user had turned it off (or we had hidden it): the model is in charge, so the UI reflects the truth. New `markThinking()` is called on the first reasoning token in both chat send paths (text + image): it sets `THINK_CAPABLE=true`, `IS_THINK_ON=true`, reveals the button, marks it `on` (`THINK ●`), and runs `syncThinkPrompt()`. Idempotent (gated on the first token via `if(!rthink)`). Chunking is untouched. Verified with `node --check`.
 
 ---
 
