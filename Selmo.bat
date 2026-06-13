@@ -1,10 +1,10 @@
 @echo off
 setlocal enabledelayedexpansion
-title Selmo -- IA Locale
+title Selmo -- Local AI
 
 cd /d "%~dp0"
 
-:: Scansione modelli (escludi mmproj)
+:: Scan models (exclude mmproj)
 set count=0
 for %%F in ("models\*.gguf") do (
     echo %%~nxF | findstr /i "mmproj" >nul
@@ -16,36 +16,36 @@ for %%F in ("models\*.gguf") do (
 )
 
 if %count%==0 (
-    echo  ERRORE: nessun file .gguf trovato in models\
-    echo  Scarica un modello e copialo nella cartella models\
+    echo  ERROR: no .gguf file found in models\
+    echo  Download a model and copy it into the models\ folder
     pause
     exit /b 1
 )
 
-:: Menu selezione
+:: Selection menu
 if %count%==1 (
     set "selected=1"
-    echo  Un solo modello trovato: !model_1!
+    echo  Only one model found: !model_1!
     echo.
 ) else (
-    echo  Modelli disponibili:
+    echo  Available models:
     echo.
     for /l %%i in (1,1,%count%) do (
         echo    [%%i] !model_%%i!
     )
     echo.
-    set /p "selected=  Scegli il modello [1-%count%]: "
+    set /p "selected=  Choose the model [1-%count%]: "
 )
 
 set "MODELFILE=!modelpath_%selected%!"
 set "MODELNAME=!model_%selected%!"
 if "!MODELFILE!"=="" (
-    echo  Scelta non valida.
+    echo  Invalid choice.
     pause
     exit /b 1
 )
 
-:: Auto-detection mmproj (visione multimodale)
+:: mmproj auto-detection (multimodal vision)
 set "MMPROJ_FILE="
 for %%F in ("models\*mmproj*.gguf") do (
     if not defined MMPROJ_FILE (
@@ -60,20 +60,25 @@ for %%F in ("models\*mmproj*.gguf") do (
     )
 )
 
-:: No forcing: offload all layers to GPU; ctx 0 = let the model decide (training ctx)
+:: Runtime parameters -- defaults are pre-filled; press ENTER to keep or type a new value
 set NGL=99
+set /p "NGL=  GPU layers (-ngl) [!NGL!]: "
 set CTX=8192
+set /p "CTX=  Context window (--ctx) [!CTX!]: "
+echo.
+echo  Starting: NGL=!NGL!  CTX=!CTX!
+echo.
 
-:: Avvio backend -- unica finestra, tutto muore alla chiusura
+:: Start backend -- single window, everything dies on close
 if defined MMPROJ_FILE (
     python "%~dp0selmo_server.py" --model "!MODELFILE!" --ngl %NGL% --ctx %CTX% --mmproj "!MMPROJ_FILE!"
 ) else (
     python "%~dp0selmo_server.py" --model "!MODELFILE!" --ngl %NGL% --ctx %CTX%
 )
 
-:: Se python esce con errore, tieni la finestra aperta
+:: If python exits with an error, keep the window open
 if errorlevel 1 (
     echo.
-    echo  ERRORE - premi un tasto per chiudere.
+    echo  ERROR - press a key to close.
     pause >nul
 )

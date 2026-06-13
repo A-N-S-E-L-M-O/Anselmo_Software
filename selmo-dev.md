@@ -1,5 +1,11 @@
 # Selmo — Development documentation
-*Updated session 16 · 2026-06-13 · v0.800*
+*Updated session 16 · 2026-06-13 · v0.801*
+
+---
+
+## v0.801 — launcher runtime prompt for ngl/ctx (session 16 cont.)
+
+`Selmo.bat` no longer hardcodes `-ngl`/`--ctx`. After the model is chosen it prompts for both, with the defaults pre-filled (`99` / `8192`) — press ENTER to keep or type a new value. This makes it easy to test different models and GPUs without editing the file. See the rewritten "Server parameters" section for details and the rationale (file size does not predict speed; `block_count` does). `Selmo.bat` was also fully translated to English per the project language rule.
 
 ---
 
@@ -142,18 +148,52 @@ Kokoro link: https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-file
 
 ---
 
-## Server parameters — adaptive launcher logic
+## Credits & licenses
 
-Based on the size of the .gguf file. Updated in session 8 with a 9000MB threshold to separate 13B from 22-24B (the KV cache overflows at 16384 ctx with 11GB free VRAM — verified on Mistral Small 3.2 24B IQ3_M).
+Third-party components and their licenses (for publication / attribution). All are open source; the permissive ones (MIT / Apache 2.0 / BSD / ISC / OFL) impose no copyleft on Selmo's own code.
 
-| File range | Typical models | -ngl | --ctx-size |
-|---|---|---|---|
-| < 6000 MB | ~9B | 99 | 4096 |
-| 6000–9000 MB | ~13B | 99 | 16384 |
-| 9000–13000 MB | 22-24B | 45 | 8192 |
-| > 13000 MB | >30B | 30 | 8192 |
+| Component | Role | License |
+|---|---|---|
+| llama.cpp | LLM runtime (server + CUDA) | MIT |
+| faster-whisper | STT engine | MIT |
+| CTranslate2 | faster-whisper backend | MIT |
+| Whisper model (OpenAI) | STT weights | MIT |
+| Kokoro / kokoro-onnx | neural TTS | Apache 2.0 |
+| onnxruntime / onnxruntime-web | ONNX inference (VAD + Kokoro) | MIT |
+| @ricky0123/vad-web | browser VAD library | ISC |
+| Silero VAD (`silero_vad.onnx`) | VAD model weights | MIT |
+| Flask | Python web bridges | BSD-3-Clause |
+| requests | HTTP client | Apache 2.0 |
+| trafilatura | web text extraction | Apache 2.0 (≥ v1.8.0; GPLv3+ before) |
+| langdetect | TTS language auto-detect | Apache 2.0 |
+| pynvml | GPU watt monitor | BSD-3-Clause |
+| soundfile | WAV encoding | BSD-3-Clause |
+| Podman | container engine (for SearXNG) | Apache 2.0 |
+| SearXNG | local metasearch | AGPL-3.0 — see note |
+| JSZip | client-side zip (docx/odt/pptx) | MIT or GPLv3 (dual) |
+| SheetJS (xlsx) | spreadsheet parsing | Apache 2.0 |
+| PDF.js | PDF text/render | Apache 2.0 |
+| marked | Markdown rendering | MIT |
+| Share Tech Mono | UI font | SIL Open Font License (OFL) |
 
-**⚠ Known limit (s14): fixed NGL vs number of layers.** The 9000–13000 band uses `NGL=45`, implicitly tuned on the **40 layers** of Mistral-Small-24B (45≥40 → everything on the GPU, 33 t/s). But **EuroLLM-22B has 54 layers**: with NGL=45, **9 layers stay on the CPU** → 6 t/s. The file size (MB) is **not** enough to predict speed: what counts is the GGUF's `block_count`. A "small" 22B on disk can have more layers than a 24B. To make EuroLLM-22B fly you'd need a higher NGL with reduced ctx (it still stays at the 12GB limit). Not fixed in s14 (decided to bet on Magistral as the replacement).
+**AGPL note (SearXNG):** SearXNG runs as a **separate process** in its own Podman container, reached over HTTP. Selmo neither bundles nor links its code, so the AGPL copyleft does not extend to Selmo's source. It stays an optional, swappable local service (the web bridge falls back to DuckDuckGo if it is down). For a publication that ships SearXNG, keep it as a separate container and point users to its upstream repo.
+
+**Not-EU but open (transparency note):** Silero (VAD), onnxruntime (Microsoft), Whisper (OpenAI), JSZip/SheetJS/PDF.js are open source but not European — neutral with respect to the manifesto's "European AI" stance, like the other US-origin client libraries already in use.
+
+---
+
+## Server parameters — runtime prompt (ngl + ctx)
+
+Current behavior (v0.801): `Selmo.bat` no longer derives `-ngl` / `--ctx` from the file size. After the model is chosen it **prompts** for both, with the defaults pre-filled — press ENTER to keep them or type a new value:
+
+```
+  GPU layers (-ngl) [99]:
+  Context window (--ctx) [8192]:
+```
+
+Defaults: `NGL=99` (offload every layer to the GPU) and `CTX=8192`. The chosen values are passed straight to `selmo_server.py --ngl --ctx`. The 8192 default comes from the v0.714 OOM lesson: `CTX=0` (the model's training context, 32K+) made Magistral allocate a ~20 GB KV cache on a 12 GB GPU. 8192 is the safe ceiling for 22-24B models on the RTX 4070 Ti; smaller models can take more, which is exactly why the value is now asked at launch instead of hardcoded.
+
+**Why a prompt instead of file-size bands (superseded heuristic).** Up to s16 the launcher picked `-ngl` / `--ctx` from the `.gguf` size (bands like <6000 MB → ngl 99 / ctx 4096, 9000-13000 MB → ngl 45 / ctx 8192, etc.). That heuristic was wrong: file size (MB) does not predict speed — the GGUF's `block_count` (layer count) does. EuroLLM-22B has **54 layers**, so a fixed `NGL=45` left 9 layers on the CPU → 6 t/s; Mistral-Small-24B has **40 layers**, so the same NGL=45 ran fully on the GPU → 33 t/s, despite near-identical size on disk. Rather than keep guessing, NGL/CTX are now chosen at launch for the specific model + GPU. Possible future step: auto-detect free VRAM via `nvidia-smi` and read `block_count` from the GGUF to suggest the values.
 
 **Thinking models and context window — s9 decision.** The launcher does NOT change the window for reasoning models: it keeps the GPU full and `ctx 8192` for all. Reason: the workflow is chunking-based, so every piece is already small and a large ctx isn't needed; on top of that, long contexts usually hurt quality and cost speed. The priority is to use the GPU to the max, not to have a wide window. Room for the reasoning tokens is reserved on the client side in `chunk_pipeline.py` with `--thinking-buffer` (default 0; 800+ for reasoning): it slightly reduces the chunk size, leaving margin for thinking, at the same server ctx. Wrong path discarded in s9: in the launcher we tried (a) lowering `-ngl` from 45 to 35 to fit ctx 16384 → Gemma collapsed from 22 to 8 t/s; (b) using a q8_0 KV cache to keep ctx 16384 at full GPU → useless/counterproductive with chunking anyway. Rule: never sacrifice `-ngl`, and don't widen the server ctx for thinking — handle it in the pipeline.
 
@@ -346,37 +386,4 @@ Sources: ai.google.dev/gemma/docs/capabilities/vision · dev.to/someoddcodeguy "
 **Goal:** natural voice conversation — tap mic once, speak, VAD detects end of speech, sends to Whisper, model replies via TTS Kokoro, returns to listening.
 
 **Approach:** [`@ricky0123/vad`](https://www.npmjs.com/package/@ricky0123/vad) — Silero VAD compiled to ONNX, runs entirely in the browser via WebAssembly (onnxruntime-web).
-- Load lib from CDN + `silero_vad.onnx` (~2MB) served by Selmo.
-- Callbacks: `onSpeechStart` / `onSpeechEnd(blob)` → blob sent directly to Whisper port 8083.
-- Silero VAD: 88% TPR at 5% FPR vs 50% for browser-native WebRTC VAD.
-- After transcription → auto-send → Kokoro TTS reads reply → back to listening.
-- Requires the HTTPS proxy to be active (getUserMedia needs secure context on mobile).
-- Latency budget: Whisper ~500ms on short clips (4070 Ti) — acceptable for conversation.
-
----
-
-## Next steps (s14 roadmap)
-
-### 1. Clean lifecycle — no orphan windows, purge on shutdown
-Problem: `Selmo.bat` opens 4 Python services (GPU monitor 8082, web 8081, whisper 8083, TTS 8084) with `start /min`, each in a window that stays open and must be closed by hand when the main task stops. Ugly and inconvenient.
-Goal: hidden backend + **full purge** when `llama-server` (the main process) stops.
-Approach:
-- Start the bridges **without a window**: `pythonw.exe` (no console) or `start /b`, instead of `start /min`.
-- Track the PIDs at startup and, when llama-server closes, do cleanup (`taskkill` the 4 services). In `Selmo.bat` the cleanup goes after the server block (foreground), before the `pause`.
-- Cleaner alternative: a single orchestrator (`selmo_launch.py` via pythonw) that spawns the subprocesses + llama-server, waits, and kills the children on exit. SearXNG (Podman) stays outside, it's separate.
-
-### 2. Responsive UI / phone use
-Status: the server is already reachable on the local network (tested from another device — it works), but the UI doesn't adapt.
-Goal: usable from a phone and at small window sizes.
-Approach:
-- Media queries: below a useful width threshold (~800×600) stack the 3 columns (history / chat / dashboard) into one; larger touch targets.
-- SVG speedometer → at small windows replace it with a **horizontal bar** (linear gauge) for the watts; compact the Wh odometer, cost, tokens.
-- Collapsible dashboard on mobile to give room to the chat.
-- Viewport meta already present; the adaptive CSS is missing.
-
----
-
-## Session history
-
-### Session 1-3
-Initial setup. ll
+- Load lib from CDN + `silero_vad.onnx` (~2MB) serve
