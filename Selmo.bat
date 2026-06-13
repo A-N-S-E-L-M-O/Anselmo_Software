@@ -23,12 +23,14 @@ if exist "%INI%" (
                         if /i "%%A"=="ngl"  set "def_ngl=%%B"
                         if /i "%%A"=="ctx"  set "def_ctx=%%B"
                         if /i "%%A"=="max"  set "def_max=%%B"
-                        if /i "%%A"=="note" set "def_note=%%B" & if /i "%%A"=="cpumoe" set "def_cpumoe=%%B"
+                        if /i "%%A"=="note"   set "def_note=%%B"
+                        if /i "%%A"=="cpumoe" set "def_cpumoe=%%B"
                     ) else if defined curIdx (
                         if /i "%%A"=="ngl"  set "sngl_!curIdx!=%%B"
                         if /i "%%A"=="ctx"  set "sctx_!curIdx!=%%B"
                         if /i "%%A"=="max"  set "smax_!curIdx!=%%B"
-                        if /i "%%A"=="note" set "snote_!curIdx!=%%B" & if /i "%%A"=="cpumoe" set "scpumoe_!curIdx!=%%B"
+                        if /i "%%A"=="note"   set "snote_!curIdx!=%%B"
+                        if /i "%%A"=="cpumoe" set "scpumoe_!curIdx!=%%B"
                     )
                 )
             )
@@ -130,7 +132,8 @@ set "li=%~2"
 set "ngl_%li%=!def_ngl!"
 set "ctx_%li%=!def_ctx!"
 set "max_%li%=!def_max!"
-set "note_%li%=!def_note!" & set "cpumoe_%li%=!def_cpumoe!"
+set "note_%li%=!def_note!"
+set "cpumoe_%li%=!def_cpumoe!"
 set "hit=0"
 for /l %%s in (1,1,%secN%) do (
     if "!hit!"=="0" (

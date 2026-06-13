@@ -739,7 +739,7 @@ function setOdo(v){
 }
 
 // STATE
-let gen=false,abort=null,tokSec=0,_genT0=0,_genTok=0,_tokScale=20,wh=0,whAll=parseFloat(localStorage.getItem('swh')||'0'),
+let gen=false,abort=null,tokSec=0,_genT0=0,_genTok=0,_tokScale=100,wh=0,whAll=parseFloat(localStorage.getItem('swh')||'0'),
     chunks=[],chunkIdx=0,
     price=parseFloat(localStorage.getItem('sprice')||'0.28'),
     toks=parseInt(localStorage.getItem('stoks')||'0'),
@@ -796,7 +796,6 @@ async function poll(){
   document.getElementById('wh-total').textContent=whAll.toFixed(3);
   updCost();
   document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
-  if(gen&&tokSec>_tokScale*.95)_tokScale=Math.ceil(tokSec*1.2/10)*10;
   {const sf=document.getElementById('speed-fill');
   sf.style.width=Math.min((tokSec/_tokScale)*100,100)+'%';
   sf.style.background=tokSec>0?(tokSec<10?'#ff4444':tokSec<20?'#ffcc00':'var(--cyan)'):'var(--cyan)';}
@@ -1545,7 +1544,7 @@ async function processDoc(prompt){
       const tp=makeThinkPanel(prog.inner);
       await streamTokens(res,
         c=>{full+=c;t++;_genTok++;prog.bub.textContent=full;scrollBot();},
-        r=>{tp.append(r);});
+        r=>{_genTok++;tp.append(r);});
       tp.seal();
       toks+=t;localStorage.setItem('stoks',toks);
       document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
@@ -1816,7 +1815,7 @@ async function sendMsg(){
       const tp=makeThinkPanel(inner);
       await streamTokens(res,
         c=>{full+=c;t++;_genTok++;bub.textContent=full;scrollBot();},
-        r=>{if(!rthink)markThinking();rthink+=r;tp.append(r);});
+        r=>{_genTok++;if(!rthink)markThinking();rthink+=r;tp.append(r);});
       tp.seal();
       bub.innerHTML=marked.parse(full);
       toks+=t;localStorage.setItem('stoks',toks);
@@ -1879,7 +1878,7 @@ async function sendMsg(){
     const tp=makeThinkPanel(inner);
     await streamTokens(res,
       c=>{full+=c;t++;_genTok++;bub.textContent=full;scrollBot();},
-      r=>{if(!rthink)markThinking();rthink+=r;tp.append(r);});
+      r=>{_genTok++;if(!rthink)markThinking();rthink+=r;tp.append(r);});
     tp.seal();
     bub.innerHTML=marked.parse(full);
     toks+=t;localStorage.setItem('stoks',toks);
