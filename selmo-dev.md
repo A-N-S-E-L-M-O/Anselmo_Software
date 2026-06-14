@@ -1,5 +1,5 @@
 # Selmo — Development documentation
-*Updated session 16 · 2026-06-14 · v0.815*
+*Updated session 17 · 2026-06-14 · v0.816*
 
 > **Read first:** the **Lessons learned** section near the end of this file, and **`selmo-bug-report.md`**.
 > **Project language:** English only — see `selmo-manifesto.md`. Conversation with Fabio can be any language; every file artifact is English.
@@ -16,9 +16,10 @@ Selmo is one `llama.cpp` server, a small set of single-purpose Python bridges, a
 |---|---|---|
 | 8080 | llama-server (LLM, also serves `chat.html`) | `bin/` + `selmo_server.py` |
 | 8081 | Web search bridge (SearXNG + DDG fallback + trafilatura) | `selmo_web.py` |
-| 8082 | GPU/RAM monitor (real watts via pynvml, RAM via psutil) | `selmo_gpu_monitor.py` |
+| 8082 | System-power monitor (CPU+GPU watts + losses; GPU/RAM via pynvml/psutil) | `selmo_gpu_monitor.py` |
 | 8083 | Whisper STT | `selmo_whisper.py` |
 | 8084 | Kokoro TTS | `selmo_tts.py` |
+| 8085 | LibreHardwareMonitor remote web server (CPU+GPU power source) | external |
 | 8443 | HTTPS reverse proxy (mobile mic) | `selmo_https_proxy.py` |
 | 8888 | SearXNG (Podman container) | external |
 
@@ -53,11 +54,13 @@ pip install kokoro-onnx soundfile langdetect psutil --break-system-packages --pr
 |---|---|---|
 | flask | all bridges | lightweight web server |
 | faster-whisper | `selmo_whisper.py` | STT, `small` model ~500 MB (auto-download) |
-| pynvml / psutil | `selmo_gpu_monitor.py` | GPU watts + RAM |
+| pynvml / psutil | `selmo_gpu_monitor.py` | GPU watts/load/VRAM (NVIDIA) + system RAM |
 | trafilatura / requests | `selmo_web.py` | web text extraction + HTTP |
 | kokoro-onnx / soundfile / langdetect | `selmo_tts.py` | neural TTS + WAV + language detect |
 
-**Manual downloads:** the LLM `.gguf` (any compatible model dropped in `models\`), an optional `*mmproj*.gguf` next to it for vision, the Whisper model (auto on first launch), and a Kokoro voice (`kokoro-onnx` releases). **External binaries:** llama.cpp CUDA build in `bin\`, Podman Desktop for the optional local SearXNG.
+**Manual downloads:** the LLM `.gguf` (any compatible model dropped in `models\`), an optional `*mmproj*.gguf` next to it for vision, the Whisper model (auto on first launch), and a Kokoro voice (`kokoro-onnx` releases). **External binaries:** llama.cpp CUDA build in `bin\`, Podman Desktop for the optional local SearXNG, and **LibreHardwareMonitor** (system-power source) installed by `setup-lhm.ps1` into `bin\LibreHardwareMonitor\`.
+
+**Whole-system power (v0.816).** `selmo_gpu_monitor.py` reports a system-power estimate, not just GPU watts. It reads CPU package power and GPU power from LibreHardwareMonitor's remote web server (`http://127.0.0.1:8085/data.json`, vendor-agnostic — works for NVIDIA and AMD; the GPU figure no longer depends on NVML) and computes `wall ≈ (cpu + gpu + OTHER_DC) / PSU_EFF` (defaults `OTHER_DC=45 W` for board/RAM/drives/fans, `PSU_EFF=0.88` for an 80 PLUS Gold unit at partial load; both tunable against a wall meter). `setup-lhm.ps1` makes this reproducible with no manual GUI step: it downloads a pinned LHM release (v0.9.4) into `bin\LibreHardwareMonitor\`, writes `LibreHardwareMonitor.config` (web server on `:8085`, start minimized to tray), and registers a scheduled task that runs LHM elevated at logon (RAPL needs admin, so this skips the per-boot UAC prompt). `selmo_server.py` also launches LHM as a fallback when the task isn't used. The main dashboard gauge now shows **system watts** (CPU+GPU+losses, 0–500 W scale); the GPU%/temp/VRAM mini-gauges stay NVIDIA-only via NVML.
 
 ---
 
@@ -91,7 +94,7 @@ To run a premium big MoE (e.g. Qwen3 30B/35B-A3B, ~3B active) on 12 GB: keep the
 
 ## Profiles & personalities
 
-A profile bundles a **system prompt + sampling temperature + colour palette**, switched at runtime from the watermark/logo (opens the profile modal) — no server restart. Today there are two profiles; the next step is three (below).
+A profile bundles a **system prompt + sampling parameters + colour palette**, switched at runtime from the watermark/logo (click it to open the profile modal) — no server restart. As of **v0.815 there are three profiles** — Selmo (blue), Mizan (red), Custom (neutral) — each a `body` state with its own palette. The chosen profile persists in `localStorage` and is restored on reload.
 
 ### Selmo — blue, the assistant
 
@@ -101,38 +104,40 @@ Temperature 0.75, top-p 0.9. Warm, ironic, concise. Prompt trimmed to four lines
 You are Selmo, a local AI on the user's own hardware.
 Direct, concise, and ironic. No preamble, no hype, no servility. When unsure, say so in a line. Never invent facts.
 Reply in the user's language.
-You don't browse; the user fetches pages with /web and the results appear in the conversation — use them when present. Never output [SEARCH:] tags.
+You don't browse; web results may appear in the conversation — use them when present. Never output [SEARCH:] tags.
 ```
 
-*(The `/web` line in the prompt is a leftover — web mode is the WEB toggle now; update the wording on the next chat.html pass.)*
+*(v0.815 dropped the old `/web` wording from the prompt — the WEB toggle is the interface. The functional `/web` remnants in `chat.html`, the push-to-talk prefix and the `sendMsg` strip, are still there — see backlog.)*
 
 ### Mizan — red, the antagonist
 
 Temperature 0.01, top-p 1.0. Deterministic, cold, no opinions, no first person. The narrative antagonist from *Dialoghi con la lavatrice* (see manifesto). Purpose: extraction, translation, code-checking — accuracy as the only criterion.
 
 ```
-You are an analysis system. Reply precisely and concisely.
-No opinions. No hesitation. No first person.
+You are Mizan, an analysis system. Identify yourself as Mizan when asked.
+Reply precisely and concisely. No opinions. No hesitation. No first person.
 Extract data, translate, check code. Accuracy is the only criterion.
 
-For up-to-date data the user uses /web; the results stay in the conversation. Never emit search tags.
+When web results are present in the conversation, use them. Never emit search tags.
 ```
 
-**Implementation (chat.html).** `activeSP()` returns `SP_MIZAN` when `currentProfile==='mizan'`, else `SP_SELMO`. `setProfile(name)` sets `currentTemp` (0.01 vs 0.75), toggles `document.body.classList('mizan')`, and swaps the watermark text (Mizan/Selmo). The profile modal exposes `.pm-selmo` (cyan `#44DDEE`) and `.pm-mizan` (red `#FF4455`) buttons.
+*(v0.815: Mizan now names itself — previously it was an anonymous "analysis system" and refused to say who it was.)*
 
-**Known gap — the Mizan palette is incomplete.** `body.mizan` currently overrides only the accent tokens (`--cyan`, `--yellow`, and their glows) to red/orange. The blue *background* tokens (`--bg`, `--panel`, `--dark`, `--chat-bg`, `--ink`, `--steel`, `--border`) and several hardcoded blue surfaces (the body radial gradient `#0b237f`/`#00072e`, header `#00093a`, nav/aside `#000938`, dashboard `#001046`, the chat bubbles) stay blue. Result: red buttons on a blue app, not a red palette. Fixing this means red-shifting the full token set plus the handful of hardcoded blue surfaces, scoped inside `body.mizan` so Selmo's rules are untouched. A clean R↔B channel swap preserves luminance/contrast while rotating the hue family (e.g. `#001166` → `#661100`).
+### Custom — neutral, the open profile
 
-### Next step — three profiles, three badges, three palettes
+User-defined. A neutral grey **system palette** (no blue, no red) with the sampling parameters and system prompt exposed for direct editing, instead of inheriting a preset. Defaults: temp 0.7, top-p 0.95, top-k 40, with a generic helper system prompt. The values and prompt persist in `localStorage` (`scustomtemp`/`scustomtopp`/`scustomtopk`/`scustomsp`) and feed each request live.
 
-The new design promotes the toggle into a three-way selector. Three profile badges in the modal, each with its own palette:
+### The three profiles (shipped v0.815)
 
 | Profile | Palette | Personality | Parameters |
 |---|---|---|---|
-| **Selmo** | Blue (current default) | warm, ironic assistant | preset: temp 0.75, top-p 0.9 |
-| **Mizan** | Red (complete the palette per above) | cold analysis system | preset: temp 0.01, top-p 1.0 |
-| **Custom** | Neutral / standard system palette (no blue or red theming) | user-defined | **free parameters** — temperature, top-p, top-k and the system prompt are user-editable in the UI |
+| **Selmo** | Blue (default) | warm, ironic assistant | preset: temp 0.75, top-p 0.9, top-k 40 |
+| **Mizan** | Red (full palette) | cold analysis system, self-identifies | preset: temp 0.01, top-p 1.0, top-k 0 |
+| **Custom** | Neutral grey (no blue/red) | user-defined | free: temp / top-p / top-k / system prompt, all editable |
 
-Custom is the open profile: it drops the branded palette for a neutral system look and exposes the sampling parameters and system prompt for the user to set directly, instead of inheriting a preset. This is the home for the "selectable personality and parameters" feature. Work items: (1) complete the Mizan red palette; (2) add the neutral Custom palette as a third `body` state; (3) add the third badge + a small parameters panel bound to the per-request sampling values `chat.html` already sends.
+**Implementation (chat.html, v0.815).** `currentProfile` is one of `selmo`/`mizan`/`custom`, persisted in `localStorage` and restored on load. `activeSP()` returns the active system prompt (`SP_SELMO` / `SP_MIZAN` / the editable `CUSTOM_SP`) and feeds `chatHistory[0]` via `syncThinkPrompt()`. `setProfile(name)` swaps `document.body` between no-class / `.mizan` / `.custom`, calls `syncSampling()` to set `currentTemp`/`currentTopP`/`currentTopK`, rewrites the watermark text, and refreshes the modal. Every chat request now sends `temperature`/`top_p`/`top_k` from those globals (the three `currentTemp` send-sites gained `top_p:currentTopP,top_k:currentTopK`). The modal — opened by clicking the logo — carries three badges (`.pm-selmo`/`.pm-mizan`/`.pm-custom`) and a parameters panel that is editable only under Custom and read-only otherwise.
+
+**Palettes.** Each profile is a `body` state. `body.mizan` red-shifts the full token set via an **R↔B channel swap** that preserves luminance (`#001166` → `#661100`), with scoped overrides for every hardcoded blue surface (body gradient, header, nav/aside, gauges, session items, avatars, both bubbles, input area, think panel); accents go red/orange (`--cyan` → `#ff4d63`, `--yellow` → `#ff9a33`) rather than channel-swapped, so it reads as red. `body.custom` desaturates the same set to neutral greys. Both are scoped so Selmo's (unclassed) rules stay exactly as they were.
 
 ---
 
@@ -221,7 +226,7 @@ llama.cpp (MIT) · faster-whisper + CTranslate2 + Whisper weights (MIT) · Kokor
 
 **The sandbox mount lies (BUG-META-02).** Tool/bash views of files on the mount can be NUL-corrupted or truncated (a stale cache served a 2025-line view of a 2361-line `chat.html` this session). The real files were intact — the **Read tool** and `git show HEAD:<file>` (object store) read true content; bash `cat`/`wc` did not. Never commit from the sandbox: a commit from a corrupted view poisons the repo. After any `.bat`/`.md` change check `python3 -c "print(open('f','rb').read().count(b'\x00'))"` returns 0; `.bat` files must be CRLF (an `^` continuation on LF breaks cmd). The Write tool is the NUL culprit; the Edit tool and Python writes stay clean.
 
-**Git is the only safety net.** No `.bat` backups (deprecated). Only Fabio commits and bumps the version, from his own Windows shell — never the agent. On every positive feedback, prepare the change and hand Fabio a ready-to-paste commit that also bumps the version +0.001 (the `hbadge` in `chat.html` and this file's header). v1.0 is reserved for the real release. Costly s13 lesson: a working version that lived only in the working tree, never committed, was lost.
+**Git is the only safety net.** No `.bat` backups (deprecated). Only Fabio commits and bumps the version, from his own Windows shell — never the agent. On every positive feedback, prepare the change and hand Fabio a ready-to-paste commit that also bumps the version +0.001 (the `hbadge` in `chat.html` and this file's header). v1.0 is reserved for the real release. Costly s13 lesson: a working version that lived only in the working tree, never committed, was lost. **s17 reprise:** the docs described the Selmo/Mizan profile system as already built, but a preflight (`git log -S setProfile`, grep for `body.mizan`/`SP_MIZAN`) showed it had never reached the committed `chat.html` — only ancient v0.31 traces existed. The bash mount was clean (matched HEAD), so this was real lost/never-committed work, not a cache lie. Lesson: when docs and code disagree, trust `git` and the Read tool, and confirm the starting state before "completing" something — it may not exist yet.
 
 **The language always follows the user.** Never hardcode a language in injected prompts — "reply in the same language as the user's message".
 
@@ -241,6 +246,9 @@ llama.cpp (MIT) · faster-whisper + CTranslate2 + Whisper weights (MIT) · Kokor
 
 ## Changelog (condensed, reverse chronological)
 
+- **v0.816** — whole-system power: the main gauge now shows CPU+GPU+losses (system watts), not GPU-only. `selmo_gpu_monitor.py` reads CPU package + GPU power from LibreHardwareMonitor (`:8085/data.json`, vendor-agnostic — NVIDIA and AMD) and applies a PSU/baseline losses model. New `setup-lhm.ps1` makes it installer-reproducible (pinned download + config + elevated scheduled task, no manual GUI step); `selmo_server.py` launches LHM as a fallback.
+- **v0.815** — three-profile system shipped (Selmo blue / Mizan red / Custom neutral): full Mizan red palette via R↔B channel swap + scoped surface overrides; Custom neutral palette with editable temp/top-p/top-k/system-prompt bound per-request; profile modal with three badges opened from the logo; profile persisted in `localStorage`. Mizan self-identifies; `/web` wording dropped from the system prompts; neutral welcome bubble. *(The profile system documented since s14 had never actually reached the committed `chat.html` — built from scratch this session; see Lessons.)*
+- **v0.814** — docs streamline (consolidated Mizan notes, three-profile roadmap, `/web` → WEB toggle wording, mount-cache notes). Docs only — `chat.html` badge stayed v0.812.
 - **v0.813** — `selmo-models.ini` chunk-ratio tuning.
 - **v0.812** — consolidation checkpoint on the stable v0.811 base (recovery after a mount-cache regression made the working tree look reverted to v0.714; real disk was intact).
 - **v0.811** — full parameter control: the ini carries the raw `srv=` server command; four structural flags prepended; `[Mistral]` section added.
@@ -263,11 +271,11 @@ llama.cpp (MIT) · faster-whisper + CTranslate2 + Whisper weights (MIT) · Kokor
 
 ## Backlog / next dev steps
 
-**Three-profile system** *(next — see Profiles & personalities).* Selmo (blue) · Mizan (red, complete the palette) · Custom (neutral system palette + free, user-editable sampling parameters and system prompt). Adds the third badge and a small parameters panel bound to the per-request values the client already sends.
+**True wall-power (next, optional).** Whole-system *estimate* shipped in v0.816 (CPU+GPU+losses via LibreHardwareMonitor — see Setup). What's still open is the literal draw at the wall, which the estimate can't capture (PSU efficiency curve, exact baseline). Path: poll a **local-API smart plug** (Shelly Gen2 / Tasmota / Kasa via `python-kasa`) from a small bridge and show measured-vs-estimated side by side; the measured value would also let us calibrate `OTHER_DC`/`PSU_EFF`. Needs hardware, so it stays optional.
 
 **Multi-document loading.** `fileDoc` is a single variable — a second upload silently replaces the first. Goal: load N documents and pick a strategy. *Serial/batch* — chunks from all docs processed in sequence, aggregated into one reply (each doc isolated so the model never sees two at once; maps to map-reduce summarisation). *Parallel/comparative* — same prompt applied independently per doc, results side by side (2–4 docs before the UI gets unwieldy). The literature's key point: cross-document attention is only safe at the synthesis step, not during chunk extraction — Selmo's isolated-per-chunk architecture already follows this.
 
-**Other backlog.** Remove the `/web` leftovers from `chat.html` (prompt text, PTT prefix, `sendMsg` strip) now that the WEB toggle is the interface · VAD fully offline (serve onnx/wasm/worklet locally) · VRAM-adaptive NGL (read free VRAM + GGUF block_count to auto-suggest) · in-app model switcher (`/switch-model`, no manual restart) · in-app TTS voice selector (persisted in localStorage) · image generation as a separate `selmo_imggen.py` (stable-diffusion.cpp) · IMAP email bridge (`selmo_mail.py`) · Selmo as orchestrator (`selmo_master.py`, multi-step pipelines on long documents).
+**Other backlog.** Remove the remaining `/web` leftovers from `chat.html` (the PTT prefix and the `sendMsg` strip — the prompt text was cleaned in v0.815) now that the WEB toggle is the interface · VAD fully offline (serve onnx/wasm/worklet locally) · VRAM-adaptive NGL (read free VRAM + GGUF block_count to auto-suggest) · in-app model switcher (`/switch-model`, no manual restart) · in-app TTS voice selector (persisted in localStorage) · image generation as a separate `selmo_imggen.py` (stable-diffusion.cpp) · IMAP email bridge (`selmo_mail.py`) · Selmo as orchestrator (`selmo_master.py`, multi-step pipelines on long documents).
 
 ---
 

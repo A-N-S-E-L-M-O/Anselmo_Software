@@ -509,7 +509,7 @@ body.custom .think-toggle{color:#9a9aa3;}
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.815</div>
+  <div class="hbadge">v0.816</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -530,7 +530,7 @@ body.custom .think-toggle{color:#9a9aa3;}
 </nav>
 
 <aside>
-  <div class="panel-label">instant power draw</div>
+  <div class="panel-label">system power draw</div>
   <svg id="steam-svg" viewBox="0 0 220 190">
     <defs>
       <radialGradient id="dF" cx="50%" cy="40%">
@@ -571,8 +571,8 @@ body.custom .think-toggle{color:#9a9aa3;}
     <circle cx="110" cy="100" r="5" fill="#111"/>
     <circle cx="110" cy="100" r="2.5" fill="#AAAAAA"/>
     <text x="28" y="122" text-anchor="middle" fill="#AAAAAA" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace">0</text>
-    <text x="192" y="122" text-anchor="middle" fill="#AAAAAA" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace">100</text>
-    <text x="110" y="22" text-anchor="middle" fill="#AAAAAA" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace">50</text>
+    <text x="192" y="122" text-anchor="middle" fill="#AAAAAA" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace">500</text>
+    <text x="110" y="22" text-anchor="middle" fill="#AAAAAA" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace">250</text>
   </svg>
 
   <div id="mem-row">
@@ -581,7 +581,7 @@ body.custom .think-toggle{color:#9a9aa3;}
   </div>
 
   <div id="watt-bar-wrap">
-    <div class="panel-label" style="margin-bottom:4px;">instant power draw</div>
+    <div class="panel-label" style="margin-bottom:4px;">system power draw</div>
     <div id="watt-bar-track"><div id="watt-bar-fill"></div></div>
     <div id="watt-bar-label">-- W</div>
   </div>
@@ -789,10 +789,10 @@ function setGauge(pct,watts,real){
   const wRad=((a+180)*Math.PI)/180,wx=CX+R*.22*Math.sin(wRad),wy=CY-R*.22*Math.cos(wRad);
   document.getElementById('needlew').setAttribute('points',`${b1x},${b1y} ${b2x},${b2y} ${wx},${wy}`);
   const gv=document.getElementById('gval');
-  gv.textContent=real?Math.round(pct)+'%':Math.round(watts)+'W';
+  gv.textContent=Math.round(watts)+'W';
   gv.style.fill=col;gv.style.filter=`drop-shadow(0 0 5px ${col}60)`;
-  document.getElementById('gsub').textContent=real&&watts>0?Math.round(watts)+' W':'';
-  document.getElementById('glabel').textContent=real?'GPU %':'WATT';
+  document.getElementById('gsub').textContent=(lhmOk&&(cpuW>0||gpuPwr>0))?('CPU '+Math.round(cpuW)+' · GPU '+Math.round(gpuPwr)):(real?'':'~est');
+  document.getElementById('glabel').textContent='SYSTEM';
   // mobile horizontal bar
   const barFill=document.getElementById('watt-bar-fill');
   const barLabel=document.getElementById('watt-bar-label');
@@ -803,7 +803,7 @@ function setGauge(pct,watts,real){
     barFill.style.boxShadow='0 0 6px '+col;
   }
   if(barLabel){
-    barLabel.textContent=real?(Math.round(pct)+'%  '+Math.round(watts)+'W'):Math.round(watts)+'W';
+    barLabel.textContent=Math.round(watts)+'W'+(real?'':' ~');
     barLabel.style.color=col;
   }
   const tbFill=document.getElementById('gpu-topbar-fill');
@@ -835,7 +835,7 @@ let gen=false,abort=null,tokSec=0,_genT0=0,_genTok=0,_tokScale=100,wh=0,whAll=pa
     price=parseFloat(localStorage.getItem('sprice')||'0.28'),
     toks=parseInt(localStorage.getItem('stoks')||'0'),
     sessStart=Date.now(),fileCtx=null,fileDoc=null,fileImage=null,fileChat=null,
-    gpuP=0,gpuW=0,gpuT=0,gpuOk=false,
+    gpuP=0,gpuW=0,gpuT=0,gpuOk=false,sysW=0,cpuW=0,gpuPwr=0,lhmOk=false,
     whisperOk=false,mediaRecorder=null,audioChunks=[],pttAutoSend=false,pttForceTts=false,pttWebSearch=false,
     ttsOk=false,ttsEnabled=false,
     currentTemp=0.75,
@@ -847,12 +847,14 @@ let gen=false,abort=null,tokSec=0,_genT0=0,_genTok=0,_tokScale=100,wh=0,whAll=pa
     CUSTOM_SP=(localStorage.getItem('scustomsp')||"You are a helpful local AI assistant. Be clear and concise. Reply in the user's language.");
 let vadInstance=null,vadConvo=false,vadAwaitingReply=false,_ttsPending=false;
 
-// GPU MONITOR
+// SYSTEM POWER MONITOR
+const SYS_MAX=500,PSU_EFF_EST=0.88,OTHER_DC_EST=45;
 setInterval(async()=>{
   try{
     const r=await fetch(GMON,{signal:AbortSignal.timeout(800)});
     const d=await r.json();
     gpuOk=d.ok||false;gpuP=d.gpu_pct||0;gpuW=d.watts||0;gpuT=d.temp||0;
+    lhmOk=d.lhm_ok||false;cpuW=d.cpu_watts||0;gpuPwr=d.gpu_pwr||0;sysW=d.sys_watts||0;
     if(gpuOk)document.getElementById('hw-mode').textContent=`GPU ${gpuP}% - ${gpuT}C`;
     if(setVram&&d.vram_total>0)setVram(d.vram_used/d.vram_total*100,d.vram_used.toFixed(1)+' / '+d.vram_total.toFixed(1)+' GB');
     if(setRam&&d.ram_total>0)setRam(d.ram_used/d.ram_total*100,d.ram_used.toFixed(1)+' / '+d.ram_total.toFixed(1)+' GB');
@@ -873,23 +875,25 @@ async function poll(){
   // tok/sec: client-side from stream timing (reliable across llama.cpp versions)
   tokSec=gen&&_genT0>0?_genTok/((Date.now()-_genT0)/1000):0;
 
-  let dp,dw,real;
-  if(gpuOk){dp=gpuP;dw=gpuW;real=true;}
+  let watts,real;
+  if(sysW>0){watts=sysW;real=true;}
   else{
-    dw=gen?(tokSec>20?80+(tokSec-20)*2:tokSec>8?45+(tokSec-8)*2.5:25+tokSec*2.5):5;
-    dp=Math.min((dw/80)*100,100);real=false;
+    // monitor unreachable: rough estimate from generation speed, then add losses
+    const comp=gen?(tokSec>20?80+(tokSec-20)*2:tokSec>8?45+(tokSec-8)*2.5:25+tokSec*2.5):8;
+    watts=Math.round((comp+OTHER_DC_EST)/PSU_EFF_EST);real=false;
   }
-  setGauge(dp,dw,real);
+  const dp=Math.min((watts/SYS_MAX)*100,100);
+  setGauge(dp,watts,real);
 
   if(gen){
-    const delta=(gpuOk?gpuW:dw)/3600;
+    const delta=watts/3600;
     wh+=delta;whAll+=delta;
     localStorage.setItem('swh',whAll.toFixed(6));
   }
   setOdo(wh);
   document.getElementById('wh-s').textContent=wh.toFixed(3);
   const _tbLbl=document.getElementById('gpu-topbar-lbl');
-  if(_tbLbl)_tbLbl.textContent=(real?Math.round(dp)+'%':'~'+Math.round(dp)+'%')+'  ·  '+wh.toFixed(3)+' Wh';
+  if(_tbLbl)_tbLbl.textContent=(real?'':'~')+Math.round(watts)+'W  ·  '+wh.toFixed(3)+' Wh';
   document.getElementById('wh-total').textContent=whAll.toFixed(3);
   updCost();
   document.getElementById('tok-tot').textContent=toks.toLocaleString('en');

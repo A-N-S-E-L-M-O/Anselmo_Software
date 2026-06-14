@@ -109,6 +109,68 @@ def _start(label: str, args: list) -> subprocess.Popen:
     return p
 
 
+# -- LibreHardwareMonitor (system-power source on port 8085) -------------------
+# Provides CPU package power + GPU power (vendor-agnostic) that selmo_gpu_monitor
+# reads from http://127.0.0.1:8085/data.json. It needs admin rights (RAPL) and
+# its Remote Web Server enabled once in the app (Options > Remote Web Server >
+# Run, plus "Run web server"/"Start minimized" so it persists). We only launch
+# it; we don't add it to _procs (shared tray app, and an elevated child can't be
+# killed by a non-elevated parent). Override the exe location with SELMO_LHM.
+
+def _lhm_path():
+    cands = []
+    env = os.environ.get("SELMO_LHM")
+    if env:
+        cands.append(Path(env))
+    cands += [
+        BASE / "bin" / "LibreHardwareMonitor" / "LibreHardwareMonitor.exe",  # setup-lhm.ps1 default
+        BASE / "bin" / "LibreHardwareMonitor.exe",
+        BASE / "tools" / "LibreHardwareMonitor" / "LibreHardwareMonitor.exe",
+        BASE / "LibreHardwareMonitor" / "LibreHardwareMonitor.exe",
+        Path(r"C:\Program Files\LibreHardwareMonitor\LibreHardwareMonitor.exe"),
+    ]
+    for c in cands:
+        try:
+            if c and c.exists():
+                return c
+        except Exception:
+            pass
+    return None
+
+def _lhm_running():
+    try:
+        out = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq LibreHardwareMonitor.exe"],
+            capture_output=True, text=True, creationflags=NO_WINDOW,
+        ).stdout or ""
+        return "LibreHardwareMonitor.exe" in out
+    except Exception:
+        return False
+
+def start_lhm():
+    """Launch LibreHardwareMonitor minimized (if present and not already up)."""
+    if sys.platform != "win32":
+        return
+    if _lhm_running():
+        print("  -> LibreHardwareMonitor [port 8085] (already running)", flush=True)
+        return
+    exe = _lhm_path()
+    if not exe:
+        print("  -> LibreHardwareMonitor not found: CPU power unavailable "
+              "(set SELMO_LHM or drop it in bin\\). System gauge still estimates GPU+losses.",
+              flush=True)
+        return
+    try:
+        import ctypes
+        # ShellExecute honours LHM's admin manifest (RAPL needs it); 7 = SW_SHOWMINNOACTIVE.
+        rc = ctypes.windll.shell32.ShellExecuteW(None, "open", str(exe), None, str(exe.parent), 7)
+        if rc <= 32:
+            raise OSError(f"ShellExecute returned {rc}")
+        print("  -> LibreHardwareMonitor [port 8085] (started minimized)", flush=True)
+    except Exception as e:
+        print(f"  -> LibreHardwareMonitor launch failed ({e})", flush=True)
+
+
 # -- Main ----------------------------------------------------------------------
 
 def main():
@@ -152,6 +214,7 @@ def main():
     _start("Whisper STT   [port 8083]", [str(BASE / "selmo_whisper.py")])
     _start("TTS Kokoro    [port 8084]", [str(BASE / "selmo_tts.py"), "--voice", args.voice])
     _start("HTTPS Proxy   [port 8443]", [str(BASE / "selmo_https_proxy.py")])
+    start_lhm()  # system-power source (CPU+GPU watts) on port 8085
 
     # Small pause to give the services time to start
     time.sleep(2)
