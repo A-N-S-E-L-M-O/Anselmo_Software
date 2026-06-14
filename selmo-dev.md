@@ -1,5 +1,15 @@
 # Selmo — Development documentation
-*Updated session 16 · 2026-06-13 · v0.810*
+*Updated session 16 · 2026-06-14 · v0.811*
+
+---
+
+## v0.811 — full parameter control: the ini carries the raw server command (session 16 cont.)
+
+The launcher no longer maps a handful of keys (`ngl`/`ctx`/`cpumoe`) to fixed llama-server flags. `selmo-models.ini` now holds one **`srv=`** line per model: the exact llama-server command line, forwarded **verbatim**. At launch you pick the model, see its `srv` string, then press ENTER to keep it or type/paste a full replacement line (the "show + retype" UX — `set /p` can't pre-fill an editable line, and the keystroke/GUI tricks were rejected as fragile). `selmo_server.py` now takes a single `--srv "<flags>"`, `shlex`-splits it, and prepends only the **four structural flags** the app can't run without: `--model` (the menu pick), `--host 0.0.0.0`, `--port 8080`, `--path <base>`. Those four are stripped from `srv` if typed by mistake, so chat.html / static serving / the LAN bind can't break no matter what you put in the string. mmproj is still auto-detected next to the model and appended **last** with `--batch-size/--ubatch-size 2048` (so our batch wins the Gemma non-causal ubatch assert, BUG-IMG-01).
+
+`chunk_ratio`/`chunk_maxtok` stay separate Selmo-only keys (written to `selmo-config.json` for chat.html, never sent to the server). Tuning flags — ctx, ngl, n-cpu-moe, flash-attn, cache-type, reasoning-format, timeout, metrics — now all live in the editable string. **Caveat:** sampling flags (`--temp`/`--top-p`/`--top-k`) in `srv` set only the server *default*; chat.html sends its own per-request values and still overrides them. Keep `--reasoning-format deepseek` (THINK panel), `--timeout 600` (phone uploads, BUG-IMG-02) and `--metrics` in the string — features depend on them. Verified: all real model names resolve to the right `[section]` (first-match-wins, LFM2.5 before LFM2), structural-strip works, Selmo.bat is CRLF / 0 NUL.
+
+**BUG-META-02 active this session:** the sandbox mount served NUL-corrupted views of `chat.html` (clean HEAD + ~3870 garbage bytes appended after `</html>`) and `selmo_server.py` (785 NUL). The real files (Read-tool verified) are intact. The version badge bump in chat.html and the git commit were therefore done from Fabio's Windows shell — committing from the sandbox would have staged the corrupted blobs.
 
 ---
 

@@ -4,10 +4,12 @@ title Selmo -- Local AI
 
 cd /d "%~dp0"
 
-:: ---- Load per-model defaults from selmo-models.ini ----
+:: ---- Load per-model server strings from selmo-models.ini ----
 set "INI=%~dp0selmo-models.ini"
 set "secN=0"
-set "def_ngl=99" & set "def_ctx=8192" & set "def_max=unknown" & set "def_cpumoe=" & set "def_chunk_ratio=0.25" & set "def_chunk_maxtok=6000" & set "def_note=Unknown/untested: try your settings"
+set "def_srv=--ctx-size 8192 -ngl 99 --parallel 1 --no-warmup --timeout 600 --metrics --reasoning-format deepseek"
+set "def_max=unknown" & set "def_note=Unknown/untested: try your settings"
+set "def_chunk_ratio=0.25" & set "def_chunk_maxtok=6000"
 set "curIdx="
 if exist "%INI%" (
     for /f "usebackq eol=; tokens=* delims=" %%L in ("%INI%") do (
@@ -20,19 +22,15 @@ if exist "%INI%" (
             ) else (
                 for /f "tokens=1* delims==" %%A in ("!ln!") do (
                     if "!curIdx!"=="0" (
-                        if /i "%%A"=="ngl"  set "def_ngl=%%B"
-                        if /i "%%A"=="ctx"  set "def_ctx=%%B"
-                        if /i "%%A"=="max"  set "def_max=%%B"
-                        if /i "%%A"=="note"        set "def_note=%%B"
-                        if /i "%%A"=="cpumoe"      set "def_cpumoe=%%B"
+                        if /i "%%A"=="srv"          set "def_srv=%%B"
+                        if /i "%%A"=="max"          set "def_max=%%B"
+                        if /i "%%A"=="note"         set "def_note=%%B"
                         if /i "%%A"=="chunk_ratio"  set "def_chunk_ratio=%%B"
                         if /i "%%A"=="chunk_maxtok" set "def_chunk_maxtok=%%B"
                     ) else if defined curIdx (
-                        if /i "%%A"=="ngl"  set "sngl_!curIdx!=%%B"
-                        if /i "%%A"=="ctx"  set "sctx_!curIdx!=%%B"
-                        if /i "%%A"=="max"  set "smax_!curIdx!=%%B"
-                        if /i "%%A"=="note"        set "snote_!curIdx!=%%B"
-                        if /i "%%A"=="cpumoe"      set "scpumoe_!curIdx!=%%B"
+                        if /i "%%A"=="srv"          set "ssrv_!curIdx!=%%B"
+                        if /i "%%A"=="max"          set "smax_!curIdx!=%%B"
+                        if /i "%%A"=="note"         set "snote_!curIdx!=%%B"
                         if /i "%%A"=="chunk_ratio"  set "schunk_ratio_!curIdx!=%%B"
                         if /i "%%A"=="chunk_maxtok" set "schunk_maxtok_!curIdx!=%%B"
                     )
@@ -94,39 +92,38 @@ for %%F in ("!modeldir_%selected%!*mmproj*.gguf") do (
     if not defined MMPROJ_FILE if exist "%%~fF" set "MMPROJ_FILE=%%~fF"
 )
 
-:: Per-model defaults (resolved from selmo-models.ini; lower -ngl if VRAM is short)
-set "NGL=!ngl_%selected%!"
-set "CTX=!ctx_%selected%!"
-if "!NGL!"=="" set "NGL=%def_ngl%"
-if "!CTX!"=="" set "CTX=%def_ctx%"
-set "CMOE=!cpumoe_%selected%!"
-if "!CMOE!"=="" set "CMOE=%def_cpumoe%"
+:: ---- Resolve this model's values (from selmo-models.ini) ----
+set "SRV=!srv_%selected%!"
 set "CRATIO=!chunk_ratio_%selected%!"
-if "!CRATIO!"=="" set "CRATIO=%def_chunk_ratio%"
 set "CMAXTOK=!chunk_maxtok_%selected%!"
+if "!SRV!"=="" set "SRV=%def_srv%"
+if "!CRATIO!"=="" set "CRATIO=%def_chunk_ratio%"
 if "!CMAXTOK!"=="" set "CMAXTOK=%def_chunk_maxtok%"
 
 echo.
-
-:: Defaults are pre-filled; press ENTER to keep or type a new value
-set /p "NGL=  GPU layers (-ngl) [!NGL!]: "
-set /p "CTX=  Context window (--ctx) [!CTX!]  (native max !max_%selected%!): "
-set /p "CMOE=  CPU MoE experts (--n-cpu-moe, blank=off) [!CMOE!]: "
+echo  Native max ctx for this model: !max_%selected%!   (keep --ctx-size at or below this)
+echo.
+echo  Server args (the exact llama-server command line):
+echo    !SRV!
+echo.
+echo  Press ENTER to keep them, or type/paste a full replacement line.
+echo  (--model / --host / --port / --path are added automatically.)
+set /p "SRV=  srv> "
+echo.
 set /p "CRATIO=  Chunk input ratio (fraction of ctx per chunk) [!CRATIO!]: "
 set /p "CMAXTOK=  Chunk max output tokens [!CMAXTOK!]: "
 echo.
-set "EXTRA="
-if not "!CMOE!"=="" if not "!CMOE!"=="0" set "EXTRA=--cpumoe !CMOE!"
-set "_cmoe_show=!CMOE!"
-if "!_cmoe_show!"=="" set "_cmoe_show=off"
-echo  Starting: NGL=!NGL!  CTX=!CTX!  CPUMOE=[!_cmoe_show!]  chunk_ratio=!CRATIO!  chunk_maxtok=!CMAXTOK!
+set "_vis=text only"
+if defined MMPROJ_FILE set "_vis=on (mmproj auto-detected)"
+echo  Launching:  vision=!_vis!  chunk_ratio=!CRATIO!  chunk_maxtok=!CMAXTOK!
+echo    !SRV!
 echo.
 
 :: Start backend -- single window, everything dies on close
 if defined MMPROJ_FILE (
-    python "%~dp0selmo_server.py" --model "!MODELFILE!" --ngl %NGL% --ctx %CTX% --mmproj "!MMPROJ_FILE!" --chunk-ratio !CRATIO! --chunk-maxtok !CMAXTOK! !EXTRA!
+    python "%~dp0selmo_server.py" --model "!MODELFILE!" --srv "!SRV!" --mmproj "!MMPROJ_FILE!" --chunk-ratio !CRATIO! --chunk-maxtok !CMAXTOK!
 ) else (
-    python "%~dp0selmo_server.py" --model "!MODELFILE!" --ngl %NGL% --ctx %CTX% --chunk-ratio !CRATIO! --chunk-maxtok !CMAXTOK! !EXTRA!
+    python "%~dp0selmo_server.py" --model "!MODELFILE!" --srv "!SRV!" --chunk-ratio !CRATIO! --chunk-maxtok !CMAXTOK!
 )
 
 :: If python exits with an error, keep the window open
@@ -137,21 +134,19 @@ if errorlevel 1 (
 )
 goto :eof
 
-:: ---- Resolve ngl / ctx / note for a model from the parsed ini ----
+:: ---- Resolve srv / max / note / chunk params for a model from the parsed ini ----
 ::   %~1 = model file name   %~2 = menu index   (first matching section wins)
 :lookup
 set "li=%~2"
-set "ngl_%li%=!def_ngl!"
-set "ctx_%li%=!def_ctx!"
+set "srv_%li%=!def_srv!"
 set "max_%li%=!def_max!"
 set "note_%li%=!def_note!"
-set "cpumoe_%li%=!def_cpumoe!"
 set "chunk_ratio_%li%=!def_chunk_ratio!"
 set "chunk_maxtok_%li%=!def_chunk_maxtok!"
 set "hit=0"
 for /l %%s in (1,1,%secN%) do (
     if "!hit!"=="0" (
-        echo %~1| findstr /i /c:"!sname_%%s!" >nul && ( set "ngl_%li%=!sngl_%%s!" & set "ctx_%li%=!sctx_%%s!" & set "max_%li%=!smax_%%s!" & set "note_%li%=!snote_%%s!" & set "cpumoe_%li%=!scpumoe_%%s!" & set "chunk_ratio_%li%=!schunk_ratio_%%s!" & set "chunk_maxtok_%li%=!schunk_maxtok_%%s!" & set "hit=1" )
+        echo %~1| findstr /i /c:"!sname_%%s!" >nul && ( set "srv_%li%=!ssrv_%%s!" & set "max_%li%=!smax_%%s!" & set "note_%li%=!snote_%%s!" & set "chunk_ratio_%li%=!schunk_ratio_%%s!" & set "chunk_maxtok_%li%=!schunk_maxtok_%%s!" & set "hit=1" )
     )
 )
 goto :eof

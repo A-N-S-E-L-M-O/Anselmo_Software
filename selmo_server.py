@@ -5,7 +5,7 @@ and llama-server in the foreground in this window.
 Closing this window (or Ctrl+C) shuts everything down.
 
 Usage (called by Selmo.bat):
-  python selmo_server.py --model <path> --ngl <N> --ctx <N> [--mmproj <path>] [--voice <name>]
+  python selmo_server.py --model <path> --srv "<llama-server flags>" [--mmproj <path>] [--voice <name>] [--chunk-ratio <f>] [--chunk-maxtok <N>]
 """
 
 import subprocess
@@ -16,6 +16,7 @@ import time
 import threading
 import argparse
 import json
+import shlex
 from pathlib import Path
 
 BASE   = Path(__file__).parent
@@ -113,9 +114,7 @@ def _start(label: str, args: list) -> subprocess.Popen:
 def main():
     parser = argparse.ArgumentParser(description="Selmo Backend Launcher")
     parser.add_argument("--model",  required=True,  help="Path to the .gguf file")
-    parser.add_argument("--ngl",    type=int, default=99,       help="GPU layers (99 = offload all, let llama.cpp fit what it can)")
-    parser.add_argument("--ctx",    type=int, default=0,        help="Context size (0 = use the model's training context, let the model decide)")
-    parser.add_argument("--cpumoe",      type=int,   default=0,    help="MoE experts kept on CPU/RAM (--n-cpu-moe N). 0 = off (all on GPU per -ngl)")
+    parser.add_argument("--srv",    default="",  help="Raw llama-server flags from selmo-models.ini, forwarded verbatim. Everything except the 4 structural flags managed here (--model/--host/--port/--path).")
     parser.add_argument("--mmproj",      default=None,             help="mmproj path (vision)")
     parser.add_argument("--voice",       default="im_nicola",      help="TTS voice")
     parser.add_argument("--chunk-ratio", type=float, default=0.25, help="Fraction of ctx used for input per chunk (rest = reasoning+output budget)")
@@ -139,11 +138,8 @@ def main():
     print(boxline("Your data stays on your computer."))
     print(border)
     print()
-    ctx_label = "model default" if args.ctx == 0 else str(args.ctx)
     print(f"  Model    : {model_name}")
-    print(f"  -ngl     : {args.ngl}   ctx: {ctx_label}")
-    if args.cpumoe > 0:
-        print(f"  n-cpu-moe: {args.cpumoe} expert layers on RAM (MoE offload)")
+    print(f"  Server   : {args.srv or '(structural flags only)'}")
     if args.mmproj:
         print(f"  Vision   : on  ({Path(args.mmproj).name})")
     else:
@@ -170,47 +166,42 @@ def main():
         )
 
     # -- Build the llama-server command ---------------------------------------
+    # Selmo manages only 4 STRUCTURAL flags the app can't run without:
+    #   --model (the menu pick) · --host/--port (chat.html talks to
+    #   0.0.0.0:8080) · --path (static serving of chat.html). EVERYTHING else
+    #   -- ctx, ngl, cpumoe, sampling, flash-attn, reasoning-format, timeout,
+    #   metrics... -- comes from the editable `srv` string in selmo-models.ini
+    #   and is forwarded verbatim. Full control lives in the ini.
+    #   Note: keep --reasoning-format (THINK panel), --timeout 600 (phone
+    #   uploads, BUG-IMG-02) and --metrics in srv, features depend on them.
     llama = str(BASE / "bin" / "llama-server.exe")
     cmd = [
         llama,
-        "--model",              args.model,
-        "--host",               "0.0.0.0",
-        "--port",               "8080",
-        "--ctx-size",           str(args.ctx),
-        "-ngl",                 str(args.ngl),
-        "--parallel",           "1",
-        "--no-warmup",
-        # BUG-IMG-02: --timeout 0 zeroes cpp-httplib's read timeout. On
-        # localhost the body arrives all at once and that's fine, but over the
-        # network (phone) a large body (image ~200KB, Whisper audio) arrives in
-        # many packets with micro-gaps: with the timeout at 0 the read fails on
-        # the first packet that isn't ready yet and httplib replies 400 with an
-        # empty body (no content-type, len 0) BEFORE the handler. A generous
-        # value: it does not cut off long generations (the client aborts at 300s)
-        # but lets slow bodies be read.
-        "--timeout",            "600",
-        "--metrics",
-        "--path",               str(BASE),
-        # No forced sampling (--temp/--top-p removed): the client sends its own
-        # per-request values, so the model's defaults apply otherwise. Neutral
-        # for benchmarking against LM Studio. Only --reasoning-format is kept,
-        # so the reasoning window keeps working.
-        "--reasoning-format",   "deepseek",
+        "--model",  args.model,
+        "--host",   "0.0.0.0",
+        "--port",   "8080",
+        "--path",   str(BASE),
     ]
-    if args.cpumoe > 0:
-        # MoE expert offload: keep the experts of N layers in system RAM while the
-        # dense backbone (attention/router) stays on the GPU. Only a few experts
-        # activate per token, so a big MoE (e.g. Qwen3-30B-A3B) runs on 12GB VRAM.
-        cmd += ["--n-cpu-moe", str(args.cpumoe)]
+    # Forward the user's server string, dropping any structural flag they may
+    # have typed (those are owned above; a stray --port would break chat.html).
+    STRUCTURAL = {"--model", "-m", "--host", "--port", "--path"}
+    toks = shlex.split(args.srv) if args.srv else []
+    i = 0
+    while i < len(toks):
+        if toks[i] in STRUCTURAL:
+            i += 2          # drop the flag and its value
+            continue
+        cmd.append(toks[i])
+        i += 1
     if args.mmproj:
+        # Appended LAST so our batch/ubatch win: Gemma's vision encoder uses
+        # non-causal attention, all image tokens must fit a single ubatch or it
+        # GGML_ASSERTs (BUG-IMG-01). Vision models use their native resolution.
         cmd += [
-            "--mmproj",             args.mmproj,
-            "--batch-size",         "2048",
-            "--ubatch-size",        "2048",
+            "--mmproj",      args.mmproj,
+            "--batch-size",  "2048",
+            "--ubatch-size", "2048",
         ]
-        # No per-model image-token forcing: every vision model uses its native
-        # resolution (neutral). batch/ubatch 2048 stays so the image tokens fit
-        # in a single ubatch (avoids the Gemma GGML_ASSERT crash, BUG-IMG-01).
 
     print()
     print("  Starting llama-server...")
