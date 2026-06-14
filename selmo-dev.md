@@ -1,5 +1,5 @@
 # Selmo — Development documentation
-*Updated session 17 · 2026-06-14 · v0.818*
+*Updated session 18 · 2026-06-14 · v0.819*
 
 > **Read first:** the **Lessons learned** section near the end of this file, and **`selmo-bug-report.md`**.
 > **Project language:** English only — see `selmo-manifesto.md`. Conversation with Fabio can be any language; every file artifact is English.
@@ -16,10 +16,10 @@ Selmo is one `llama.cpp` server, a small set of single-purpose Python bridges, a
 |---|---|---|
 | 8080 | llama-server (LLM, also serves `chat.html`) | `bin/` + `selmo_server.py` |
 | 8081 | Web search bridge (SearXNG + DDG fallback + trafilatura) | `selmo_web.py` |
-| 8082 | System-power monitor (CPU+GPU watts + losses; GPU/RAM via pynvml/psutil) | `selmo_gpu_monitor.py` |
+| 8082 | System-power monitor (system watts + Wh counter; GPU via NVML, CPU power estimated from load, LHM optional) | `selmo_gpu_monitor.py` |
 | 8083 | Whisper STT | `selmo_whisper.py` |
 | 8084 | Kokoro TTS | `selmo_tts.py` |
-| 8085 | LibreHardwareMonitor remote web server (CPU+GPU power source) | external |
+| 8085 | LibreHardwareMonitor remote web server (**optional** real CPU/GPU power) | external |
 | 8443 | HTTPS reverse proxy (mobile mic) | `selmo_https_proxy.py` |
 | 8888 | SearXNG (Podman container) | external |
 
@@ -61,6 +61,10 @@ pip install kokoro-onnx soundfile langdetect psutil --break-system-packages --pr
 **Manual downloads:** the LLM `.gguf` (any compatible model dropped in `models\`), an optional `*mmproj*.gguf` next to it for vision, the Whisper model (auto on first launch), and a Kokoro voice (`kokoro-onnx` releases). **External binaries:** llama.cpp CUDA build in `bin\`, Podman Desktop for the optional local SearXNG, and **LibreHardwareMonitor** (system-power source) installed by `setup-lhm.ps1` into `bin\LibreHardwareMonitor\`.
 
 **Whole-system power (v0.816).** `selmo_gpu_monitor.py` reports a system-power estimate, not just GPU watts. It reads CPU package power and GPU power from LibreHardwareMonitor's remote web server (`http://127.0.0.1:8085/data.json`, vendor-agnostic — works for NVIDIA and AMD; the GPU figure no longer depends on NVML) and computes `wall ≈ (cpu + gpu + OTHER_DC) / PSU_EFF` (defaults `OTHER_DC=45 W` for board/RAM/drives/fans, `PSU_EFF=0.88` for an 80 PLUS Gold unit at partial load; both tunable against a wall meter). `setup-lhm.ps1` makes this reproducible with no manual GUI step: it downloads a pinned LHM release (v0.9.4) into `bin\LibreHardwareMonitor\`, writes `LibreHardwareMonitor.config` (web server on `:8085`, start minimized to tray), and registers a scheduled task that runs LHM elevated at logon (RAPL needs admin, so this skips the per-boot UAC prompt). `selmo_server.py` also launches LHM as a fallback when the task isn't used. The main dashboard gauge now shows **system watts** (CPU+GPU+losses, 0–500 W scale); the GPU%/temp/VRAM mini-gauges stay NVIDIA-only via NVML.
+
+**Driver-free power & backend energy (v0.819).** LHM turned out to be a non-starter for a 5-minute install on an arbitrary machine: its WinRing0 driver needs admin and is quarantined by Microsoft Defender's vulnerable-driver blocklist, so CPU package power and core temperatures don't read on a locked-down box (the GPU still works — that's NVAPI/NVML, no driver). So **LHM is now optional**. When it isn't feeding real watts, `selmo_gpu_monitor.py` keeps GPU watts from NVML and **estimates CPU watts from utilisation** — linear idle→TDP, with laptop/desktop defaults chosen by battery presence (`psutil.sensors_battery()`): laptop `4→28 W`, desktop `20→125 W`, plus the `OTHER_DC`/`PSU_EFF` loss model; all four are tunable against a wall meter. `cpu_est:true` marks an estimate and the client prefixes it with `~`. CPU **temperature** is best-effort (LHM only, package→hottest-core) and hidden when unavailable. Net effect: the whole power panel needs only `pip install psutil pynvml`.
+
+Energy is integrated in the monitor itself (`integrate_energy`, a 1 s tick of `sys_watts`) as the single source of truth: `wh_session` (resets each launch) and `wh_total` (persisted in `selmo-wh.json`, gitignored), both resettable via `GET /reset_session` and `/reset_total`. Every `chat.html` instance only displays these, so multiple tabs or devices can never double-count — the box draws one set of watts no matter how many UIs are open (the old client-side `localStorage` counter summed across instances). The dashboard regroups the hardware readouts under the gauge (watt split → VRAM/RAM → GPU/CPU load); the session-watt-hours odometer reads to 0.1 Wh.
 
 ---
 
@@ -248,6 +252,7 @@ llama.cpp (MIT) · faster-whisper + CTranslate2 + Whisper weights (MIT) · Kokor
 
 ## Changelog (condensed, reverse chronological)
 
+- **v0.819** — power without a kernel driver: CPU watts **estimated from load** (laptop/desktop profile via battery detection), GPU from NVML, LHM now **optional** (its WinRing0 driver is Defender-blocked and admin-only, so CPU power/temp don't read on a locked-down box); estimated figures flagged with `~`. Energy counter moved into the monitor as the single source of truth — `wh_session`/`wh_total` persisted in `selmo-wh.json` with `/reset_session` `/reset_total` endpoints — so multiple open UIs can't double-count (was client-side `localStorage`). Device line gained CPU load (temperature best-effort, LHM-only); session odometer reads to 0.1 Wh; hardware readouts regrouped under the gauge (watt split → VRAM/RAM → GPU/CPU load).
 - **v0.818** — profile params mini-help: native `title` tooltips on Temp / Top-p / Top-k / System prompt in the profile modal, explaining each parameter and its use-case ranges on hover.
 - **v0.817** — web search query-rewrite: a local RAG-style step (`rewriteQuery`) turns the chat turn into a keyword query before hitting the engine — fixes terse follow-ups (e.g. "17 anni" returning the movie) by inheriting the running topic from recent turns. Thinking disabled via `chat_template_kwargs.enable_thinking:false` (+ plain-call retry) since in-prompt `/no_think` is ignored by Qwen/Gemma; strict `QUERY:` line parsed from `content`/`reasoning_content`; the sources footer shows the query actually sent (`🔎 "…" ← original`). Graceful fallback to the raw message on any failure.
 - **v0.816** — whole-system power: the main gauge now shows CPU+GPU+losses (system watts), not GPU-only. `selmo_gpu_monitor.py` reads CPU package + GPU power from LibreHardwareMonitor (`:8085/data.json`, vendor-agnostic — NVIDIA and AMD) and applies a PSU/baseline losses model. New `setup-lhm.ps1` makes it installer-reproducible (pinned download + config + elevated scheduled task, no manual GUI step); `selmo_server.py` launches LHM as a fallback.

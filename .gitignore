@@ -32,3 +32,6 @@ selmo.key
 # File di test pesanti
 Test files/
 chat.fab
+
+# Runtime energy state (per-machine, written by selmo_gpu_monitor.py)
+selmo-wh.json
