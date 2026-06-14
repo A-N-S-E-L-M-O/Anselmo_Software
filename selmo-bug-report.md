@@ -1,5 +1,5 @@
 # Selmo — Bug Report
-*Living document · updated session 16 · June 2026*
+*Living document · updated session 18 · June 2026*
 
 ---
 
@@ -24,7 +24,7 @@ Files written/edited via tools on this mount can end up full of NUL bytes (`\x00
 
 ---
 
-## BUG-IMG-02 · Vision from phone → HTTP 400 ⚠️ OPEN (session 15)
+## BUG-IMG-02 · Vision from phone → HTTP 400 ⚠️ OPEN — needs phone retest (session 15)
 
 **Symptom** — Uploading an image from the phone (Android) makes the multimodal request to `llama-server` (8080) return **HTTP 400**. The model in use (Magistral-Small-2509) has the mmproj loaded (auto-match on `Magistral-` in `Selmo.bat`), so vision is active and worked from the desktop.
 
@@ -35,19 +35,27 @@ Files written/edited via tools on this mount can end up full of NUL bytes (`\x00
 
 **Next step** — Read the real server message (now visible in the bubble) and distinguish: ctx overflow, image decode error, or "multimodal not supported" for Magistral. If it's Magistral that can't handle vision, fall back to Gemma 4 for image tasks.
 
+**Status (s18)** — Diagnostics are all in place (error body shown in the bubble, client resize to 1280px JPEG, `max_tokens` cap when an image is attached). Nothing more to change in code until an actual phone retest captures the real 400 message.
+
 ---
 
-## BUG-IMG-03 · Vision + web search together doesn't work ⚠️ OPEN (session 15)
+## BUG-MIC-01 · Whisper over HTTPS is painful (self-signed cert) ⚠️ OPEN (session 18)
 
-**Symptom** — With an image loaded **and** WEB active (or the `/web` command), the image is not analyzed.
+**Symptom** — Microphone capture (Whisper STT) needs a **secure context**; browsers only grant `getUserMedia` over HTTPS (or `localhost`). On the phone over LAN that means the 8443 reverse proxy (`selmo_https_proxy.py`) with the self-signed `selmo.crt`/`selmo.key`, so the browser shows "not secure" warnings and the user must click through the cert exception — and some browsers still block the mic outright.
 
-**Cause (identified)** — In `sendMsg`, when `IS_WEB_ON`/`isWebSearch` is true, the flow enters the web branch (≈line 1643) which builds a **text-only** prompt (source context) and handles/closes its own fetch **before** reaching the multimodal block `if(fileImage)` (≈line 1706): the attached image is therefore ignored. Also `recentClean` does `.replace(...)` on `m.content` which, for a previous image message, is an **array** → possible exception.
+**Why** — A self-signed cert isn't trusted, and `getUserMedia` refuses to run in an untrusted/insecure origin. Browser security policy, not a Selmo bug per se.
 
-**Proposed fix** — In the web branch include `imgContent` in the content array too (context text + `image_url`), or establish an explicit priority with a warning ("web ignores the image"). Handle the `content` array case inside `recentClean` (skip it or serialize it).
+**Fix options (next session)**
+- **mkcert** — generate a *locally-trusted* cert for the LAN IP and install the mkcert root CA on the phone once; replaces the self-signed `selmo.crt`/`selmo.key` and removes the warnings cleanly. Clean and reusable (one CA install per device).
+- **Chrome insecure-origin flag** — on the phone, add the plain-HTTP LAN origin to `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, dropping HTTPS for the mic entirely. Fastest, but per-device and Chrome-only.
 
 ---
 
 ## Resolved
+
+### BUG-IMG-03 · Vision + web search together — ✓ RESOLVED in code (verify with a quick test)
+
+The fix the report had filed as "proposed" is actually implemented in `sendMsg`. When an image is loaded with WEB on, the web branch builds a multimodal array (the image pages + the web-context text) instead of a text-only prompt, so the image is no longer dropped (≈line 2042). `recentClean` also reads `m._orig` first and, when the content is an array, filters/joins the text parts — so the old `.replace()`-on-an-array exception is gone (≈line 2031). Confirmation run: load an image, turn WEB on, ask about it.
 
 ### BUG-IMG-01 · Vision + IMG/OCR (images/PDF) — ✓ RESOLVED (v0.702)
 
