@@ -1,5 +1,5 @@
 # Selmo — Manifesto
-*June 2026 · v0.4*
+*June 2026 · v0.5 · updated session 16*
 
 ---
 
@@ -30,7 +30,7 @@ It runs on your own hardware. Your data never leaves your device. It supports an
 
 ## Narrative universe
 
-The book "Dialoghi con la lavatrice". Selmo is a character before it is a product. Mizan is its antagonist. The app and the book promote each other. The English version is coming.
+The book "Dialoghi con la lavatrice". Selmo is a character before it is a product. Mizan is its antagonist — and that antagonism is built into the app as a switchable profile (cold, deterministic, analysis-only) against Selmo's warm assistant. The app and the book promote each other. The English version is coming.
 
 ---
 
@@ -62,10 +62,10 @@ Three tiers of choice, from ethics to performance:
 llama.cpp with CUDA, chat interface, real wattmeter, Wh odometer, universal launcher.
 
 ### Phase 1 — Stability ✓
-Document extraction (.docx, .odt), auto-chunking, Selmo/Mizan toggle, GPU monitor, adaptive launcher.
+Document extraction (.docx, .odt), auto-chunking, Selmo/Mizan profile toggle, GPU monitor, adaptive launcher.
 
 ### Phase 1.5 — Web search ✓
-Explicit `/web` command, local SearXNG in Podman, DDG fallback, trafilatura, source ledger.
+Web mode via a header toggle (off by default), local SearXNG in Podman, DDG fallback, trafilatura, source ledger.
 
 ### Phase 1.6 — Native app (Tauri)
 PyInstaller on the Python bridges, Inno Setup installer, Windows .exe distribution.
@@ -90,6 +90,8 @@ Flower (Oxford) + OpenFedLLM. Only weight deltas — the data never leaves. Requ
 **Voice (Whisper) ✓** — *Implemented s9.* `selmo_whisper.py` on port 8083, uses `faster-whisper` (pip). 🎤 button in chat.html: MediaRecorder → POST `/transcribe` → text injected into the input. Auto-started by Selmo.bat. Prerequisite: `pip install faster-whisper flask --break-system-packages` + the `small` model downloaded on first launch (~500MB).
 
 **Outgoing voice (TTS) ✓** — *Implemented s9.* `selmo_tts.py` on port 8084, uses Piper TTS (pip). 🔊 button in chat.html: autoplay toggle on every response. Prerequisite: `pip install piper-tts --break-system-packages` + a .onnx voice in `voices/`. Italian voices: [it_IT-paola-medium (F) / it_IT-riccardo-x_low (M)](https://huggingface.co/rhasspy/piper-voices/tree/main/it/it_IT). The text is cleaned of markdown before synthesis. Full loop: microphone → Whisper → Selmo → Piper → speaker.
+
+**Three profiles (personality + palette)** — promote the Selmo/Mizan toggle into a three-way selector with its own palette each: **Selmo** (blue, warm assistant), **Mizan** (red, cold analysis system), and **Custom** (neutral system palette, with the sampling parameters and system prompt left free for the user to set). One identity, three faces.
 
 **Image generation** — Requires a diffusion architecture, not an LLM. Candidate: `stable-diffusion.cpp` (same approach as llama.cpp, runs well on a 4070 Ti). It would sit alongside as a separate `selmo_imggen.py`. It does not interfere with the current stack.
 

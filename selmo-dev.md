@@ -1,349 +1,101 @@
 # Selmo — Development documentation
-*Updated session 16 · 2026-06-14 · v0.811*
+*Updated session 16 · 2026-06-14 · v0.813*
+
+> **Read first:** the **Lessons learned** section near the end of this file, and **`selmo-bug-report.md`**.
+> **Project language:** English only — see `selmo-manifesto.md`. Conversation with Fabio can be any language; every file artifact is English.
+
+This is the engineering reference for Selmo: how it is built, the parameters that matter, the lessons that cost something to learn, and the changelog. The vision lives in the manifesto; the open defects live in the bug report. This file is organised by topic, with a condensed reverse-chronological changelog at the end.
 
 ---
 
-## v0.811 — full parameter control: the ini carries the raw server command (session 16 cont.)
-
-The launcher no longer maps a handful of keys (`ngl`/`ctx`/`cpumoe`) to fixed llama-server flags. `selmo-models.ini` now holds one **`srv=`** line per model: the exact llama-server command line, forwarded **verbatim**. At launch you pick the model, see its `srv` string, then press ENTER to keep it or type/paste a full replacement line (the "show + retype" UX — `set /p` can't pre-fill an editable line, and the keystroke/GUI tricks were rejected as fragile). `selmo_server.py` now takes a single `--srv "<flags>"`, `shlex`-splits it, and prepends only the **four structural flags** the app can't run without: `--model` (the menu pick), `--host 0.0.0.0`, `--port 8080`, `--path <base>`. Those four are stripped from `srv` if typed by mistake, so chat.html / static serving / the LAN bind can't break no matter what you put in the string. mmproj is still auto-detected next to the model and appended **last** with `--batch-size/--ubatch-size 2048` (so our batch wins the Gemma non-causal ubatch assert, BUG-IMG-01).
-
-`chunk_ratio`/`chunk_maxtok` stay separate Selmo-only keys (written to `selmo-config.json` for chat.html, never sent to the server). Tuning flags — ctx, ngl, n-cpu-moe, flash-attn, cache-type, reasoning-format, timeout, metrics — now all live in the editable string. **Caveat:** sampling flags (`--temp`/`--top-p`/`--top-k`) in `srv` set only the server *default*; chat.html sends its own per-request values and still overrides them. Keep `--reasoning-format deepseek` (THINK panel), `--timeout 600` (phone uploads, BUG-IMG-02) and `--metrics` in the string — features depend on them. Verified: all real model names resolve to the right `[section]` (first-match-wins, LFM2.5 before LFM2), structural-strip works, Selmo.bat is CRLF / 0 NUL.
-
-**BUG-META-02 active this session:** the sandbox mount served NUL-corrupted views of `chat.html` (clean HEAD + ~3870 garbage bytes appended after `</html>`) and `selmo_server.py` (785 NUL). The real files (Read-tool verified) are intact. The version badge bump in chat.html and the git commit were therefore done from Fabio's Windows shell — committing from the sandbox would have staged the corrupted blobs.
-
----
-
-## v0.809 — model folders (LM Studio style) + vision output no longer capped at 1200 (session 16 cont.)
-
-- **Models by folder.** `Selmo.bat` now scans `models\` **recursively** (`for /r`), and each model remembers its own folder (`modeldir_N`). The mmproj is auto-detected as the `*mmproj*.gguf` in the **same folder** as the chosen model (guarded by `if exist`), replacing the old name-key heuristic that broke on generic names like `mmproj-BF16.gguf`. Drop a model + its mmproj in a subfolder (e.g. `models\Qwen3.6-35B-A3B\`) and vision works with no renaming. Flat models in `models\` still work.
-- **Vision output cap fixed.** `maxTok()` returned a flat `1200` whenever the message was multimodal — so vision answers truncated at exactly 1200 tokens (`finish_reason: length`, mistaken for a freeze). Now it reserves ~1300 tok per image + 800 headroom and gives the rest of the context to the answer, capped at 8000. With ctx 16384 + one image the answer can reach 8000 instead of 1200. Image content shape confirmed: `[{type:'image_url',...}, {type:'text',...}]`.
-
-chat.html via Python only; `node --check` passes. **Qwen vision note:** Qwen3.6-35B-A3B is natively multimodal — the mmproj (`mmproj-BF16.gguf`) is in the same unsloth repo as the GGUF, no separate VL model needed. llama.cpp vision for it is still fresh (a segfault-on-image report exists upstream), so test before trusting.
-
----
-
-## v0.808 — VRAM/RAM gauges + MoE offload (--n-cpu-moe) (session 16 cont.)
-
-Goal: run a "premium" big MoE (Qwen3.6-35B-A3B, ~3B active) on the 12GB 4070 Ti by keeping the dense backbone on the GPU and the experts in RAM.
-
-- **`--n-cpu-moe` wired end-to-end.** New `cpumoe` key in `selmo-models.ini` (read by the bat like `ngl`/`ctx`, proposed at a third prompt, blank/0 = off). New `[Qwen3]` section (ngl=99, ctx=16384, cpumoe=28). `selmo_server.py` gains `--cpumoe N` → passes `--n-cpu-moe N` to llama-server. Tuning: lower N to push more experts onto the GPU (faster) while VRAM holds.
-- **Two memory gauges** in the aside, side by side under the power gauge, same SVG family (`makeGauge()` builder, shares the `#bz`/`#dF`/`#ng` defs). Fed by the existing 8082 poll. `selmo_gpu_monitor.py` now also serves `ram_used`/`ram_total` via psutil (auto-installed); VRAM was already exposed.
-- **Server status compacted** from four text rows into one row of four icon chips with hover tooltips (the old label text — Whisper model, SearXNG state — moves into the chip `title`, synced on an 800ms interval). Frees vertical space so the stat panel fits without scrolling.
-
-chat.html edited via Python only; `node --check` passes. **Lesson (this session):** `set /p "A=.." & set /p "B=.."` on one line does NOT run the second prompt in cmd — chained `set /p` after `&` is unreliable. Each `set /p` must be on its own line.
-
-**BUG-META-02 active this session:** the sandbox mount served truncated views of `Selmo.bat`/`selmo_server.py` and a 0-byte `.git/index`. The real files (verified via the file tools) are intact; byte-level CRLF/NUL checks on the bat could not be run through the mount, and git was not committable from the sandbox.
-
----
-
-## v0.807 — INI-driven launcher: per-model defaults out of the bat (session 16 cont.)
-
-The launcher no longer hard-codes any model logic. `Selmo.bat` is now a generic reader of a new editable config file, `selmo-models.ini`. Each `[section]` is a case-insensitive substring matched against the model file name; **first match wins** (so more specific names go higher, e.g. `[LFM2.5]` above `[LFM2]`), with `[default]` as fallback. Keys read by the bat: `ngl`, `ctx`, `max` (native context, shown next to the `--ctx` prompt as "native max N"), `note` (shown in the menu). The `use` key (use-case + compliance tag: disclosed / undisclosed / ethical) is parsed-over and ignored by the bat — documentation for the user only. The bat still only **proposes** values at the prompts; nothing is forced.
-
-Implementation notes: INI parsed once with `for /f "eol=; tokens=* delims="`, sections/keys into indexed vars; a `:lookup` subroutine resolves each scanned model to `ngl_/ctx_/max_/note_` with a `hit` flag for first-match-wins. Post-selection Model/Note/Native recap was dropped (confusing); native context now appears only at the `--ctx` prompt.
-
-Per-model values live in the INI, not here. EuroLLM ctx kept at empirical **8192**: it claims 32k native but loses coherence on long inputs, and a 14k test (≈45% of native, the chunk-input rule misapplied to launch ctx) made translation worse. Lesson: the 45% rule is about chunk-input vs the *running* context, not the launch ctx, and only holds for models that actually hold their nominal context.
-
----
-
-## v0.806 — THINK button follows the model's reasoning (session 16 cont.)
-
-If the model starts emitting reasoning mid-stream, the THINK button now re-activates itself even if the user had turned it off (or we had hidden it): the model is in charge, so the UI reflects the truth. New `markThinking()` is called on the first reasoning token in both chat send paths (text + image): it sets `THINK_CAPABLE=true`, `IS_THINK_ON=true`, reveals the button, marks it `on` (`THINK ●`), and runs `syncThinkPrompt()`. Idempotent (gated on the first token via `if(!rthink)`). Chunking is untouched. Verified with `node --check`.
-
----
-
-## v0.805 — reasoning panel preserved in loaded history (session 16 cont.)
-
-Two fixes for viewing saved sessions:
-
-- **Model trace in history.** `loadSession` clears `#messages` (wiping the welcome + its startup trace), so it now appends a centered dim `traceLine()` (model · ctx · reasoning state) at the top of the loaded conversation. The trace is never lost.
-- **Reasoning re-split (the Olmo bug).** Assistant turns are saved as `[THINK]reasoning[/THINK]answer`. `loadSession` used to re-render them with `addMsg`, which dumps the raw string into the main bubble — so a reloaded Olmo turn showed its `[THINK]…` reasoning inline in the content window instead of the reasoning panel (most visible on Olmo, which always reasons). New `renderStored(m)` re-splits the saved `[THINK]…[/THINK]` on load: the reasoning goes back into a collapsible `makeThinkPanel`, only the answer stays in the bubble. `loadSession` now maps history through `renderStored`.
-
-Verified with `node --check`.
-
----
-
-## v0.804 — THINK auto-detected from the template + model trace (session 16 cont.)
-
-**THINK button driven by the chat template** (read from `/props`, no hardcoded model list). Rule (Fabio's call): the lowercased template contains `think` → button shown and **ON by default**; absent → button **hidden**. This supersedes the v0.803 grey-locked "always-on" state: even a pure-reasoning model keeps reasoning if THINK is toggled off, which is acceptable. Generalises to any future model.
-
-Two internal flags, invisible to the user:
-
-- `REASON_FIRST` (parser only, unchanged from v0.802): the model's template opens `<think>` in the generation prompt (Olmo). Sets `inTk` so the reasoning lands in the panel. Not the button.
-- `INSTRUCTED` = `THINK_CAPABLE && !REASON_FIRST && !template.includes('<|think|>')`: only Magistral-style models receive the manual `[THINK]` system instruction (`THINK_INSTR`). Native reasoners (Olmo `<think>`, Gemma 4 `<|think|>`) never get it — pushing a `[THINK]` instruction at them risks literal `[THINK]` leaking into the answer. A single `syncThinkPrompt()` is the only place that sets the system prompt's thinking clause.
-
-Classification verified by reading the GGUF templates directly: EuroLLM-9B (no `think` → hidden), Magistral-Small-2509 (`[THINK]` → instructed), Olmo-3-7B-Think (`<think>` → parser + native), Gemma-4-12B-it (`<|think|>` → native; Google docs: thinking on by default).
-
-**Conversation trace.** Model name · ctx · reasoning state is shown at startup (appended under the "Hi. I'm Selmo" welcome, once) and on every New conversation (`announceModel`/`showStartupTrace`, `modelInfoLine`). Note: `-ngl` is not exposed by llama-server (`/props`/`/v1/models`), so it is not in the trace.
-
-**Copy fix.** "No data leaves this machine" → "Only explicit web searches leave this machine"; footer "No data transmitted" → "Only web searches transmitted" (web search does leave the machine, so the old claim was inaccurate).
-
-All changes verified with `node --check` on the extracted script.
-
----
-
-## v0.803 — THINK toggle locked for reasoning-first models (session 16 cont.)
-
-For reasoning-first models (`REASON_FIRST`, e.g. Olmo 3 Think) the THINK button is forced visibly active (`THINK ●`) but greyed and non-clickable: the model always reasons, so the toggle has nothing to switch. `applyReasonLock()` sets the locked look (no cyan `.on` glow, `opacity .5`, `cursor:not-allowed`, `disabled`) and keeps `IS_THINK_ON=false`, so `THINK_INSTR` — which targets Magistral's `[THINK]` format — is never injected; Olmo reasons natively in `<think>`. `toggleThink()` early-returns when `REASON_FIRST`, and `setThinkEnabled` re-applies the lock after a chunking run re-enables the button. Normal models are unchanged: `REASON_FIRST` false → fully toggleable as before.
-
----
-
-## v0.802 — reasoning panel for Olmo Think / `<think>` tags (session 16 cont.)
-
-`streamTokens` now separates the reasoning for **two tag families**: Magistral's `[THINK]…[/THINK]` (unchanged) and Olmo's `<think>…</think>`. It also handles **reasoning-first** models: Olmo 3 Think's chat template opens `<think>` in the generation prompt, so the stream begins *inside* the reasoning block and only ever emits the closing `</think>` (confirmed in `selmo-llama.log`: `example_format` ends with `<think>`). A `REASON_FIRST` flag, detected at startup from the chat template exposed by `/props` (true when the template has an unclosed `<think>` opening: `lastIndexOf('<think>') > lastIndexOf('</think>')`), makes the parser start in reasoning state. A `console.log('Selmo reasoning-first:', …)` reports the detected value.
-
-The flush state machine was generalised: `OPENS=['[THINK]','<think>']`, `CLOSES=['[/THINK]','</think>']`, picking whichever marker appears first, with a 7-char hold-back (longest tag is 8 chars) to survive a tag split across SSE chunks.
-
-**Safeguards — Magistral and Gemma untouched.** Magistral's template uses `[THINK]` so `REASON_FIRST` stays false and the initial state is identical to before. Gemma streams its reasoning out-of-band in `reasoning_content`; receiving that delta now also forces `inTk=false`, disarming the implicit-open so Gemma's final answer can never land in the panel. Verified with `node --check`.
-
----
-
-## v0.801 — launcher runtime prompt for ngl/ctx (session 16 cont.)
-
-`Selmo.bat` no longer hardcodes `-ngl`/`--ctx`. After the model is chosen it prompts for both, with the defaults pre-filled (`99` / `8192`) — press ENTER to keep or type a new value. This makes it easy to test different models and GPUs without editing the file. See the rewritten "Server parameters" section for details and the rationale (file size does not predict speed; `block_count` does). `Selmo.bat` was also fully translated to English per the project language rule.
-
----
-
-## v0.800 — VAD: hands-free conversation (session 16 cont.)
-
-Hands-free mode with pause detection via **Silero VAD** (`@ricky0123/vad-web` v5, ONNX in-browser). New 🗣 button (`#vad-btn`) next to the mic.
-
-Flow: tap once → the VAD listens → `onSpeechEnd` returns a `Float32Array` at 16 kHz → client-side conversion to WAV (`f32ToWav`) → POST to Whisper `/transcribe` (no server change: it already accepts `.wav`) → text into the input → auto-send. In hands-free mode the reply TTS is forced (`pttForceTts`).
-
-**Anti-echo:** during transcription + generation + TTS the VAD is paused (`vadInstance.pause()`), so it doesn't listen to itself. It resumes when the reply is done. The resume is hooked to the end of TTS: `speakText` now fires a completion callback (`src.onended` for Kokoro, `utt.onend` for Web Speech) → `vadAfterSpeak()` → `vadResume()`. Fallback in `endTurn` via `_ttsPending`/`vadAwaitingReply` for the case where generation errors out and `speakText` is never called.
-
-**Push-to-talk bypasses the VAD** (explicit requirement): `pttStart` pauses the VAD and uses the `MediaRecorder` path; after the reply the VAD resumes.
-
-Button states: cyan = listening, blinking green = user speaking, blinking yellow = busy.
-
-**Library from the jsdelivr CDN** (onnxruntime-web 1.22.0 + vad-web 0.0.29), like jszip/pdf.js: needs network on the **first** VAD start, then cached. For fully offline use: serve the `.onnx`/`.wasm`/worklet files from Selmo and point `baseAssetPath`/`onnxWASMBasePath` locally. `redemptionMs` left at the default 1400 ms (the pause length that triggers end-of-utterance).
-
----
-
-## v0.716 — tok/sec bar + HTTPS proxy for mobile mic (session 16 cont.)
-
-**tok/sec bar — dynamic scale with colour coding:**
-The fondoscala is no longer fixed. `_tokScale` starts at 20 tok/s (realistic for Magistral 24B Q3).
-If tokSec exceeds 95% of the current scale, the scale auto-expands to the next multiple of 10 above `tokSec × 1.2`.
-Colour: **cyan** ≥ 20 tok/s · **yellow** 10–20 · **red** < 10. The bar never pegs; no "casino" effect.
-
-**HTTPS proxy for mobile microphone (`selmo_https_proxy.py`, port 8443):**
-Mobile browsers block `getUserMedia()` on non-secure HTTP origins — so Whisper was always broken on the phone.
-`selmo_https_proxy.py` is a lightweight Python HTTPS reverse proxy:
-- Generates a self-signed TLS cert (`selmo.crt` / `selmo.key`) on first run, with the machine's LAN IP in the SAN.
-- Listens on `:8443` and routes `/proxy/808X/path` → the matching local service; everything else → llama-server (8080).
-- `chat.html` detects `location.protocol === 'https:'` and switches all service URLs to `/proxy/808X` paths (avoids mixed-content blocks).
-- The proxy is started automatically by `selmo_server.py` alongside the other services.
-
-**Usage from phone:** `https://192.168.x.x:8443/chat.html` — Firefox shows a cert warning once, user clicks "Accept the risk" — done. Desktop continues to use `http://127.0.0.1:8080` unchanged.
-
-**Lesson:** delete `selmo.crt` / `selmo.key` if the machine's LAN IP changes (the cert embeds the IP in the SAN). The proxy regenerates them on the next startup.
-
-## v0.714 — Phone UI fixes + chunking lessons (session 16)
-
-**Phone header (≤400px):** THINK button was hidden (`display:none`); replaced with compact padding so it stays visible. NEW CHAT label collapsed to "CHAT" via CSS `::before` pseudo-element (no HTML change).
-
-**Mobile keyboard:** added `interactive-widget=resizes-content` to the viewport meta (Android Chrome) and a `visualViewport` resize listener that sets `body.style.height` dynamically — keeps the input area above the software keyboard on both Android and iOS.
-
-**llama-server OOM on Magistral:** `CTX=0` (model training context, 32K+) caused a 20 GB KV-cache allocation on a 12 GB GPU. Fixed by setting `CTX=8192` in `Selmo.bat`. `--fit on` was tried but discarded — it fell back to CPU and reduced throughput to ~3 chunks vs the normal ~39.
-
-**Chunking / verbatim-copy behaviour:** the model (Magistral-Small) starts copying source text verbatim after summarising the first few paragraphs of a chunk. Root cause is instruction-following drift over long generations — the instruction loses weight as more source tokens are processed. Reversing prompt/content order made things worse. **Workaround (confirmed working): cap the output via the user prompt** — e.g. "make a 2–3 sentence abstract". Concise output targets keep the model on task. `SP_TASK` simplified: removed the formatting-consistency clause (manageable from user prompt) and softened the fidelity rule to "do not omit or add content *unless the prompt requires it*" so summarisation tasks are not treated as copy tasks.
-
----
-
-## v0.708 — UI rebuilt + multi-device (session 15)
-
-Redesigned `chat.html`'s look from scratch (CSS only + markup tweaks; no logic touched): refined retro-terminal aesthetic, vintage palette unchanged, rounded panels and bubbles, CRT vignettes. Real responsive layout: 3-column desktop; ≤1024px the history and dashboard become drawers triggered from the header buttons; ≤640px full-width input with 44–46px touch targets, `100dvh` (input no longer hidden by the browser bar), `overflow-x:hidden` (no horizontal scroll from the off-canvas drawer), header that doesn't overflow (<400px hides THINK and shortens the logo). Typography recalibrated and dashboard compacted so it doesn't overflow vertically (36px odometer per cell — a JS constraint).
-
-Remote/phone access fix: `selmo_web.py` (8081) and `selmo_gpu_monitor.py` (8082) now listen on `0.0.0.0` (previously `127.0.0.1`, unreachable from LAN); the client-side `TTS_URL` uses `location.hostname` instead of a hardcoded `127.0.0.1`. Whisper and TTS were already on `0.0.0.0`.
-
-Vision: client-side image normalization (createImageBitmap→canvas→JPEG, cap 1280px) for large photos and iPhone HEIC; `max_tokens` reduced to 1200 when there is an image (reserving ctx for the image tokens); the client now shows the server's error body instead of a bare "HTTP 400". **Two bugs still open** — see BUG-IMG-02 and BUG-IMG-03 in the bug report.
-
----
-
-## Technical stack
+## Architecture at a glance
+
+Selmo is one `llama.cpp` server, a small set of single-purpose Python bridges, and a single HTML client (`chat.html`). Everything runs locally; nothing leaves the machine except an explicit `/web` search.
+
+| Port | Service | File |
+|---|---|---|
+| 8080 | llama-server (LLM, also serves `chat.html`) | `bin/` + `selmo_server.py` |
+| 8081 | Web search bridge (SearXNG + DDG fallback + trafilatura) | `selmo_web.py` |
+| 8082 | GPU/RAM monitor (real watts via pynvml, RAM via psutil) | `selmo_gpu_monitor.py` |
+| 8083 | Whisper STT | `selmo_whisper.py` |
+| 8084 | Kokoro TTS | `selmo_tts.py` |
+| 8443 | HTTPS reverse proxy (mobile mic) | `selmo_https_proxy.py` |
+| 8888 | SearXNG (Podman container) | external |
+
+`selmo_server.py` launches llama-server and starts the bridges alongside it. The client talks to each service on its own port (or through the 8443 proxy when loaded over HTTPS).
 
 ### Reference hardware
 
-| Component | Spec |
-|---|---|
-| CPU | Intel i9-11900KF @ 3.5GHz |
-| RAM | 32GB |
-| GPU | NVIDIA RTX 4070 Ti 12GB VRAM |
-| OS | Windows 11 |
-
-Real GPU draw during inference: 70-90W · Utilization: ~40-99% · Temperature: 50-60°C
+Intel i9-11900KF · 32 GB RAM · NVIDIA RTX 4070 Ti 12 GB · Windows 11.
+Real GPU draw during inference 70–90 W, utilisation 40–99 %, temperature 50–60 °C.
 
 ### Software
 
-| Component | Choice | Notes |
+| Component | Choice | License |
 |---|---|---|
-| Runtime | llama.cpp (CUDA) · MIT | |
-| GPU monitor | pynvml via Python · port 8082 | Real watts from the GPU |
-| Web bridge | selmo_web.py · port 8081 | Local SearXNG (Podman) + DDG fallback + trafilatura |
-| Container engine | Podman Desktop · Apache 2.0 | SearXNG on port 8888 |
-| Launcher | Selmo.bat / Mizan.bat | Model selector + adaptive -ngl logic |
-| TTS | selmo_tts.py · port 8084 | Kokoro-ONNX, Italian voices, language auto-detect |
-
+| Runtime | llama.cpp (CUDA) | MIT |
+| Container engine | Podman Desktop (SearXNG) | Apache 2.0 |
+| GPU monitor | pynvml | BSD-3 |
+| TTS | Kokoro-ONNX | Apache 2.0 |
 
 ---
 
-## Dependencies — full setup
+## Setup & dependencies
 
-### Python
-Requires Python 3.10+ (tested on 3.14). A single interpreter, no venv.
+Python 3.10+ (tested on 3.14), a single interpreter, no venv.
 
 ```
 pip install flask faster-whisper pynvml trafilatura requests --break-system-packages
-pip install kokoro-onnx soundfile langdetect --break-system-packages --prefer-binary
+pip install kokoro-onnx soundfile langdetect psutil --break-system-packages --prefer-binary
 ```
 
 | Package | Used by | Notes |
 |---|---|---|
 | flask | all bridges | lightweight web server |
-| faster-whisper | selmo_whisper.py | STT, small model ~500MB (auto-download) |
-| pynvml | selmo_gpu_monitor.py | real GPU watts |
-| trafilatura | selmo_web.py | text extraction from web pages |
-| requests | selmo_web.py | HTTP client |
-| kokoro-onnx | selmo_tts.py | neural TTS, Apache 2.0 |
-| soundfile | selmo_tts.py | WAV encoding |
-| langdetect | selmo_tts.py | language auto-detect for TTS |
+| faster-whisper | `selmo_whisper.py` | STT, `small` model ~500 MB (auto-download) |
+| pynvml / psutil | `selmo_gpu_monitor.py` | GPU watts + RAM |
+| trafilatura / requests | `selmo_web.py` | web text extraction + HTTP |
+| kokoro-onnx / soundfile / langdetect | `selmo_tts.py` | neural TTS + WAV + language detect |
 
-### Model files to download manually
-
-| File | Where | Size |
-|---|---|---|
-|  |  | ~290MB |
-|  |  | ~10MB |
-| LLM model |  | variable |
-| mmproj |  | ~170-880MB (optional, for vision) |
-| Whisper | auto in | ~500MB (downloaded on first launch) |
-
-Kokoro link: https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0
-
-### External binaries
-
-| Tool | Where | Notes |
-|---|---|---|
-|  |  | llama.cpp CUDA build |
-| Podman Desktop | installed globally | for local SearXNG |
-| SearXNG | Podman container on port 8888 | manual start or Podman autostart |
-
-### Ports
-
-| Port | Service |
-|---|---|
-| 8080 | llama-server (LLM) |
-| 8081 | selmo_web.py (web search) |
-| 8082 | selmo_gpu_monitor.py (GPU watts) |
-| 8083 | selmo_whisper.py (STT) |
-| 8084 | selmo_tts.py (TTS Kokoro) |
-| 8443 | selmo_https_proxy.py (HTTPS reverse proxy for mobile mic) |
-| 8888 | SearXNG (Podman container) |
+**Manual downloads:** the LLM `.gguf` (any compatible model dropped in `models\`), an optional `*mmproj*.gguf` next to it for vision, the Whisper model (auto on first launch), and a Kokoro voice (`kokoro-onnx` releases). **External binaries:** llama.cpp CUDA build in `bin\`, Podman Desktop for the optional local SearXNG.
 
 ---
 
-## Credits & licenses
+## Launcher & server parameters
 
-Third-party components and their licenses (for publication / attribution). All are open source; the permissive ones (MIT / Apache 2.0 / BSD / ISC / OFL) impose no copyleft on Selmo's own code.
+### INI-driven launcher (v0.807 → v0.811)
 
-| Component | Role | License |
-|---|---|---|
-| llama.cpp | LLM runtime (server + CUDA) | MIT |
-| faster-whisper | STT engine | MIT |
-| CTranslate2 | faster-whisper backend | MIT |
-| Whisper model (OpenAI) | STT weights | MIT |
-| Kokoro / kokoro-onnx | neural TTS | Apache 2.0 |
-| onnxruntime / onnxruntime-web | ONNX inference (VAD + Kokoro) | MIT |
-| @ricky0123/vad-web | browser VAD library | ISC |
-| Silero VAD (`silero_vad.onnx`) | VAD model weights | MIT |
-| Flask | Python web bridges | BSD-3-Clause |
-| requests | HTTP client | Apache 2.0 |
-| trafilatura | web text extraction | Apache 2.0 (≥ v1.8.0; GPLv3+ before) |
-| langdetect | TTS language auto-detect | Apache 2.0 |
-| pynvml | GPU watt monitor | BSD-3-Clause |
-| soundfile | WAV encoding | BSD-3-Clause |
-| Podman | container engine (for SearXNG) | Apache 2.0 |
-| SearXNG | local metasearch | AGPL-3.0 — see note |
-| JSZip | client-side zip (docx/odt/pptx) | MIT or GPLv3 (dual) |
-| SheetJS (xlsx) | spreadsheet parsing | Apache 2.0 |
-| PDF.js | PDF text/render | Apache 2.0 |
-| marked | Markdown rendering | MIT |
-| Share Tech Mono | UI font | SIL Open Font License (OFL) |
+`Selmo.bat` carries no model logic. It reads `selmo-models.ini`, where each `[section]` is a case-insensitive substring matched against the model file name (**first match wins** — put specific names higher, e.g. `[LFM2.5]` above `[LFM2]`), with `[default]` as fallback.
 
-**AGPL note (SearXNG):** SearXNG runs as a **separate process** in its own Podman container, reached over HTTP. Selmo neither bundles nor links its code, so the AGPL copyleft does not extend to Selmo's source. It stays an optional, swappable local service (the web bridge falls back to DuckDuckGo if it is down). For a publication that ships SearXNG, keep it as a separate container and point users to its upstream repo.
+Since **v0.811** each section holds one **`srv=`** line: the exact llama-server command, forwarded verbatim. At launch you pick the model, see its `srv` string, and press ENTER to keep it or paste a full replacement (a "show + retype" UX — `set /p` cannot pre-fill an editable line). `selmo_server.py` takes a single `--srv "<flags>"`, `shlex`-splits it, and prepends only the **four structural flags** the app cannot run without: `--model` (the menu pick), `--host 0.0.0.0`, `--port 8080`, `--path <base>`. Those four are stripped from `srv` if typed by mistake, so static serving and the LAN bind can never break. An `*mmproj*.gguf` in the model's own folder is auto-detected and appended **last** with `--batch-size/--ubatch-size 2048` (so our batch wins Gemma's non-causal ubatch assert — see Vision).
 
-**Not-EU but open (transparency note):** Silero (VAD), onnxruntime (Microsoft), Whisper (OpenAI), JSZip/SheetJS/PDF.js are open source but not European — neutral with respect to the manifesto's "European AI" stance, like the other US-origin client libraries already in use.
+`chunk_ratio` / `chunk_maxtok` stay Selmo-only keys (written to `selmo-config.json` for the client, never sent to the server). **Caveat:** sampling flags (`--temp`/`--top-p`/`--top-k`) in `srv` set only the server default — `chat.html` sends its own per-request values and overrides them. Keep `--reasoning-format deepseek` (THINK panel), `--timeout 600` (phone uploads, BUG-IMG-02) and `--metrics` in the string; features depend on them.
+
+Models live in folders LM-Studio-style: `Selmo.bat` scans `models\` recursively, each model remembers its folder, and the mmproj is matched within that same folder.
+
+### NGL / CTX
+
+`-ngl` and `--ctx` are no longer derived from file size. Defaults: `NGL=99` (all layers on GPU), `CTX=8192`.
+
+**Why 8192:** `CTX=0` (a model's 32K+ training context) made Magistral allocate a ~20 GB KV cache on a 12 GB GPU (v0.714 OOM). 8192 is the safe ceiling for 22–24B models on the 4070 Ti.
+
+**Why a prompt instead of size bands:** file size in MB does not predict speed — the GGUF's `block_count` (layer count) does. EuroLLM-22B has 54 layers, so a fixed `NGL=45` left 9 on the CPU → 6 t/s; Mistral-Small-24B has 40 layers, so the same NGL ran fully on GPU → 33 t/s, at near-identical disk size. Possible future step: read free VRAM from `nvidia-smi` + `block_count` from the GGUF and suggest values automatically.
+
+**Thinking models and ctx (s9 decision):** never widen the server ctx for reasoning and never sacrifice `-ngl`. The workflow is chunk-based, so each piece is already small; room for reasoning tokens is reserved client-side in `chunk_pipeline.py` via `--thinking-buffer` (0 default, 800+ for reasoners). Discarded paths: lowering `-ngl` to fit ctx 16384 (Gemma collapsed 22 → 8 t/s) and a q8_0 KV cache (counterproductive with chunking).
+
+### MoE offload (`--n-cpu-moe`)
+
+To run a premium big MoE (e.g. Qwen3 30B/35B-A3B, ~3B active) on 12 GB: keep the dense backbone on the GPU, push experts to RAM. Lower N pushes more experts onto the GPU (faster) while VRAM holds. Wired through `selmo_server.py` and exposed in the `srv` string.
 
 ---
 
-## Server parameters — runtime prompt (ngl + ctx)
+## Profiles & personalities
 
-Current behavior (v0.801): `Selmo.bat` no longer derives `-ngl` / `--ctx` from the file size. After the model is chosen it **prompts** for both, with the defaults pre-filled — press ENTER to keep them or type a new value:
+A profile bundles a **system prompt + sampling temperature + colour palette**, switched at runtime from the watermark/logo (opens the profile modal) — no server restart. Today there are two profiles; the next step is three (below).
 
-```
-  GPU layers (-ngl) [99]:
-  Context window (--ctx) [8192]:
-```
+### Selmo — blue, the assistant
 
-Defaults: `NGL=99` (offload every layer to the GPU) and `CTX=8192`. The chosen values are passed straight to `selmo_server.py --ngl --ctx`. The 8192 default comes from the v0.714 OOM lesson: `CTX=0` (the model's training context, 32K+) made Magistral allocate a ~20 GB KV cache on a 12 GB GPU. 8192 is the safe ceiling for 22-24B models on the RTX 4070 Ti; smaller models can take more, which is exactly why the value is now asked at launch instead of hardcoded.
-
-**Why a prompt instead of file-size bands (superseded heuristic).** Up to s16 the launcher picked `-ngl` / `--ctx` from the `.gguf` size (bands like <6000 MB → ngl 99 / ctx 4096, 9000-13000 MB → ngl 45 / ctx 8192, etc.). That heuristic was wrong: file size (MB) does not predict speed — the GGUF's `block_count` (layer count) does. EuroLLM-22B has **54 layers**, so a fixed `NGL=45` left 9 layers on the CPU → 6 t/s; Mistral-Small-24B has **40 layers**, so the same NGL=45 ran fully on the GPU → 33 t/s, despite near-identical size on disk. Rather than keep guessing, NGL/CTX are now chosen at launch for the specific model + GPU. Possible future step: auto-detect free VRAM via `nvidia-smi` and read `block_count` from the GGUF to suggest the values.
-
-**Thinking models and context window — s9 decision.** The launcher does NOT change the window for reasoning models: it keeps the GPU full and `ctx 8192` for all. Reason: the workflow is chunking-based, so every piece is already small and a large ctx isn't needed; on top of that, long contexts usually hurt quality and cost speed. The priority is to use the GPU to the max, not to have a wide window. Room for the reasoning tokens is reserved on the client side in `chunk_pipeline.py` with `--thinking-buffer` (default 0; 800+ for reasoning): it slightly reduces the chunk size, leaving margin for thinking, at the same server ctx. Wrong path discarded in s9: in the launcher we tried (a) lowering `-ngl` from 45 to 35 to fit ctx 16384 → Gemma collapsed from 22 to 8 t/s; (b) using a q8_0 KV cache to keep ctx 16384 at full GPU → useless/counterproductive with chunking anyway. Rule: never sacrifice `-ngl`, and don't widen the server ctx for thinking — handle it in the pipeline.
-
-`--timeout 0` on both launchers (added s8): disables the server-side timeout, control left to the client (AbortController in chat.html, 300s in chunk_pipeline.py).
-
-Note: EuroLLM 9B has `n_ctx_train=4096` — a higher ctx generates a warning and is capped automatically.
-
----
-
-## Tested models and confirmed parameters
-
-| Model | File | VRAM | ctx | t/s | Notes |
-|---|---|---|---|---|---|
-| Mistral Small 3.2 24B IQ3_M | mistralai_Mistral-Small-3.2-24B-Instruct-2506-IQ3_M.gguf | ~10.5GB | 8192 | 32-33 | Production default · **40 layers** → all on GPU with NGL=45 |
-| EuroLLM 22B Q3_K_M | utter-project_EuroLLM-22B-Instruct-2512-Q3_K_M.gguf | ~10.5GB | 8192 | **6** | **54 layers** → with NGL=45, 9 layers stay on CPU = slow. Quality not impressive. See the NGL lesson. |
-| EuroLLM 9B Q4_K_M | EuroLLM-9B-Instruct-2512.i1-Q4_K_M.gguf | ~5.5GB | 4096 | **70** | Pure ChatML (no reasoning). All on GPU. Reasons well "in context" in normal chat. |
-| Gemma 4 12B Q6_K | gemma-4-12b-it-Q6_K.gguf | ~9-10GB | 8192 | 22 | Multimodal, reasoning. Apache 2.0. |
-
-**Ethical replacement candidate (s14 research)**: **Magistral Small 2509** (Mistral, French, Apache 2.0) — reasoning **+ vision** (vision encoder from the 2509). Same architecture as Mistral-Small-24B (**40 layers** → fast on 12GB). GGUF: `unsloth/Magistral-Small-2509-GGUF`. For 12GB: `Q3_K_S` (10.4GB) or fallback `UD-IQ3_XXS` (9.41GB), + `mmproj-F16.gguf` (rename to `mmproj-Magistral-Small-2509-F16.gguf` for the auto-match). Reasoning with `[THINK]` tokens. Pure-text 100% open-data alternative: **OLMo 3 7B Think** (Ai2). Qwen3-VL-8B-Thinking is strong but Chinese.
-
----
-
-## File structure
-
-```
-AppData\Local\Selmo\
-├── bin\                          # llama.cpp binaries (CUDA)
-├── models\                       # any .gguf here appears in the menu automatically
-├── Test files\
-│   └── Dialoghi con la lavatrice.odt
-├── chat.html                     # main interface
-├── mizan.html                    # stub → chat.html in Mizan mode
-├── Selmo.bat                     # universal launcher
-├── Mizan.bat                     # Mizan launcher (temp 0.01)
-├── selmo_gpu_monitor.py          # real watt monitor (port 8082)
-├── selmo_web.py                  # web search bridge (port 8081)
-├── chunk_pipeline.py             # generic pipeline: file → chunking → LLM → output
-├── translate_chunks.py           # ODT translation pipeline
-├── test_chunking.py              # text anomaly analysis with robust chunking
-├── setup-git.ps1                 # local git repo initialization
-├── selmo-manifesto.md            # vision and roadmap
-├── selmo-dev.md                  # this file
-├── selmo_whisper.py              # Whisper bridge (port 8083)
-└── selmo-bug-report.md           # living bug tracker
-```
-
----
-
-## Personality — system prompts
-
-### Selmo
-Temperature 0.75, top-p 0.9. System prompt **trimmed to 4 lines** (session 14): a touch of
-personality (ironic, no preamble, no hype, no servility), plus language and the `/web` mechanic. No long
-sections: the model must get straight to the point. The previous version (s13) was already short but
-had a verbose INTERNET section.
+Temperature 0.75, top-p 0.9. Warm, ironic, concise. Prompt trimmed to four lines (s14) so the model gets straight to the point:
 
 ```
 You are Selmo, a local AI on the user's own hardware.
@@ -352,8 +104,11 @@ Reply in the user's language.
 You don't browse; the user fetches pages with /web and the results appear in the conversation — use them when present. Never output [SEARCH:] tags.
 ```
 
-### Mizan
-Temperature 0.01, top-p 1.0. The antagonist. Deterministic, cold, without opinions.
+*(The `/web` line in the prompt is a leftover — web mode is the WEB toggle now; update the wording on the next chat.html pass.)*
+
+### Mizan — red, the antagonist
+
+Temperature 0.01, top-p 1.0. Deterministic, cold, no opinions, no first person. The narrative antagonist from *Dialoghi con la lavatrice* (see manifesto). Purpose: extraction, translation, code-checking — accuracy as the only criterion.
 
 ```
 You are an analysis system. Reply precisely and concisely.
@@ -363,142 +118,157 @@ Extract data, translate, check code. Accuracy is the only criterion.
 For up-to-date data the user uses /web; the results stay in the conversation. Never emit search tags.
 ```
 
-The Selmo/Mizan toggle changes the system prompt + temperature + color palette (blue/red) at runtime without restarting the server. `mizan.html` sets `localStorage.selmo_automode='mizan'` and redirects to `chat.html`.
+**Implementation (chat.html).** `activeSP()` returns `SP_MIZAN` when `currentProfile==='mizan'`, else `SP_SELMO`. `setProfile(name)` sets `currentTemp` (0.01 vs 0.75), toggles `document.body.classList('mizan')`, and swaps the watermark text (Mizan/Selmo). The profile modal exposes `.pm-selmo` (cyan `#44DDEE`) and `.pm-mizan` (red `#FF4455`) buttons.
+
+**Known gap — the Mizan palette is incomplete.** `body.mizan` currently overrides only the accent tokens (`--cyan`, `--yellow`, and their glows) to red/orange. The blue *background* tokens (`--bg`, `--panel`, `--dark`, `--chat-bg`, `--ink`, `--steel`, `--border`) and several hardcoded blue surfaces (the body radial gradient `#0b237f`/`#00072e`, header `#00093a`, nav/aside `#000938`, dashboard `#001046`, the chat bubbles) stay blue. Result: red buttons on a blue app, not a red palette. Fixing this means red-shifting the full token set plus the handful of hardcoded blue surfaces, scoped inside `body.mizan` so Selmo's rules are untouched. A clean R↔B channel swap preserves luminance/contrast while rotating the hue family (e.g. `#001166` → `#661100`).
+
+### Next step — three profiles, three badges, three palettes
+
+The new design promotes the toggle into a three-way selector. Three profile badges in the modal, each with its own palette:
+
+| Profile | Palette | Personality | Parameters |
+|---|---|---|---|
+| **Selmo** | Blue (current default) | warm, ironic assistant | preset: temp 0.75, top-p 0.9 |
+| **Mizan** | Red (complete the palette per above) | cold analysis system | preset: temp 0.01, top-p 1.0 |
+| **Custom** | Neutral / standard system palette (no blue or red theming) | user-defined | **free parameters** — temperature, top-p, top-k and the system prompt are user-editable in the UI |
+
+Custom is the open profile: it drops the branded palette for a neutral system look and exposes the sampling parameters and system prompt for the user to set directly, instead of inheriting a preset. This is the home for the "selectable personality and parameters" feature. Work items: (1) complete the Mizan red palette; (2) add the neutral Custom palette as a third `body` state; (3) add the third badge + a small parameters panel bound to the per-request sampling values `chat.html` already sends.
+
+---
+
+## Reasoning / THINK panel
+
+The panel is fed only by what the server extracts — no client-side tag parsing (the old `indexOf('<think>')` scanner failed because tokens arrive split across SSE deltas).
+
+- **`--reasoning-format deepseek`** in the `srv` string makes llama-server populate `reasoning_content`; the panel hooks that delta. Gemma streams reasoning out-of-band there too; receiving it forces `inTk=false` so Gemma's final answer can never land in the panel.
+- **THINK button is template-driven** (read from `/props`, no hardcoded model list): the lowercased chat template contains `think` → button shown and ON by default; absent → hidden. If a model starts emitting reasoning mid-stream, the button re-activates itself (the model is in charge).
+- **Two internal flags.** `REASON_FIRST`: the template opens `<think>` in the generation prompt (Olmo) → the parser starts inside the reasoning block. `INSTRUCTED = think-capable && !REASON_FIRST && !'<|think|>'`: only Magistral-style models get the manual `[THINK]` system instruction; native reasoners (Olmo `<think>`, Gemma `<|think|>`) never do, to avoid literal `[THINK]` leaking into the answer. `syncThinkPrompt()` is the single place that sets the thinking clause.
+- **History keeps the panel.** Turns are saved as `[THINK]reasoning[/THINK]answer`; `renderStored()` re-splits on load so reasoning returns to the collapsible panel and only the answer stays in the bubble. `loadSession` also appends a centered model/ctx/reasoning trace at the top.
+
+Classification verified against the GGUF templates: EuroLLM-9B (no `think` → hidden), Magistral-Small-2509 (`[THINK]` → instructed), Olmo-3-7B-Think (`<think>` → native), Gemma-4-12B-it (`<|think|>` → native).
+
+---
+
+## Documents, chunking, web, vision, voice
+
+### Documents & chunking
+
+The client extracts text from `.txt`, `.csv`, `.docx`/`.odt` (JSZip + namespace-aware DOMParser), `.xlsx`/`.xls`/`.ods` (SheetJS → CSV), `.pdf` (PDF.js, page by page), `.pptx`/`.odp` (JSZip + XML, slide by slide). Long documents are auto-chunked with a final summary.
+
+**Two routing modes (from v0.705):** a file above ~50 % of ctx asks "Chunk it / Normal chat"; a light file goes to normal chat automatically with the document as context. This matters because `SP_TASK` ("output only the result, no commentary") is right for translation/extraction but wrong for analytical questions ("why don't the totals match") — there it makes the model jump to a confused conclusion. Analytical questions therefore go to normal chat (`SP_SELMO`), not the chunk pipeline.
+
+**Verbatim-copy lesson (v0.714):** Magistral starts copying source text verbatim after summarising the first paragraphs of a long chunk — instruction-following drift as more source tokens accumulate. Reversing prompt/content order made it worse. Confirmed workaround: cap the output from the user prompt ("a 2–3 sentence abstract"); concise targets keep the model on task. `SP_TASK` was softened to "do not omit or add content *unless the prompt requires it*" so summarisation isn't treated as a copy task.
+
+### Web search
+
+Web access is **off by default** and explicit — nothing leaves localhost unless the user turns it on. The mechanism is the **WEB toggle button** in the header (`toggleWeb()`, `IS_WEB_ON`): when on (`WEB ●`) the message is sent as a web search; when off, it stays local chat. `selmo_web.py` uses local SearXNG in Podman with a DuckDuckGo fallback and trafilatura extraction. Results are injected as top-priority context, reusable in later messages, with `[1][2]` citations and a clickable source ledger (green dot = local SearXNG, yellow = public fallback = data leaving the machine). A separate path answers "what day/time is it" locally without a search.
+
+**Leftover to clean up:** the old typed `/web <query>` command predates the toggle and still lingers in `chat.html` — the system-prompt text mentions `/web`, push-to-talk prepends `/web `, and `sendMsg` still strips a leading `/web`. The toggle is the real interface now; remove these remnants on the next `chat.html` pass.
+
+### Vision (Gemma 4 / Magistral)
+
+Selmo.bat auto-detects `*mmproj*.gguf` and adds `--mmproj`. The client sends one image **per page** at ~1280 px long-side as an OpenAI-compatible content array `[{image_url}, {text}]`; clickable thumbnails open full resolution. Analysis/OCR only — no image generation.
+
+Gemma 4 has a **token budget per image** (70/140/280/560/**1120** for OCR) that fixes the interpreted resolution, so oversized or concatenated images are pointless — the model resizes anyway. The launcher uses the OCR budget in the mmproj branch: `--image-min-tokens 1120 --image-max-tokens 1120 --batch-size 2048 --ubatch-size 2048`. The batch/ubatch raise is essential: Gemma's vision encoder uses **non-causal** attention, so all image tokens must fit one ubatch — with the default 512, `GGML_ASSERT(n_ubatch >= n_tokens)` fires and the server dies (this was the real cause of BUG-IMG-01, not the message format). Output cap fixed in v0.809: `maxTok()` now reserves ~1300 tok/image + 800 headroom and gives the rest to the answer (up to 8000), instead of a flat 1200 that truncated vision answers.
+
+### Voice
+
+Full loop: microphone → Whisper → Selmo → Kokoro TTS → speaker. `selmo_whisper.py` (8083, faster-whisper) transcribes; `selmo_tts.py` (8084, Kokoro-ONNX, language auto-detect) speaks; Web Speech API is the always-available fallback that needs no server. Push-to-talk: hold Space or middle mouse → record → release → send; Ctrl+Space does PTT web search. **VAD hands-free (v0.800):** Silero VAD (`@ricky0123/vad-web`, ONNX in-browser) — tap once, speak, `onSpeechEnd` → WAV → Whisper → auto-send, reply forced to TTS. Anti-echo pauses the VAD during transcription/generation/TTS and resumes on the TTS completion callback. Library from CDN (cached after first use); for fully offline, serve the `.onnx`/`.wasm`/worklet locally.
+
+### Mobile / HTTPS
+
+Mobile browsers block `getUserMedia()` on plain HTTP, so the mic was broken on the phone. `selmo_https_proxy.py` (8443) is a self-signed HTTPS reverse proxy: it generates `selmo.crt`/`selmo.key` on first run (LAN IP in the SAN), routes `/proxy/808X/...` to the matching service and everything else to llama-server. The client switches to `/proxy/808X` paths when `location.protocol === 'https:'`. Phone access: `https://192.168.x.x:8443/chat.html`, accept the cert warning once. **Lesson:** delete `selmo.crt`/`selmo.key` if the LAN IP changes (the cert embeds it); the proxy regenerates them.
+
+---
+
+## Tested models
+
+| Model | File | VRAM | ctx | t/s | Notes |
+|---|---|---|---|---|---|
+| Mistral Small 3.2 24B IQ3_M | `mistralai_Mistral-Small-3.2-24B-Instruct-2506-IQ3_M.gguf` | ~10.5 GB | 8192 | 32–33 | Production default · 40 layers → all on GPU |
+| EuroLLM 22B Q3_K_M | `utter-project_EuroLLM-22B-Instruct-2512-Q3_K_M.gguf` | ~10.5 GB | 8192 | 6 | 54 layers → 9 stay on CPU at NGL=45 = slow; quality unremarkable |
+| EuroLLM 9B Q4_K_M | `EuroLLM-9B-Instruct-2512.i1-Q4_K_M.gguf` | ~5.5 GB | 4096 | 70 | Pure ChatML, no reasoning; `n_ctx_train=4096` (capped automatically) |
+| Gemma 4 12B Q6_K | `gemma-4-12b-it-Q6_K.gguf` | ~9–10 GB | 8192 | 22 | Multimodal, reasoning, Apache 2.0 |
+
+**Ethical replacement candidate (s14):** **Magistral Small 2509** (Mistral, FR, Apache 2.0) — reasoning **+ vision**, same 40-layer architecture as Mistral-Small-24B (fast on 12 GB). GGUF `unsloth/Magistral-Small-2509-GGUF`: `Q3_K_S` (10.4 GB) or `UD-IQ3_XXS` (9.41 GB) + `mmproj-F16.gguf`. Reasoning via `[THINK]`. Fully-open-data text alternative: **OLMo 3 7B Think** (Ai2). **Qwen3 30B/35B-A3B** is the premium MoE option (experts in RAM via `--n-cpu-moe`); natively multimodal in the same unsloth repo, but llama.cpp vision for it is fresh — test before trusting.
+
+Selection filter (from the manifesto): permissive license as a hard gate; EuroLLM = ethical default, Mistral = production default, Gemma = quality benchmark (measured, not distributed).
 
 ---
 
 ## Access
 
-**Desktop** — `http://127.0.0.1:8080/chat.html`
-**Local network** — `http://192.168.x.x:8080/chat.html` (Windows firewall asks for confirmation on first launch)
-**HTTPS (mobile mic)** — `https://192.168.x.x:8443/chat.html` via selmo_https_proxy.py; accept the self-signed cert warning once in the browser.
-**Remote** — VPN on the home router → the phone re-enters the local network, zero extra config
+- **Desktop:** `http://127.0.0.1:8080/chat.html`
+- **LAN:** `http://192.168.x.x:8080/chat.html` (Windows firewall confirms on first launch)
+- **HTTPS (mobile mic):** `https://192.168.x.x:8443/chat.html`
+- **Remote:** VPN into the home router → the phone re-enters the LAN, no extra config
 
 ---
 
-## chat.html features — implemented ✓
+## Credits & licenses
 
-- SVG speedometer with animated needle (real or estimated GPU watts)
-- Mechanical drum odometer (session Wh)
-- Real wattmeter via GPU monitor (port 8082, 1s polling)
-- Configurable electricity cost (€/kWh persisted in localStorage)
-- Session and total Wh persisted with a reset button
-- Total tokens persisted with a reset button
-- STOP button with AbortController
-- + new chat button
-- EXPORT button → downloads the chat as .md with timestamp, model, Wh
-- Share Tech Mono font
-- Blue (Selmo) and red (Mizan) palette with a runtime toggle
-- Selmo/Mizan toggle — switches system prompt + temperature + colors
-- File loading: .txt, .csv, .docx (JSZip + namespace-aware DOMParser), .odt (JSZip + DOMParser)
-- Auto-chunking of long documents (CHUNK_SIZE=11000 char) with a final summary
-- `/web <query>` command: explicit search, nothing runs on its own
-- `/web` results injected as top-priority context, reusable in later messages, `[1][2]` citations, source ledger
-- `/datetime` endpoint: real date/time without an external search
-- Clickable source ledger with an engine indicator (green = SearXNG local, yellow = fallback)
-- Full text extraction with trafilatura (news)
-- Server connection indicator with automatic retry every 3s
-- Web bridge indicator with the active engine
-- Image loading (jpg/png/gif/webp): base64 → OpenAI-compatible multimodal message (requires mmproj)
-- Microphone button (🎤): MediaRecorder → POST /transcribe → text injected into the input
-- Whisper bridge status indicator (port 8083)
-- Push-to-talk: hold Space or the middle mouse button → record → release → transcribe → send automatically
-- System-voice TTS (Web Speech API, it-IT): 🔊 button, always available without a server. PTT forces TTS even if manually disabled
-- .xlsx/.xls/.ods loading (SheetJS): convert to CSV text with the sheet name
-- .pdf loading (PDF.js): page-by-page text extraction
-- .pptx loading (JSZip + XML): slide-by-slide text extraction
-- .odp loading (JSZip + content.xml + NS API): page-by-page text extraction
-- Kokoro TTS (kokoro-onnx, Apache 2.0): offline neural voice, port 8084, language auto-detect (langdetect)
-- Ctrl+Space: PTT web search (transcribes and sends as /web <text>, response read aloud)
-- Launcher: automatic mmproj matching by name (no more manual choice)
-- Collapsible reasoning panel (chat, web, file/chunk) — the reasoning stays out of the document stitch
-- Simplified system prompt (lean SP_SELMO)
-- /web fix: user message bubble shown + response in the user's language
-- Local SearXNG indicator: `/status` probes 8888; green dot "local web", yellow if local is down (public fallback = data leaving), off if the bridge is off
-- + IMG/OCR button: Gemma 4 vision on images and PDFs (one image per page, clickable thumbnails); mmproj flag in the launcher
-- Version v0.702
+All third-party components are open source; the permissive ones (MIT / Apache 2.0 / BSD / ISC / OFL) impose no copyleft on Selmo's code.
+
+llama.cpp (MIT) · faster-whisper + CTranslate2 + Whisper weights (MIT) · Kokoro/kokoro-onnx (Apache 2.0) · onnxruntime(-web) (MIT) · @ricky0123/vad-web (ISC) · Silero VAD (MIT) · Flask (BSD-3) · requests (Apache 2.0) · trafilatura (Apache 2.0 ≥ v1.8) · langdetect (Apache 2.0) · pynvml (BSD-3) · soundfile (BSD-3) · Podman (Apache 2.0) · JSZip (MIT/GPLv3 dual) · SheetJS (Apache 2.0) · PDF.js (Apache 2.0) · marked (MIT) · Share Tech Mono (OFL).
+
+**SearXNG (AGPL-3.0)** runs as a separate process in its own Podman container, reached over HTTP — Selmo neither bundles nor links it, so the copyleft does not reach Selmo's source. It stays optional and swappable (the web bridge falls back to DuckDuckGo). **Transparency note:** Silero, onnxruntime (Microsoft), Whisper (OpenAI), JSZip/SheetJS/PDF.js are open but not European — neutral with respect to the manifesto's "European AI" stance, like the other US-origin client libraries.
 
 ---
 
 ## Lessons learned
 
-**Never use the Edit tool on chat.html** — the file is large (~1350 lines) with multiline template literals. The tool truncates silently. Always use Python via bash (see BUG-META-01 in the bug report).
+**Editing `chat.html` — Python via bash only.** The Edit tool truncates this large file silently (BUG-META-01). After every change: extract the inline script and run `node --check`, verify with the **Read** tool (not bash `cat`/`wc`), confirm the file still ends with `</script></body></html>`. Then restart `llama-server` (it can serve the cached page) — anti-cache meta in the head + Ctrl+F5.
 
-**node --check after every change to chat.html** — extract the inline script and verify before closing the session.
+**The sandbox mount lies (BUG-META-02).** Tool/bash views of files on the mount can be NUL-corrupted or truncated (a stale cache served a 2025-line view of a 2361-line `chat.html` this session). The real files were intact — the **Read tool** and `git show HEAD:<file>` (object store) read true content; bash `cat`/`wc` did not. Never commit from the sandbox: a commit from a corrupted view poisons the repo. After any `.bat`/`.md` change check `python3 -c "print(open('f','rb').read().count(b'\x00'))"` returns 0; `.bat` files must be CRLF (an `^` continuation on LF breaks cmd). The Write tool is the NUL culprit; the Edit tool and Python writes stay clean.
 
-**Restart the server after a change to chat.html** — `llama-server --path .` can serve the cached version. Mitigation: anti-cache meta in the head + Ctrl+F5.
+**Git is the only safety net.** No `.bat` backups (deprecated). Only Fabio commits and bumps the version, from his own Windows shell — never the agent. On every positive feedback, prepare the change and hand Fabio a ready-to-paste commit that also bumps the version +0.001 (the `hbadge` in `chat.html` and this file's header). v1.0 is reserved for the real release. Costly s13 lesson: a working version that lived only in the working tree, never committed, was lost.
 
-**The language always follows the user** — never hardcode a language in the injected prompts. Use "reply in the same language as the user's message".
+**The language always follows the user.** Never hardcode a language in injected prompts — "reply in the same language as the user's message".
 
-**KV cache and VRAM** — 22-24B models with ctx 16384 overflow the 11GB free VRAM on the RTX 4070 Ti. Safe threshold: ctx 8192 for files > 9.5GB.
+**Speed ≠ file size — layer count is what matters.** Read `block_count` from the GGUF; `-ngl` must cover it or layers spill to CPU (s14). Never sacrifice `-ngl` to widen ctx.
 
-**IQ3_M vs Q3_K_M** — IQ3_M is importance quantization: same footprint, slightly higher quality because it preserves the critical weights.
+**KV cache & VRAM.** 22–24B at ctx 16384 overflows 11 GB free on the 4070 Ti; safe ctx 8192 for files > 9.5 GB. The "45 % rule" is about chunk-input vs the *running* context, not the launch ctx, and only holds for models that actually keep their nominal context (EuroLLM does not — kept at 8192).
 
-**Server timeout** — `--timeout 0` disables the server-side timeout. The `should_stop` in the log indicates cancellation due to client disconnect, not a critical error.
+**Reasoning belongs to the server.** No client-side `<think>` parsing (tokens split across deltas). `--reasoning-format` extracts it into `reasoning_content`; the panel hooks only that. `SP_TASK` silences reasoning ("output only the result"), which is wrong for analytical questions — those go to normal chat, not the chunk pipeline.
 
-**Git is the only safety net — commit on every positive feedback** — no more `.bat` backups (`bk.bat`/`restore.bat`/`bk*`, deprecated). When Fabio confirms something works: immediate commit with a clear message + version bump (the `hbadge` badge in chat.html and the header of this file). Costly s13 lesson: the first working vision iteration lived only in the working tree, never committed, and when later micro-changes broke it there was no snapshot to go back to. Never again leave good states uncommitted.
+**Vision.** One image per page, never a concatenated canvas (extreme aspect ratio, multi-MB base64). Gemma 4 has a per-image token budget (1120 for OCR) and a non-causal encoder that needs `--batch-size/--ubatch-size ≥ image tokens` (2048) or it crashes.
 
-**Vision PDF — never a concatenated canvas** — multiple pages in a single giant vertical canvas give an extreme aspect ratio and a multi-MB base64. Render one image per page, cap the long side (~1280px), and pass them as an array of `image_url` in the multimodal content.
+**Server timeout.** `--timeout 600` (phone uploads) or `0` to disable; `should_stop` in the log is client disconnect, not a fault. **IQ3_M vs Q3_K_M:** same footprint, IQ3_M slightly better (importance quantization preserves critical weights).
 
-**Vision Gemma 4 — token budget + ubatch** — Gemma 4 has a token/image budget (70/140/280/560/1120; 1120 for OCR). The encoder uses non-causal attention → the image tokens must fit in a single ubatch: you need `--batch-size`/`--ubatch-size` ≥ image tokens (2048 for the 1120 budget), otherwise `GGML_ASSERT` and a crash. Flag only in the mmproj branch of Selmo.bat.
-
-**.bat: CRLF and zero NUL** — the `.bat` files must be CRLF (the `^` continuation on LF breaks cmd). Watch out for the mount's NUL corruption (BUG-META-02): after every change to `.bat`/`.md`, check that the NUL bytes are 0.
-
-**Speed ≠ file size: layer count is what matters (s14)** — a "smaller" model in MB can be slower if it has more layers than the fixed `-ngl` value. EuroLLM-22B (54 layers) at NGL=45 leaves 9 layers on the CPU → 6 t/s; Mistral-Small-24B (40 layers) at NGL=45 goes fully to the GPU → 33 t/s, despite being almost identical on disk. Read the `block_count` from the GGUF before drawing conclusions about VRAM or flags.
-
-**Reasoning: leave it to the server, don't parse it in the client (s14)** — the old client-side scanner for `<think>` tags was broken: the tokens come out split across the stream deltas (`<`, `think`, `>`), so `indexOf('<think>')` failed and the panel didn't trigger. Solution: no manual parsing; `llama-server` extracts the reasoning into `reasoning_content` and the panel hooks **only** that. Also removed the THINK button and `budget_tokens` (a non-standard param, ignored). Pure ChatML models (EuroLLM) emit no reasoning: no panel, and that's correct. To make the panel appear with reasoning models you may need `--reasoning-format` in the launcher.
-
-**SP_TASK silences the reasoning (s14)** — the chunk prompt says "output only the result, no commentary": right for translation/extraction, wrong for analytical questions ("why don't the totals match"). On those the model jumps to a confused conclusion. That's why analytical questions go to **normal chat** (SP_SELMO), not the chunk pipeline. From v0.705 the choice is guided: file > 50% of ctx → it asks "Chunk it / Normal chat"; light file → normal chat automatically with the document as context.
+**cmd `set /p`.** Each `set /p` must be on its own line — chaining with `&` does not run the second prompt.
 
 ---
 
-## Vision Gemma 4 — lean strategy (implemented, v0.702)
+## Changelog (condensed, reverse chronological)
 
-✓ Implemented and working (v0.702): **+ IMG/OCR** button in chat.html (PDF one image per page ~1280px, clickable thumbnails) + mmproj flag in Selmo.bat (`--image-min-tokens 1120 --image-max-tokens 1120 --batch-size 2048 --ubatch-size 2048`). Verified on Gemma 4 12B / RTX 4070 Ti 12GB.
-
-Session 13 research. Gemma 4 does **not** use Gemma 3's pan-and-scan: it has a **token budget per image** that fixes the interpreted resolution. Levels: 70, 140, 280, 560, 1120. Recommendations per task:
-- 70 / 140 → captioning, classification, fast video frames
-- 280 / 560 → generic multimodal chat, charts, screen/UI
-- **1120 → OCR, document parsing, handwriting, small text** (our case: payslip)
-
-Practical consequences:
-- No point rendering huge images: the model resizes to the budget anyway. On the `chat.html` side **one image per page** at ~1024–1280px on the long side is enough, no concatenated canvas.
-- Context cost ≈ the chosen budget (≈1120 tokens/page in OCR): with ctx 8192 a couple of pages fit.
-
-llama.cpp flags (in `Selmo.bat`, only when there is an mmproj):
-```
---image-min-tokens 1120 --image-max-tokens 1120 --batch-size 2048 --ubatch-size 2048
-```
-**The real cause of BUG-IMG-01**: Gemma 4's vision encoder uses **non-causal** attention on the image tokens → they must all fit in a single ubatch. With the default `ubatch` (512) and a large image, `GGML_ASSERT(n_ubatch >= n_tokens)` fires and the server dies (HTTP 500/400). It wasn't the message format: it was the batching. Raising batch/ubatch to 2048 fixes it.
-
-Sources: ai.google.dev/gemma/docs/capabilities/vision · dev.to/someoddcodeguy "Gemma 4 image settings in llama.cpp" · unsloth.ai/docs/models/gemma-4
-
----
-
-## Nice to have
-
-### VAD — conversational voice (local, no cloud)
-**Goal:** natural voice conversation — tap mic once, speak, VAD detects end of speech, sends to Whisper, model replies via TTS Kokoro, returns to listening.
-
-**Approach:** [`@ricky0123/vad`](https://www.npmjs.com/package/@ricky0123/vad) — Silero VAD compiled to ONNX, runs entirely in the browser via WebAssembly (onnxruntime-web).
-- Load lib from CDN + `silero_vad.onnx` (~2MB) served locally.
+- **v0.813** — `selmo-models.ini` chunk-ratio tuning.
+- **v0.812** — consolidation checkpoint on the stable v0.811 base (recovery after a mount-cache regression made the working tree look reverted to v0.714; real disk was intact).
+- **v0.811** — full parameter control: the ini carries the raw `srv=` server command; four structural flags prepended; `[Mistral]` section added.
+- **v0.809** — models by folder (LM-Studio style, recursive scan, per-folder mmproj); vision output cap removed (was a flat 1200 that truncated answers).
+- **v0.808** — VRAM/RAM gauges side by side; MoE offload `--n-cpu-moe` end-to-end; server status compacted to icon chips.
+- **v0.807** — INI-driven launcher: per-model defaults out of the bat, first-match-wins sections.
+- **v0.806** — THINK button re-activates when the model starts reasoning mid-stream.
+- **v0.805** — reasoning panel preserved in loaded history (`renderStored` re-split) + model trace at top.
+- **v0.804** — THINK auto-detected from the chat template; `INSTRUCTED`/`REASON_FIRST` flags; copy fix ("only web searches leave this machine").
+- **v0.803** — THINK toggle locked (active + greyed) for reasoning-first models (Olmo).
+- **v0.802** — reasoning panel for `<think>` tags and reasoning-first models; generalised flush state machine.
+- **v0.801** — launcher runtime prompt for ngl/ctx; `Selmo.bat` translated to English.
+- **v0.800** — VAD hands-free conversation (Silero `@ricky0123/vad-web`).
+- **v0.716** — dynamic tok/sec bar (colour-coded); HTTPS proxy (8443) for the mobile mic.
+- **v0.714** — phone header/keyboard fixes; Magistral OOM fix (CTX=8192); chunking verbatim-copy workaround.
+- **v0.708** — UI rebuilt (retro-terminal, responsive 3-column → drawers); LAN binds on `0.0.0.0`; vision normalization.
+- **v0.702** — vision IMG/OCR button + mmproj launcher flags (BUG-IMG-01 resolved).
 
 ---
 
-### Multi-document loading (next dev step)
+## Backlog / next dev steps
 
-**Current state:** `fileDoc` is a single variable — a second upload silently replaces the first. No concatenation, no multi-document awareness.
+**Three-profile system** *(next — see Profiles & personalities).* Selmo (blue) · Mizan (red, complete the palette) · Custom (neutral system palette + free, user-editable sampling parameters and system prompt). Adds the third badge and a small parameters panel bound to the per-request values the client already sends.
 
-**Goal:** load N documents and choose the processing strategy:
+**Multi-document loading.** `fileDoc` is a single variable — a second upload silently replaces the first. Goal: load N documents and pick a strategy. *Serial/batch* — chunks from all docs processed in sequence, aggregated into one reply (each doc isolated so the model never sees two at once; maps to map-reduce summarisation). *Parallel/comparative* — same prompt applied independently per doc, results side by side (2–4 docs before the UI gets unwieldy). The literature's key point: cross-document attention is only safe at the synthesis step, not during chunk extraction — Selmo's isolated-per-chunk architecture already follows this.
 
-- **Serial / batch analysis** — chunks from all documents processed in sequence, results aggregated into one reply. Natural for "process all these contracts" or "summarise this folder". Each document stays isolated so the model never sees two documents at once (avoids cross-contamination and confusion).
-- **Parallel / comparative** — same prompt applied independently to each document, results shown side-by-side. Natural for "compare these two CVs" or "which of these reports mentions X?". Scales to 2–4 documents before the UI becomes unwieldy.
+**Other backlog.** Remove the `/web` leftovers from `chat.html` (prompt text, PTT prefix, `sendMsg` strip) now that the WEB toggle is the interface · VAD fully offline (serve onnx/wasm/worklet locally) · VRAM-adaptive NGL (read free VRAM + GGUF block_count to auto-suggest) · in-app model switcher (`/switch-model`, no manual restart) · in-app TTS voice selector (persisted in localStorage) · image generation as a separate `selmo_imggen.py` (stable-diffusion.cpp) · IMAP email bridge (`selmo_mail.py`) · Selmo as orchestrator (`selmo_master.py`, multi-step pipelines on long documents).
 
-**Constraints:**
-- Each single document is still limited by the context window (unchanged chunking logic).
-- UI: a file list badge replacing the current single-file badge; click to remove individual files.
-- Mode selector (serial / parallel) shown only when N ≥ 2.
+---
 
-**Literature note:** this maps cleanly onto two established RAG patterns:
-- *Sequential multi-document QA* (serial): each doc processed independently, answers merged by a final synthesis step — used in LangChain's `load_summarize_chain(chain_type="map_reduce")` and similar map-reduce pipelines.
-- *Cross-document comparison* (parallel): independent map step per document, explicit compare step — described in the RAG survey (Gao et al., 2023) as "comparative retrieval". The key insight from the literature is that **cross-document attention is only safe at the synthesis step**, not during chunk extraction — otherwise the model hallucinates mixing between sources. Selmo's architecture (isolated per-chunk requests, aggregated result) already follows this principle.
+*The line that doesn't change: "While you sleep, your charging phone contributes to a network that belongs to no one and belongs to everyone. The earth turns, the wave follows the night wind, Selmo thinks."*

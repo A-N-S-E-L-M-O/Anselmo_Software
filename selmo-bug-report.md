@@ -1,5 +1,5 @@
 # Selmo — Bug Report
-*Living document · updated session 15 · June 2026*
+*Living document · updated session 16 · June 2026*
 
 ---
 
@@ -19,6 +19,8 @@
 Files written/edited via tools on this mount can end up full of NUL bytes (`\x00`) and/or with wrong line endings. It happened in s13 to `Selmo.bat` (593 NUL + LF → the `^` continuation broke cmd → fragments executed as commands → crash on startup) and to `selmo-bug-report.md` (3684 NUL → grep saw it as "binary"). The **Write** tool seems to be the culprit; the **Edit** tool and Python writes stay clean.
 
 **Rule**: after every change to a `.bat`/`.md`, check `python3 -c "print(open('f','rb').read().count(b'\x00'))"` → it must return 0. The `.bat` files must be **CRLF**. Cleanup: remove the NULs and rewrite (the `.bat` files in CRLF), preferably via Python.
+
+**Read-side variant (session 16).** The same mount also serves **stale, truncated** *read* views: bash `cat`/`wc` showed `chat.html` as 2025 lines while the real file was 2361 lines ending cleanly in `</script></body></html>`, and `git` (reading through the same mount) reported phantom "337 deletions". The disk file was intact: the **Read tool** and **`git show HEAD:<file>`** (object store) both returned true content. Implications: don't trust bash views of `chat.html`; verify with the Read tool; and **never edit `chat.html` via Python-in-bash while the bash view is truncated** — a write-back would chop the real file to the truncated length. A session restart clears the stale cache.
 
 ---
 
