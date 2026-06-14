@@ -1,5 +1,5 @@
 # Selmo — Development documentation
-*Updated session 17 · 2026-06-14 · v0.817*
+*Updated session 17 · 2026-06-14 · v0.818*
 
 > **Read first:** the **Lessons learned** section near the end of this file, and **`selmo-bug-report.md`**.
 > **Project language:** English only — see `selmo-manifesto.md`. Conversation with Fabio can be any language; every file artifact is English.
@@ -248,6 +248,7 @@ llama.cpp (MIT) · faster-whisper + CTranslate2 + Whisper weights (MIT) · Kokor
 
 ## Changelog (condensed, reverse chronological)
 
+- **v0.818** — profile params mini-help: native `title` tooltips on Temp / Top-p / Top-k / System prompt in the profile modal, explaining each parameter and its use-case ranges on hover.
 - **v0.817** — web search query-rewrite: a local RAG-style step (`rewriteQuery`) turns the chat turn into a keyword query before hitting the engine — fixes terse follow-ups (e.g. "17 anni" returning the movie) by inheriting the running topic from recent turns. Thinking disabled via `chat_template_kwargs.enable_thinking:false` (+ plain-call retry) since in-prompt `/no_think` is ignored by Qwen/Gemma; strict `QUERY:` line parsed from `content`/`reasoning_content`; the sources footer shows the query actually sent (`🔎 "…" ← original`). Graceful fallback to the raw message on any failure.
 - **v0.816** — whole-system power: the main gauge now shows CPU+GPU+losses (system watts), not GPU-only. `selmo_gpu_monitor.py` reads CPU package + GPU power from LibreHardwareMonitor (`:8085/data.json`, vendor-agnostic — NVIDIA and AMD) and applies a PSU/baseline losses model. New `setup-lhm.ps1` makes it installer-reproducible (pinned download + config + elevated scheduled task, no manual GUI step); `selmo_server.py` launches LHM as a fallback.
 - **v0.815** — three-profile system shipped (Selmo blue / Mizan red / Custom neutral): full Mizan red palette via R↔B channel swap + scoped surface overrides; Custom neutral palette with editable temp/top-p/top-k/system-prompt bound per-request; profile modal with three badges opened from the logo; profile persisted in `localStorage`. Mizan self-identifies; `/web` wording dropped from the system prompts; neutral welcome bubble. *(The profile system documented since s14 had never actually reached the committed `chat.html` — built from scratch this session; see Lessons.)*
