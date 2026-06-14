@@ -45,9 +45,12 @@ Files written/edited via tools on this mount can end up full of NUL bytes (`\x00
 
 **Why** — A self-signed cert isn't trusted, and `getUserMedia` refuses to run in an untrusted/insecure origin. Browser security policy, not a Selmo bug per se.
 
-**Fix options (next session)**
-- **mkcert** — generate a *locally-trusted* cert for the LAN IP and install the mkcert root CA on the phone once; replaces the self-signed `selmo.crt`/`selmo.key` and removes the warnings cleanly. Clean and reusable (one CA install per device).
-- **Chrome insecure-origin flag** — on the phone, add the plain-HTTP LAN origin to `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, dropping HTTPS for the mic entirely. Fastest, but per-device and Chrome-only.
+**Fix options — Selmo runs on Firefox (next session)**
+- **Firefox `about:config` (fastest)** — set `media.getusermedia.insecure.enabled = true` and `media.devices.insecure.enabled = true`; this grants the mic over plain HTTP with no cert at all. Works on desktop and on Firefox for Android (type `about:config` in the URL bar). Per-profile/device.
+- **Permanent cert exception** — keep the 8443 HTTPS proxy and add a *permanent* exception for the self-signed `selmo.crt` in Firefox ("Advanced → Accept the Risk and Continue"). Firefox persists it, so the warning is one-time per device and the origin becomes a trusted secure context.
+- **mkcert (cleanest)** — generate a locally-trusted cert for the LAN IP. Caveat: Firefox uses its **own NSS trust store**, not the OS one, so either import the mkcert root CA into Firefox (Settings → Privacy & Security → Certificates → Authorities → Import) **or** set `security.enterprise_roots.enabled = true` so Firefox honours the OS store. Replaces `selmo.crt`/`selmo.key`.
+
+*(Chrome's `unsafely-treat-insecure-origin-as-secure` flag does **not** apply — Selmo runs on Firefox.)*
 
 ---
 

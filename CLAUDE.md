@@ -26,3 +26,4 @@ Don't let confirmed-good work sit unrecorded: the moment Fabio confirms, give hi
 - **NEVER** use the Edit tool on `chat.html` (it truncates silently). Python via bash only — see BUG-META-01.
 - `node --check` on the extracted script after every change; verify with the Read tool, not with `cat`/`wc` from bash.
 - Restart `llama-server` after a change (it can serve from cache); anti-cache meta + Ctrl+F5.
+- **Target browser: Firefox** (desktop + Firefox for Android). No Chrome-isms (`chrome://flags`, Chrome-only APIs); Firefox uses its **own NSS cert store**, not the OS one, and the phone mic needs a secure context — see BUG-MIC-01.
