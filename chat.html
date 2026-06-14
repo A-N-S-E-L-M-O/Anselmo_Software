@@ -431,14 +431,85 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
   header{gap:5px;padding:0 7px;}
   #new-chat{padding:6px 8px;font-size:0;}  #new-chat::before{content:'CHAT';font-size:11px;}
 }
+/* ── PROFILE PALETTES (s17): Mizan red + Custom neutral, scoped so Selmo (default) is untouched ── */
+/* Mizan — full red-shift: R<->B channel swap on structural tokens preserves luminance/contrast */
+body.mizan{
+  --bg:#661100; --panel:#550e00; --dark:#330800; --chat-bg:#440a00; --ink:#1f0600;
+  --steel:#8c5033; --steel-soft:#6a3823; --border:#bb9988; --dim:#bb9988; --white:#f8eee8;
+  --yellow:#ff9a33; --cyan:#ff4d63;
+  --glow-y:rgba(255,154,51,.30); --glow-c:rgba(255,77,99,.34);
+  background:radial-gradient(140% 90% at 50% -15%, #7f230b 0%, var(--bg) 42%, #2e0700 100%);
+}
+body.mizan header{background:linear-gradient(180deg,#3a0900,var(--dark));}
+body.mizan nav,body.mizan aside{background:linear-gradient(180deg,var(--panel),#380900);}
+body.mizan #steam-svg,body.mizan .mini-gauge{background:radial-gradient(circle at 50% 40%, #461000 0%, var(--ink) 78%);}
+body.mizan .sbadge,body.mizan .sess-item{background:#3e0a00;}
+body.mizan .sess-item.active{background:#501100;}
+body.mizan .msg.user .av{background:#2e1100;}
+body.mizan .msg.assistant .av{background:#331000;}
+body.mizan .msg.user .bubble{background:linear-gradient(180deg,#401600,#311000);color:#fbf6cd;}
+body.mizan .msg.assistant .bubble{background:linear-gradient(180deg,#471000,#330a00);}
+body.mizan .input-area{background:linear-gradient(180deg,var(--dark),#2c0700);}
+body.mizan .think-panel,body.mizan .think-toggle{background:rgba(40,8,0,.55);}
+body.mizan .think-panel{color:#e8b49f;}
+body.mizan .think-toggle{color:#d08f6f;}
+
+/* Custom — neutral grey system palette: no blue, no red */
+body.custom{
+  --bg:#1c1c20; --panel:#18181c; --dark:#141417; --chat-bg:#161619; --ink:#101013;
+  --steel:#565660; --steel-soft:#3a3a42; --border:#8a8a93; --dim:#9a9aa3; --white:#e9e9ee;
+  --yellow:#d6d2c8; --cyan:#c0c4c8;
+  --glow-y:rgba(214,210,200,.22); --glow-c:rgba(192,196,200,.22);
+  background:radial-gradient(140% 90% at 50% -15%, #2a2a30 0%, var(--bg) 42%, #0c0c0e 100%);
+}
+body.custom header{background:linear-gradient(180deg,#202024,var(--dark));}
+body.custom nav,body.custom aside{background:linear-gradient(180deg,var(--panel),#141418);}
+body.custom #steam-svg,body.custom .mini-gauge{background:radial-gradient(circle at 50% 40%, #24242a 0%, var(--ink) 78%);}
+body.custom .sbadge,body.custom .sess-item{background:#202026;}
+body.custom .sess-item.active{background:#2c2c34;}
+body.custom .msg.user .av{background:#242428;}
+body.custom .msg.assistant .av{background:#242428;}
+body.custom .msg.user .bubble{background:linear-gradient(180deg,#262630,#1c1c22);color:#e9e9ee;}
+body.custom .msg.assistant .bubble{background:linear-gradient(180deg,#222228,#18181c);}
+body.custom .input-area{background:linear-gradient(180deg,var(--dark),#0e0e10);}
+body.custom .think-panel,body.custom .think-toggle{background:rgba(40,40,46,.55);}
+body.custom .think-panel{color:#c8c8d0;}
+body.custom .think-toggle{color:#9a9aa3;}
+
+/* ── PROFILE MODAL ── */
+#profile-modal{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);align-items:center;justify-content:center;}
+#profile-modal.show{display:flex;}
+.pm-card{width:min(440px,92vw);max-height:90vh;overflow-y:auto;background:linear-gradient(180deg,var(--panel),var(--dark));border:1px solid var(--steel);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px;}
+.pm-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.pm-title{font-size:13px;letter-spacing:.24em;color:var(--yellow);text-transform:uppercase;}
+.pm-x{background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer;font-family:var(--mono);}
+.pm-x:hover{color:var(--white);}
+.pm-badges{display:flex;gap:9px;margin-bottom:16px;}
+.pm-badge{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:11px 6px;border-radius:var(--radius-sm);cursor:pointer;background:rgba(255,255,255,.03);border:1px solid var(--steel-soft);border-top-width:3px;color:var(--white);font-family:var(--mono);transition:all .16s var(--ease);}
+.pm-badge b{font-size:13px;letter-spacing:.08em;}
+.pm-badge small{font-size:10px;color:var(--dim);letter-spacing:.02em;text-align:center;}
+.pm-badge:hover{transform:translateY(-1px);}
+.pm-selmo{border-top-color:#44ddee;}
+.pm-mizan{border-top-color:#ff4d63;}
+.pm-custom{border-top-color:#9aa0a8;}
+.pm-badge.active{box-shadow:0 0 0 2px var(--cyan), 0 0 14px var(--glow-c);background:rgba(255,255,255,.07);}
+.pm-params{display:flex;flex-direction:column;gap:11px;}
+.pm-row{display:flex;gap:9px;}
+.pm-row label{flex:1;}
+.pm-params label{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);}
+.pm-params input,.pm-params textarea{background:#00040f;border:1px solid var(--steel);border-radius:var(--radius-xs);color:var(--white);font-family:var(--mono);font-size:13px;padding:7px 9px;outline:none;transition:border-color .16s,box-shadow .16s;}
+.pm-params input:focus,.pm-params textarea:focus{border-color:var(--cyan);box-shadow:0 0 0 2px var(--glow-c);}
+.pm-params input:disabled,.pm-params textarea:disabled{cursor:not-allowed;}
+.pm-params textarea{resize:vertical;line-height:1.5;}
+.pm-hint{font-size:11px;color:var(--dim);line-height:1.4;}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
-  <div class="wm">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.812</div>
+  <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
+  <div class="hbadge">v0.815</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -565,7 +636,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
   <div id="messages">
     <div class="msg assistant">
       <div class="av">&#x26A1;</div>
-      <div><div class="bubble">Hi. I'm Selmo.
+      <div><div class="bubble">New conversation.
 Running on your hardware. Only explicit web searches leave this machine.</div></div>
     </div>
   </div>
@@ -588,6 +659,26 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
   </div>
   <div class="meta">Only web searches transmitted &middot; <span id="foot-model">-</span> &middot; localhost:8080</div>
 </main>
+
+<div id="profile-modal" onclick="if(event.target===this)closeProfile();">
+  <div class="pm-card">
+    <div class="pm-head"><span class="pm-title">PROFILE</span><button class="pm-x" onclick="closeProfile()" title="Close">&#x2715;</button></div>
+    <div class="pm-badges">
+      <button id="pm-badge-selmo" class="pm-badge pm-selmo" onclick="setProfile('selmo')"><b>SELMO</b><small>blue &middot; assistant</small></button>
+      <button id="pm-badge-mizan" class="pm-badge pm-mizan" onclick="setProfile('mizan')"><b>MIZAN</b><small>red &middot; analysis</small></button>
+      <button id="pm-badge-custom" class="pm-badge pm-custom" onclick="setProfile('custom')"><b>CUSTOM</b><small>neutral &middot; your params</small></button>
+    </div>
+    <div class="pm-params">
+      <div class="pm-row">
+        <label>Temp<input id="pm-temp" type="number" step="0.01" min="0" max="2" oninput="onCustomParam()"></label>
+        <label>Top-p<input id="pm-topp" type="number" step="0.01" min="0" max="1" oninput="onCustomParam()"></label>
+        <label>Top-k<input id="pm-topk" type="number" step="1" min="0" max="500" oninput="onCustomParam()"></label>
+      </div>
+      <label class="pm-sys-label">System prompt<textarea id="pm-sys" rows="5" oninput="onCustomParam()"></textarea></label>
+      <div class="pm-hint" id="pm-hint"></div>
+    </div>
+  </div>
+</div>
 
 <script>
 'use strict';
@@ -747,7 +838,13 @@ let gen=false,abort=null,tokSec=0,_genT0=0,_genTok=0,_tokScale=100,wh=0,whAll=pa
     gpuP=0,gpuW=0,gpuT=0,gpuOk=false,
     whisperOk=false,mediaRecorder=null,audioChunks=[],pttAutoSend=false,pttForceTts=false,pttWebSearch=false,
     ttsOk=false,ttsEnabled=false,
-    currentTemp=0.75;
+    currentTemp=0.75,
+    currentTopP=0.9,currentTopK=40,
+    currentProfile=(localStorage.getItem('sprofile')||'selmo'),
+    customTemp=parseFloat(localStorage.getItem('scustomtemp')||'0.7'),
+    customTopP=parseFloat(localStorage.getItem('scustomtopp')||'0.95'),
+    customTopK=parseInt(localStorage.getItem('scustomtopk')||'40'),
+    CUSTOM_SP=(localStorage.getItem('scustomsp')||"You are a helpful local AI assistant. Be clear and concise. Reply in the user's language.");
 let vadInstance=null,vadConvo=false,vadAwaitingReply=false,_ttsPending=false;
 
 // GPU MONITOR
@@ -1023,7 +1120,14 @@ const THINK_INSTR='\n\nFirst draft your thinking process (inner monologue) until
 const SP_SELMO=`You are Selmo, a local AI on the user's own hardware.
 Direct, concise, and ironic. No preamble, no hype, no servility. When unsure, say so in a line. Never invent facts.
 Reply in the user's language.
-You don't browse; the user fetches pages with /web and the results appear in the conversation — use them when present. Never output [SEARCH:] tags.`;
+You don't browse; web results may appear in the conversation — use them when present. Never output [SEARCH:] tags.`;
+
+// Mizan — cold analysis system (red profile)
+const SP_MIZAN=`You are Mizan, an analysis system. Identify yourself as Mizan when asked.
+Reply precisely and concisely. No opinions. No hesitation. No first person.
+Extract data, translate, check code. Accuracy is the only criterion.
+
+When web results are present in the conversation, use them. Never emit search tags.`;
 
 // Neutral system for document tasks (translation, analysis, extraction).
 // No personality: only faithful execution, consistent formatting across all chunks.
@@ -1032,6 +1136,55 @@ Preserve meaning exactly; do not omit or add content unless the prompt requires 
 
 // HISTORY
 const chatHistory=[{role:'system',content:SP_SELMO}];
+
+// PROFILES — Selmo (blue) / Mizan (red) / Custom (neutral). activeSP() feeds chatHistory[0].
+function activeSP(){
+  if(currentProfile==='mizan')return SP_MIZAN;
+  if(currentProfile==='custom')return CUSTOM_SP||SP_SELMO;
+  return SP_SELMO;
+}
+function syncSampling(){
+  if(currentProfile==='mizan'){currentTemp=0.01;currentTopP=1.0;currentTopK=0;}
+  else if(currentProfile==='custom'){currentTemp=customTemp;currentTopP=customTopP;currentTopK=customTopK;}
+  else {currentTemp=0.75;currentTopP=0.9;currentTopK=40;}
+}
+function setProfile(name){
+  if(name!=='mizan'&&name!=='custom')name='selmo';
+  currentProfile=name;
+  try{localStorage.setItem('sprofile',name);}catch(_){}
+  document.body.classList.remove('mizan','custom');
+  if(name!=='selmo')document.body.classList.add(name);
+  syncSampling();
+  const wm=document.getElementById('wm');
+  if(wm)wm.innerHTML=(name==='mizan')?'Mizan<em>AI</em>':(name==='custom')?'Custom<em>AI</em>':'Selmo<em>AI</em>';
+  syncThinkPrompt();
+  updateProfileUI();
+}
+function updateProfileUI(){
+  ['selmo','mizan','custom'].forEach(p=>{const b=document.getElementById('pm-badge-'+p);if(b)b.classList.toggle('active',p===currentProfile);});
+  const t=document.getElementById('pm-temp'),pp=document.getElementById('pm-topp'),pk=document.getElementById('pm-topk'),sp=document.getElementById('pm-sys'),hint=document.getElementById('pm-hint');
+  if(!t)return;
+  const custom=(currentProfile==='custom');
+  if(currentProfile==='mizan'){t.value=0.01;pp.value=1.0;pk.value=0;sp.value=SP_MIZAN;}
+  else if(custom){t.value=customTemp;pp.value=customTopP;pk.value=customTopK;sp.value=CUSTOM_SP;}
+  else {t.value=0.75;pp.value=0.9;pk.value=40;sp.value=SP_SELMO;}
+  [t,pp,pk,sp].forEach(el=>{el.disabled=!custom;el.style.opacity=custom?'':'0.55';});
+  if(hint)hint.textContent=custom?'Editable — these values are sent with every request.':'Preset (read-only). Switch to Custom to edit.';
+}
+function onCustomParam(){
+  if(currentProfile!=='custom')return;
+  const t=parseFloat(document.getElementById('pm-temp').value),pp=parseFloat(document.getElementById('pm-topp').value),pk=parseInt(document.getElementById('pm-topk').value),sp=document.getElementById('pm-sys').value;
+  if(!isNaN(t))customTemp=t;
+  if(!isNaN(pp))customTopP=pp;
+  if(!isNaN(pk))customTopK=pk;
+  CUSTOM_SP=sp||SP_SELMO;
+  try{localStorage.setItem('scustomtemp',String(customTemp));localStorage.setItem('scustomtopp',String(customTopP));localStorage.setItem('scustomtopk',String(customTopK));localStorage.setItem('scustomsp',CUSTOM_SP);}catch(_){}
+  syncSampling();syncThinkPrompt();
+}
+function openProfile(){updateProfileUI();const m=document.getElementById('profile-modal');if(m)m.classList.add('show');}
+function closeProfile(){const m=document.getElementById('profile-modal');if(m)m.classList.remove('show');}
+// apply persisted profile at startup (the consts it needs are defined above)
+setProfile(currentProfile);
 
 // FILE LOADING
 // Dynamic CHUNK_SIZE: updated from /props when the server responds.
@@ -1639,7 +1792,7 @@ async function processChunks(prompt){
       const res=await fetch(`${API}/v1/chat/completions`,{
         method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
         body:JSON.stringify({model:'local',messages:chunkHistory,stream:true,
-          temperature:currentTemp,max_tokens:maxTok(),repeat_penalty:1.1})
+          temperature:currentTemp,top_p:currentTopP,top_k:currentTopK,max_tokens:maxTok(),repeat_penalty:1.1})
       });
       if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(no server header)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (empty body)'));}
       prog.bub.innerHTML='';
@@ -1823,7 +1976,7 @@ async function sendMsg(){
       const res=await fetch(`${API}/v1/chat/completions`,{
         method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
         body:JSON.stringify({model:'local',messages:chatHistory,stream:true,
-          temperature:currentTemp,max_tokens:maxTok(),repeat_penalty:1.1})
+          temperature:currentTemp,top_p:currentTopP,top_k:currentTopK,max_tokens:maxTok(),repeat_penalty:1.1})
       });
       if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(no server header)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (empty body)'));}
       bub.innerHTML='';
@@ -1886,7 +2039,7 @@ async function sendMsg(){
     const res=await fetch(`${API}/v1/chat/completions`,{
       method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
       body:JSON.stringify({model:'local',messages:chatHistory,stream:true,
-        temperature:currentTemp,max_tokens:maxTok(),repeat_penalty:1.1})
+        temperature:currentTemp,top_p:currentTopP,top_k:currentTopK,max_tokens:maxTok(),repeat_penalty:1.1})
     });
     if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(no server header)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (empty body)'));}
     bub.innerHTML='';
@@ -2167,7 +2320,7 @@ function setThinkEnabled(on){
 // Inject the [THINK] instruction only for models that need it (Magistral);
 // native reasoners (Olmo/Gemma) reason on their own, so we never push it to them.
 function syncThinkPrompt(){
-  if(chatHistory[0])chatHistory[0].content=(IS_THINK_ON&&INSTRUCTED)?(SP_SELMO+THINK_INSTR):SP_SELMO;
+  if(chatHistory[0])chatHistory[0].content=(IS_THINK_ON&&INSTRUCTED)?(activeSP()+THINK_INSTR):activeSP();
 }
 // Simple rule: 'think' in template -> THINK shown and ON by default; else hidden.
 function applyThinkMode(){
@@ -2266,7 +2419,7 @@ function loadSession(id){
   currentSessionId=id;
   chatHistory.length=1;
   s.history.forEach(m=>chatHistory.push(m));
-  currentTemp=0.75;
+  syncSampling();
   syncThinkPrompt();
   document.getElementById('messages').innerHTML='';
   document.getElementById('messages').appendChild(traceLine()); // keep the model/params trace when viewing history
