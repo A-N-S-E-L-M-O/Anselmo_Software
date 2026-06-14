@@ -509,7 +509,7 @@ body.custom .think-toggle{color:#9a9aa3;}
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.816</div>
+  <div class="hbadge">v0.817</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -1052,6 +1052,63 @@ async function webSearch(query, n=5){
     return await r.json();
   }catch(e){
     return [];
+  }
+}
+
+// Turn a conversational message + recent context into a clean, standalone
+// web-search query. Runs on the LOCAL model — nothing extra leaves localhost.
+// Falls back to the raw message on any error, so behaviour never regresses.
+async function rewriteQuery(rawMsg, history){
+  try{
+    const recent=(history||[])
+      .filter(m=>m.role!=='system')
+      .slice(-4)
+      .map(m=>{
+        const role=m.role==='user'?'User':'Selmo';
+        let raw=m._orig;
+        if(raw==null){
+          raw=m.content;
+          if(Array.isArray(raw)) raw=raw.filter(p=>p&&p.type==='text').map(p=>p.text).join(' ');
+        }
+        const c=String(raw||'').replace(/\[THINK\][\s\S]*?\[\/THINK\]/g,'').trim().slice(0,300);
+        return role+': '+c;
+      }).join('\n');
+    // Standard RAG query-rewriting step (cf. "Rewrite-Retrieve-Read", HyDE):
+    // turn the chat turn into a keyword query a search engine can actually use.
+    //
+    // Reasoning models (Qwen, Gemma) ignore an in-prompt '/no_think', so we
+    // disable thinking the supported way — chat_template_kwargs.enable_thinking
+    // = false — and retry without it if the server rejects the field. As a
+    // safety net the budget is large and we parse the 'QUERY:' line out of the
+    // reply even when a <think> block precedes it.
+    const sys='You are a search-query rewriter. Given the conversation and the '
+      +'user\'s latest message, write the single most effective web-search query '
+      +'to find pages that answer it. Resolve context and pronouns from the '
+      +'conversation: a short reply like "17 anni" must inherit the running topic. '
+      +'Use concise keywords; drop chit-chat, filler and punctuation; keep the '
+      +'user\'s language. Reply with EXACTLY one line, nothing else:\nQUERY: <keywords>';
+    const usr=(recent?'Conversation:\n'+recent+'\n\n':'')+'Latest message: '+rawMsg;
+    const callModel=extra=>fetch(`${API}/v1/chat/completions`,{
+      method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.timeout(30000),
+      body:JSON.stringify(Object.assign({model:'local',
+        messages:[{role:'system',content:sys},{role:'user',content:usr}],
+        stream:false,temperature:0.2,top_p:0.9,max_tokens:1024,repeat_penalty:1.1},extra))
+    });
+    let res=await callModel({chat_template_kwargs:{enable_thinking:false}});
+    if(!res.ok) res=await callModel({}); // server rejects the kwarg -> retry plain
+    if(!res.ok) return rawMsg;
+    const d=await res.json();
+    const msg=(d.choices&&d.choices[0]&&d.choices[0].message)||{};
+    const body=((msg.content||'')+'\n'+(msg.reasoning_content||''))
+      .replace(/<think>[\s\S]*?<\/think>/gi,'')
+      .replace(/\[THINK\][\s\S]*?\[\/THINK\]/gi,'');
+    // Pull the QUERY: line; its absence (e.g. unfinished reasoning) -> keep raw.
+    const mq=body.match(/QUERY\s*[:：]\s*(.+)/i);
+    const q=(mq?mq[1]:'').replace(/["'`]/g,'').trim();
+    console.log('[rewrite]',JSON.stringify(rawMsg),'→',JSON.stringify(q),'| out_tok',(d.usage&&d.usage.completion_tokens)||'?');
+    return q.length>=2?q:rawMsg;
+  }catch(e){
+    return rawMsg;
   }
 }
 
@@ -1936,9 +1993,14 @@ async function sendMsg(){
     const um=addMsg('user',(fileImage?(fileImage.pages>1?'\uD83D\uDDBC\uFE0F ['+fileImage.pages+'p] ':'\uD83D\uDDBC\uFE0F '):'')+txt);
     const{bub,inner}=addMsg('assistant','',true);
     const whStart=wh;
-    bub.innerHTML=`<span style="color:var(--yellow)">&#x1F50D; Searching: <em>${webQuery}</em>...</span>`;
+    bub.innerHTML=`<span style="color:var(--yellow)">&#x1F50D; Preparing search...</span>`;
     scrollBot();
     try{
+      const rawQuery=webQuery;
+      webQuery=await rewriteQuery(rawQuery,chatHistory);
+      const _eq=webQuery.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      bub.innerHTML=`<span style="color:var(--yellow)">&#x1F50D; Searching: <em>${_eq}</em>...</span>`;
+      scrollBot();
       const results=await webSearch(webQuery,5);
       if(!results.length){
         bub.textContent='No results for "'+webQuery+'".';
@@ -1995,7 +2057,10 @@ async function sendMsg(){
       document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
       chatHistory.push({role:'assistant',content:(rthink?'[THINK]'+rthink+'[/THINK]':'')+full});
       const ledger=document.createElement('div');ledger.className='tok-meta';
-      ledger.innerHTML='&#x1F310; '+results.map((r,i)=>
+      const _rq=rawQuery.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      ledger.innerHTML='&#x1F50E; <span title="query sent to the engine">“'+_eq+'”</span>'
+        +(rawQuery!==webQuery?' <span style="opacity:.55">← '+_rq+'</span>':'')+'<br>'
+        +'&#x1F310; '+results.map((r,i)=>
         '<a href="'+r.url+'" target="_blank" rel="noopener" style="color:var(--cyan);text-decoration:none">['+(i+1)+'] '+r.title+'</a>'
       ).join(' \xb7 ')+' \xb7 '+t+' tok \xb7 '+(wh-whStart).toFixed(4)+' Wh';
       inner.appendChild(ledger);
