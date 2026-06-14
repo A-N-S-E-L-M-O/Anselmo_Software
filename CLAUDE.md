@@ -15,6 +15,12 @@ On **every positive feedback from Fabio** (e.g. "it works", "ok", "perfect", "we
 
 Don't let confirmed-good work sit unrecorded: the moment Fabio confirms, give him the exact commit command so nothing good is lost (costly lesson s13: the working vision version lived only in the working tree and was never committed → lost). But never prepare a commit for **unconfirmed** states: if it's an attempt, say so and wait for Fabio's test first.
 
+### Commit-command format — DO NOT DEVIATE
+
+- **PowerShell, not bash.** Fabio runs Windows PowerShell 5.1, which has **no `&&`**. Give each git command on its **own line** (preferred), or chain with `;` on one line. Never hand him a `git add … && git commit …` string.
+- **No `cd`.** Fabio opens the terminal by right-clicking the Selmo folder, so the shell is **already in the repo root**. Do not prepend `cd <path>` — commit commands assume the working directory is the project root.
+- **ASCII-only commit messages.** Use plain hyphens `-` and ASCII punctuation in the `-m` message (no em-dashes `—` or arrows `→`); the PS 5.1 console can mangle non-ASCII in the message.
+
 ## chat.html — permanent rules
 
 - **NEVER** use the Edit tool on `chat.html` (it truncates silently). Python via bash only — see BUG-META-01.
