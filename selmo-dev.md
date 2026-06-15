@@ -1,5 +1,5 @@
 # Selmo — Development documentation
-*Updated session 18 · 2026-06-14 · v0.820*
+*Updated session 18 · 2026-06-15 · v0.821*
 
 > **Read first:** the **Lessons learned** section near the end of this file, and **`selmo-bug-report.md`**.
 > **Project language:** English only — see `selmo-manifesto.md`. Conversation with Fabio can be any language; every file artifact is English.
@@ -271,21 +271,4 @@ llama.cpp (MIT) · faster-whisper + CTranslate2 + Whisper weights (MIT) · Kokor
 - **v0.802** — reasoning panel for `<think>` tags and reasoning-first models; generalised flush state machine.
 - **v0.801** — launcher runtime prompt for ngl/ctx; `Selmo.bat` translated to English.
 - **v0.800** — VAD hands-free conversation (Silero `@ricky0123/vad-web`).
-- **v0.716** — dynamic tok/sec bar (colour-coded); HTTPS proxy (8443) for the mobile mic.
-- **v0.714** — phone header/keyboard fixes; Magistral OOM fix (CTX=8192); chunking verbatim-copy workaround.
-- **v0.708** — UI rebuilt (retro-terminal, responsive 3-column → drawers); LAN binds on `0.0.0.0`; vision normalization.
-- **v0.702** — vision IMG/OCR button + mmproj launcher flags (BUG-IMG-01 resolved).
-
----
-
-## Backlog / next dev steps
-
-**True wall-power (next, optional).** Whole-system *estimate* shipped in v0.816 (CPU+GPU+losses via LibreHardwareMonitor — see Setup). What's still open is the literal draw at the wall, which the estimate can't capture (PSU efficiency curve, exact baseline). Path: poll a **local-API smart plug** (Shelly Gen2 / Tasmota / Kasa via `python-kasa`) from a small bridge and show measured-vs-estimated side by side; the measured value would also let us calibrate `OTHER_DC`/`PSU_EFF`. Needs hardware, so it stays optional.
-
-**Multi-document loading.** `fileDoc` is a single variable — a second upload silently replaces the first. Goal: load N documents and pick a strategy. *Serial/batch* — chunks from all docs processed in sequence, aggregated into one reply (each doc isolated so the model never sees two at once; maps to map-reduce summarisation). *Parallel/comparative* — same prompt applied independently per doc, results side by side (2–4 docs before the UI gets unwieldy). The literature's key point: cross-document attention is only safe at the synthesis step, not during chunk extraction — Selmo's isolated-per-chunk architecture already follows this.
-
-**Other backlog.** Remove the remaining `/web` leftovers from `chat.html` (the PTT prefix and the `sendMsg` strip — the prompt text was cleaned in v0.815) now that the WEB toggle is the interface · VAD fully offline (serve onnx/wasm/worklet locally) · VRAM-adaptive NGL (read free VRAM + GGUF block_count to auto-suggest) · in-app model switcher (`/switch-model`, no manual restart) · in-app TTS voice selector (persisted in localStorage) · image generation as a separate `selmo_imggen.py` (stable-diffusion.cpp) · IMAP email bridge (`selmo_mail.py`) · Selmo as orchestrator (`selmo_master.py`, multi-step pipelines on long documents).
-
----
-
-*The line that doesn't change: "While you sleep, your charging phone contributes to a network that belongs to no one and belongs to everyone. The earth turns, the wave follows the night wind, Selmo thinks."*
+- **v0.716** �

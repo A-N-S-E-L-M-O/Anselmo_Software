@@ -509,7 +509,7 @@ body.custom .think-toggle{color:#9a9aa3;}
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.820</div>
+  <div class="hbadge">v0.821</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -926,11 +926,8 @@ setInterval(function(){['status','web','whisper','tts'].forEach(function(k){var 
 // Load per-model chunking params written by selmo_server.py at launch.
 fetch('/selmo-config.json').then(function(r){return r.ok?r.json():null;}).then(function(cfg){
   if(!cfg)return;
-  if(cfg.chunk_ratio)  CHUNK_RATIO=cfg.chunk_ratio;
-  if(cfg.chunk_maxtok) CHUNK_MAXTOK=cfg.chunk_maxtok;
-  // Re-apply CHUNK_SIZE if N_CTX is already known (server was fast).
-  if(N_CTX>=1024){const RESERVED=400,CPT=3.8;
-    CHUNK_SIZE=Math.floor((N_CTX*CHUNK_RATIO-RESERVED)*CPT);}
+  if(cfg.chunking_size) CHUNK_SIZE_TOK=cfg.chunking_size;
+  CHUNK_SIZE=Math.floor(CHUNK_SIZE_TOK*3.8); // chars for display
 }).catch(function(){});
 
 // ── Web bridge ────────────────────────────────────────────────────────────────
@@ -1165,10 +1162,9 @@ renderSessionList();
         applyThinkMode();
         const nCtx=p?.default_generation_settings?.n_ctx||p?.n_ctx||0;
         if(nCtx>=1024){N_CTX=nCtx;
-          const RESERVED=400;       // system prompt tokens
           const CPT=3.8;            // char per token (italiano, conservativo)
-          CHUNK_SIZE=Math.floor((N_CTX*CHUNK_RATIO-RESERVED)*CPT); // ratio from selmo-config.json (written by launcher from INI)
-          console.log(`Selmo chunking: n_ctx=${nCtx} → CHUNK_SIZE=${CHUNK_SIZE} char`);
+          CHUNK_SIZE=Math.floor(CHUNK_SIZE_TOK*CPT); // tokens from INI via selmo-config.json
+          console.log(`Selmo chunking: chunking_size=${CHUNK_SIZE_TOK} tok → CHUNK_SIZE=${CHUNK_SIZE} char`);
           document.getElementById('hdr-model').title=
             `ctx: ${nCtx.toLocaleString()} tok  ·  chunk max: ${CHUNK_SIZE.toLocaleString()} char`;
         }
@@ -1266,8 +1262,7 @@ setProfile(currentProfile);
 // Conservative default used until the server responds.
 let CHUNK_SIZE=11000;
 let N_CTX=4096; // updated from /props at startup
-let CHUNK_RATIO=0.25;    // input fraction per chunk — overridden by selmo-config.json
-let CHUNK_MAXTOK=6000;   // max output tokens per chunk — overridden by selmo-config.json
+let CHUNK_SIZE_TOK=2000; // input tokens per chunk — overridden by selmo-config.json
 function maxTok(){
   try{
     for(let i=chatHistory.length-1;i>=0;i--){
@@ -1765,12 +1760,8 @@ async function processDoc(prompt){
   // System prompt for this chunk: SP_TASK base; if model needs [THINK] instruction, append it.
   const chunkSys=SP_TASK; // no THINK_INSTR in chunking: native reasoning is enough, explicit invitation causes overthinking
   const avail=Math.max(512,N_CTX-tk(chunkSys)-tk(prompt)-SAFETY);
-  // Input sizing uses a fixed 8192-tok reference so that a larger ctx only buys
-  // more output budget (reasoning+answer), not bigger input chunks.
-  const REF_CTX=8192;
-  const availIn=Math.max(512,REF_CTX-tk(chunkSys)-tk(prompt)-SAFETY);
-  const inT=Math.floor(availIn*CHUNK_RATIO);   // from INI via selmo-config.json
-  const maxTok=Math.min(CHUNK_MAXTOK,avail-inT); // full ctx headroom for output
+  const inT=CHUNK_SIZE_TOK;   // from INI via selmo-config.json
+  const maxTok=Math.max(512,avail-inT); // full ctx headroom for output
   const chunkChars=Math.max(800,Math.floor(inT*3.2));
   const parts=splitDoc(fileDoc,chunkChars);
   const total=parts.length;

@@ -1,1 +1,1 @@
-{"chunk_ratio": 0.1, "chunk_maxtok": 16384}
+{"chunking_size": 5000}
