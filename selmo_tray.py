@@ -342,7 +342,7 @@ def _text_picker(models, sections, default) -> tuple[dict, str, int]:
 #  GUI model picker  (Tkinter -- no console needed)
 # ============================================================
 
-def _notify(message: str, title: str = "Selmo"):
+def _notify(message: str, title: str = "SelmoAI"):
     """Small modal message box (used when there is no console)."""
     try:
         import tkinter as tk
@@ -371,13 +371,13 @@ def _gui_picker(models, sections, default) -> tuple[dict, str, int]:
     if not models:
         _notify("No .gguf model found in the models\\ folder.\n"
                 "Download a model and place it there, then relaunch.",
-                "Selmo -- no model")
+                "SelmoAI -- no model")
         sys.exit(1)
 
     result: dict = {}
 
     root = tk.Tk()
-    root.title("Selmo -- choose a model")
+    root.title("SelmoAI -- choose a model")
     try:
         root.iconbitmap(str(BASE / "selmo.ico"))
     except Exception:
@@ -390,10 +390,12 @@ def _gui_picker(models, sections, default) -> tuple[dict, str, int]:
     tk.Label(root, text="Local model", font=("Segoe UI", 11, "bold")) \
         .grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 6))
 
-    lb = tk.Listbox(root, height=min(len(models), 10), width=56,
+    lb = tk.Listbox(root, height=min(len(models), 10), width=100,
                     activestyle="dotbox", exportselection=False)
     for m in models:
-        lb.insert("end", m["name"])
+        info = _match_ini(m["name"], sections, default)
+        note = info.get("note", "")
+        lb.insert("end", f"{m['name']}  --  {note}" if note else m["name"])
     lb.selection_set(0)
     lb.grid(row=1, column=0, columnspan=2, sticky="we")
 
@@ -401,12 +403,12 @@ def _gui_picker(models, sections, default) -> tuple[dict, str, int]:
     srv_var  = tk.StringVar()
     cs_var   = tk.StringVar()
 
-    tk.Label(root, textvariable=note_var, fg="#555", wraplength=420,
+    tk.Label(root, textvariable=note_var, fg="#555", wraplength=700,
              justify="left").grid(row=2, column=0, columnspan=2,
                                   sticky="w", pady=(6, 8))
 
     tk.Label(root, text="Server args").grid(row=3, column=0, sticky="w")
-    tk.Entry(root, textvariable=srv_var, width=64) \
+    tk.Entry(root, textvariable=srv_var, width=90) \
         .grid(row=4, column=0, columnspan=2, sticky="we", pady=(0, 8))
 
     tk.Label(root, text="Chunking size").grid(row=5, column=0, sticky="w")
@@ -418,8 +420,7 @@ def _gui_picker(models, sections, default) -> tuple[dict, str, int]:
         if not idx:
             return
         info = _match_ini(models[idx[0]]["name"], sections, default)
-        note_var.set(f"Native max ctx: {info.get('max', 'unknown')}"
-                     f"   --   {info.get('note', '')}".strip(" -"))
+        note_var.set(f"Native max ctx: {info.get('max', 'unknown')}")
         srv_var.set(info["srv"])
         cs_var.set(str(info["chunking_size"]))
 
@@ -506,7 +507,7 @@ def _tee(proc: subprocess.Popen, logpath: Path):
     # Server exited -- update state and tray tooltip
     _current["loaded"] = False
     if _tray_icon:
-        _tray_icon.title = f"Selmo  --  {_current['name']}  [unloaded]"
+        _tray_icon.title = f"SelmoAI  --  {_current['name']}  [unloaded]"
 
 
 def _launch_llama(model_path: str, srv_str: str, mmproj: str | None):
@@ -523,7 +524,7 @@ def _launch_llama(model_path: str, srv_str: str, mmproj: str | None):
         _llama_proc = p
     _current["loaded"] = True
     if _tray_icon:
-        _tray_icon.title = f"Selmo  --  {_current['name']}"
+        _tray_icon.title = f"SelmoAI  --  {_current['name']}"
     threading.Thread(target=_tee, args=(p, LLAMA_LOG), daemon=True).start()
     return p
 
@@ -553,7 +554,7 @@ def _action_unload(icon, item):
         return
     _stop_llama()
     if icon:
-        icon.title = f"Selmo  --  {_current['name']}  [unloaded]"
+        icon.title = f"SelmoAI  --  {_current['name']}  [unloaded]"
 
 
 def _action_reload(icon, item):
@@ -586,7 +587,7 @@ def _action_switch(model: dict, ini_data: dict):
     _launch_llama(model["path"], srv, mmproj)
 
     if _tray_icon:
-        _tray_icon.title = f"Selmo  --  {model['name']}"
+        _tray_icon.title = f"SelmoAI  --  {model['name']}"
 
 
 # ============================================================
@@ -773,7 +774,7 @@ def _build_menu(models: list[dict], ini_data: dict):
             # live status header
             pystray.MenuItem(
                 lambda item: (
-                    f"Selmo  --  {_current['name'][:32]}"
+                    f"SelmoAI  --  {_current['name'][:32]}"
                     + ("  [unloaded]" if not _current["loaded"] else "")
                 ),
                 None,
@@ -781,7 +782,7 @@ def _build_menu(models: list[dict], ini_data: dict):
             ),
             pystray.Menu.SEPARATOR,
 
-            pystray.MenuItem("Open Selmo in browser", _open_browser),
+            pystray.MenuItem("Open SelmoAI in browser", _open_browser),
             pystray.MenuItem("View log file",          _view_log),
             pystray.Menu.SEPARATOR,
 
@@ -834,7 +835,7 @@ def main():
 
     # -- single-instance guard --------------------------------------------
     if not _claim_instance():
-        _notify("Selmo is already running.\nCheck the system tray.")
+        _notify("SelmoAI is already running.\nCheck the system tray.")
         sys.exit(0)
 
     ini_path          = BASE / "selmo-models.ini"
@@ -845,7 +846,7 @@ def main():
     boxline = lambda s: "  |" + s.center(44) + "|"
     print()
     print(border)
-    print(boxline("Selmo  --  local AI, GDPR by design"))
+    print(boxline("SelmoAI  --  local AI, GDPR by design"))
     print(boxline("Your data stays on your computer."))
     print(border)
     print()
@@ -889,12 +890,12 @@ def main():
         icon = pystray.Icon(
             name  = "selmo",
             icon  = _make_icon_image(),
-            title = f"Selmo  --  {sel['name']}",
+            title = f"SelmoAI  --  {sel['name']}",
             menu  = pystray.Menu(menu_fn),
         )
         _tray_icon = icon
 
-        print("  Tray icon active -- Selmo is now running in the tray.")
+        print("  Tray icon active -- SelmoAI is now running in the tray.")
         icon.run()          # blocks until _do_exit calls icon.stop()
 
     # -- fallback: no tray, stay in console -------------------------------
