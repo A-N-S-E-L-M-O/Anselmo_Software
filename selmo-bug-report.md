@@ -54,6 +54,22 @@ Files written/edited via tools on this mount can end up full of NUL bytes (`\x00
 
 ---
 
+## BUG-EXIT-01 · Python processes hang on exit ⚠️ FIXED (session 18)
+
+**Symptom** — After clicking Exit in the tray, the `selmo_tray.py` process stays alive. All child processes (GPU monitor, web bridge, Whisper, TTS, HTTPS proxy) are correctly killed by `_cleanup()`, but the main tray process itself hangs because `icon.stop()` does not reliably unblock `icon.run()` on Windows (known pystray-on-Windows issue).
+
+**Root cause** — `_do_exit` called `_cleanup()` then `icon.stop()`. If pystray's internal message loop didn't drain cleanly, `icon.run()` never returned, leaving the tray process alive indefinitely.
+
+**Fix** — Replace `icon.stop()` with `os._exit(0)` in `_do_exit`. Since `_cleanup()` has already terminated/killed all children, `os._exit(0)` kills the tray process immediately, bypassing pystray's unreliable teardown.
+
+```python
+def _do_exit(icon, item):
+    _cleanup()
+    os._exit(0)
+```
+
+---
+
 ## Resolved
 
 ### BUG-IMG-03 · Vision + web search together — ✓ RESOLVED in code (verify with a quick test)

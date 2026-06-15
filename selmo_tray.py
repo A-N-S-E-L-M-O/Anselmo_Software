@@ -753,7 +753,7 @@ def _view_log(icon, item):
 
 def _do_exit(icon, item):
     _cleanup()
-    icon.stop()
+    os._exit(0)   # icon.stop() can hang on Windows; _cleanup() already killed children
 
 
 def _build_menu(models: list[dict], ini_data: dict):
