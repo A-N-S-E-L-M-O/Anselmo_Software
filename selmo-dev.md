@@ -1,5 +1,5 @@
 # Selmo — Development documentation
-*Updated session 19 · 2026-06-15 · v0.822*
+*Updated session 19 · 2026-06-15 · v0.823*
 
 > **Read first:** the **Lessons learned** section near the end of this file, and **`selmo-bug-report.md`**.
 > **Project language:** English only — see `selmo-manifesto.md`. Conversation with Fabio can be any language; every file artifact is English.
@@ -252,6 +252,7 @@ llama.cpp (MIT) · faster-whisper + CTranslate2 + Whisper weights (MIT) · Kokor
 
 ## Changelog (condensed, reverse chronological)
 
+- **v0.823** — no black window at startup: the tray now runs under `pythonw.exe` (via new `Selmo.vbs`, window style 0) so no console is ever allocated — hiding it was unreliable because on Windows 11 `GetConsoleWindow()` returns an internal helper window under Windows Terminal, not the visible tab. The console model picker is replaced by a Tkinter dialog (`_gui_picker`, still edits srv args + chunking size); `print()` diagnostics go to `selmo-tray.log`. `llama-server` launched with `CREATE_NO_WINDOW` so it doesn't pop its own console when the parent has none. Child cleanup no longer depends on the console ctrl handler: all children join a Windows Job Object with `KILL_ON_JOB_CLOSE`, so they die when the tray exits for any reason.
 - **v0.820** — power without a kernel driver: CPU watts **estimated from load** (laptop/desktop profile via battery detection), GPU from NVML, LHM now **optional** (its WinRing0 driver is Defender-blocked and admin-only, so CPU power/temp don't read on a locked-down box); estimated figures flagged with `~`. Energy counter moved into the monitor as the single source of truth — `wh_session`/`wh_total` persisted in `selmo-wh.json` with `/reset_session` `/reset_total` endpoints — so multiple open UIs can't double-count (was client-side `localStorage`). Device line gained CPU load (temperature best-effort, LHM-only); session odometer reads to 0.1 Wh; hardware readouts regrouped under the gauge (watt split → VRAM/RAM → GPU/CPU load).
 - **v0.818** — profile params mini-help: native `title` tooltips on Temp / Top-p / Top-k / System prompt in the profile modal, explaining each parameter and its use-case ranges on hover.
 - **v0.817** — web search query-rewrite: a local RAG-style step (`rewriteQuery`) turns the chat turn into a keyword query before hitting the engine — fixes terse follow-ups (e.g. "17 anni" returning the movie) by inheriting the running topic from recent turns. Thinking disabled via `chat_template_kwargs.enable_thinking:false` (+ plain-call retry) since in-prompt `/no_think` is ignored by Qwen/Gemma; strict `QUERY:` line parsed from `content`/`reasoning_content`; the sources footer shows the query actually sent (`🔎 "…" ← original`). Graceful fallback to the raw message on any failure.

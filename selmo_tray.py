@@ -6,9 +6,12 @@ console picker, then detaches from the console and runs as a
 pure system-tray app.
 
 Behaviour
-  - Console window is used for the model picker and startup messages,
-    then automatically closed via FreeConsole() -- the process keeps
-    running (tray stays).  No need to keep a terminal open.
+  - Runs under pythonw.exe (via Selmo.vbs) so no console window is ever
+    created -- no black window, no taskbar button.  Model selection is a
+    small Tkinter dialog; after that Selmo lives purely in the system tray.
+  - All child processes (llama-server + bridges) are placed in a Windows
+    Job Object with KILL_ON_JOB_CLOSE, so they are torn down when the tray
+    process exits for any reason (Exit, logoff, shutdown, crash).
   - "View log file" in the tray opens selmo-llama.log in Notepad.
   - "Unload model" stops llama-server to free VRAM; "Reload model"
     restarts it with the same model and flags.
@@ -98,40 +101,99 @@ def _claim_instance() -> bool:
 
 
 # ============================================================
-#  Console detach  (FreeConsole)
+#  Output redirect  (pythonw has no console)
 # ============================================================
 
-def _detach_console():
+def _redirect_output_to_log():
     """
-    Redirect stdout/stderr to devnull, then call FreeConsole().
-    The console window closes; the process (and tray) keeps running.
-    Must be called from the main thread, after all console I/O is done.
+    Under pythonw.exe there is no console and sys.stdout / sys.stderr are
+    None, so any print() would raise.  Point both at a tray log file (or
+    devnull as a last resort) so the existing print() diagnostics are safe.
+    Must be the FIRST thing main() does, before any output.
     """
+    try:
+        f = open(BASE / "selmo-tray.log", "w", encoding="utf-8", errors="replace")
+        sys.stdout = f
+        sys.stderr = f
+    except Exception:
+        try:
+            nul = open(os.devnull, "w")
+            sys.stdout = nul
+            sys.stderr = nul
+        except Exception:
+            pass
+
+
+# ============================================================
+#  Job Object  -- kill all children when the tray process dies
+# ============================================================
+#
+#  With no console (pythonw), the SetConsoleCtrlHandler below never fires,
+#  so logoff/shutdown can't lean on it.  A Job Object with
+#  KILL_ON_JOB_CLOSE is the robust replacement: every child we assign to it
+#  is killed by the OS the moment our process exits, for *any* reason.
+
+_job_handle = None
+
+
+def _setup_job():
+    global _job_handle
     if sys.platform != "win32":
         return
-    # Flush and redirect before releasing the console handle
-    try:
-        sys.stdout.flush()
-        sys.stderr.flush()
-    except Exception:
-        pass
-    try:
-        nul = open(os.devnull, "w")
-        sys.stdout = nul
-        sys.stderr = nul
-    except Exception:
-        pass
     import ctypes
-    hwnd = ctypes.windll.kernel32.GetConsoleWindow()
-    # FreeConsole() removed: keeping process attached so that
-    # closing this window sends CTRL_CLOSE_EVENT -> _ctrl_handler
-    if hwnd:
-        print("Selmo is running in the tray.  "
-              "Close this window to quit.", flush=True)
-        ctypes.windll.user32.ShowWindow(hwnd, 6)  # SW_MINIMIZE
-    # Do NOT send WM_CLOSE here -- that can kill the host terminal.
-    # The window is already gone because FreeConsole released it;
-    # the tray icon is now the only way to quit Selmo.
+    from ctypes import wintypes
+    k = ctypes.windll.kernel32
+    h = k.CreateJobObjectW(None, None)
+    if not h:
+        return
+
+    class _BASIC(ctypes.Structure):
+        _fields_ = [
+            ("PerProcessUserTimeLimit", wintypes.LARGE_INTEGER),
+            ("PerJobUserTimeLimit",     wintypes.LARGE_INTEGER),
+            ("LimitFlags",              wintypes.DWORD),
+            ("MinimumWorkingSetSize",   ctypes.c_size_t),
+            ("MaximumWorkingSetSize",   ctypes.c_size_t),
+            ("ActiveProcessLimit",      wintypes.DWORD),
+            ("Affinity",                ctypes.c_size_t),
+            ("PriorityClass",           wintypes.DWORD),
+            ("SchedulingClass",         wintypes.DWORD),
+        ]
+
+    class _IO(ctypes.Structure):
+        _fields_ = [("ReadOperationCount",  ctypes.c_ulonglong),
+                    ("WriteOperationCount", ctypes.c_ulonglong),
+                    ("OtherOperationCount", ctypes.c_ulonglong),
+                    ("ReadTransferCount",   ctypes.c_ulonglong),
+                    ("WriteTransferCount",  ctypes.c_ulonglong),
+                    ("OtherTransferCount",  ctypes.c_ulonglong)]
+
+    class _EXT(ctypes.Structure):
+        _fields_ = [("BasicLimitInformation", _BASIC),
+                    ("IoInfo",                _IO),
+                    ("ProcessMemoryLimit",    ctypes.c_size_t),
+                    ("JobMemoryLimit",        ctypes.c_size_t),
+                    ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                    ("PeakJobMemoryUsed",     ctypes.c_size_t)]
+
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+    JobObjectExtendedLimitInformation  = 9
+    info = _EXT()
+    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+    if k.SetInformationJobObject(h, JobObjectExtendedLimitInformation,
+                                 ctypes.byref(info), ctypes.sizeof(info)):
+        _job_handle = h
+
+
+def _assign_to_job(proc):
+    if _job_handle is None or sys.platform != "win32" or proc is None:
+        return
+    import ctypes
+    try:
+        ctypes.windll.kernel32.AssignProcessToJobObject(
+            _job_handle, int(proc._handle))
+    except Exception:
+        pass
 
 
 # ============================================================
@@ -277,6 +339,118 @@ def _text_picker(models, sections, default) -> tuple[dict, str, int]:
 
 
 # ============================================================
+#  GUI model picker  (Tkinter -- no console needed)
+# ============================================================
+
+def _notify(message: str, title: str = "Selmo"):
+    """Small modal message box (used when there is no console)."""
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        messagebox.showinfo(title, message)
+        root.destroy()
+    except Exception:
+        pass
+
+
+def _gui_picker(models, sections, default) -> tuple[dict, str, int]:
+    """
+    Tkinter replacement for the console picker.  Lists the models, lets the
+    user edit the server args and chunking size, and returns
+    (model_dict, srv_str, chunking_size).  Cancel / close exits cleanly.
+    """
+    import tkinter as tk
+
+    if not models:
+        _notify("No .gguf model found in the models\\ folder.\n"
+                "Download a model and place it there, then relaunch.",
+                "Selmo -- no model")
+        sys.exit(1)
+
+    result: dict = {}
+
+    root = tk.Tk()
+    root.title("Selmo -- choose a model")
+    root.configure(padx=16, pady=14)
+    root.resizable(False, False)
+    root.attributes("-topmost", True)
+    root.after(400, lambda: root.attributes("-topmost", False))
+
+    tk.Label(root, text="Local model", font=("Segoe UI", 11, "bold")) \
+        .grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 6))
+
+    lb = tk.Listbox(root, height=min(len(models), 10), width=56,
+                    activestyle="dotbox", exportselection=False)
+    for m in models:
+        lb.insert("end", m["name"])
+    lb.selection_set(0)
+    lb.grid(row=1, column=0, columnspan=2, sticky="we")
+
+    note_var = tk.StringVar()
+    srv_var  = tk.StringVar()
+    cs_var   = tk.StringVar()
+
+    tk.Label(root, textvariable=note_var, fg="#555", wraplength=420,
+             justify="left").grid(row=2, column=0, columnspan=2,
+                                  sticky="w", pady=(6, 8))
+
+    tk.Label(root, text="Server args").grid(row=3, column=0, sticky="w")
+    tk.Entry(root, textvariable=srv_var, width=64) \
+        .grid(row=4, column=0, columnspan=2, sticky="we", pady=(0, 8))
+
+    tk.Label(root, text="Chunking size").grid(row=5, column=0, sticky="w")
+    tk.Entry(root, textvariable=cs_var, width=12) \
+        .grid(row=5, column=1, sticky="w")
+
+    def _on_select(_evt=None):
+        idx = lb.curselection()
+        if not idx:
+            return
+        info = _match_ini(models[idx[0]]["name"], sections, default)
+        note_var.set(f"Native max ctx: {info.get('max', 'unknown')}"
+                     f"   --   {info.get('note', '')}".strip(" -"))
+        srv_var.set(info["srv"])
+        cs_var.set(str(info["chunking_size"]))
+
+    lb.bind("<<ListboxSelect>>", _on_select)
+    _on_select()
+
+    def _launch(_evt=None):
+        idx = lb.curselection()
+        if not idx:
+            return
+        m    = models[idx[0]]
+        info = _match_ini(m["name"], sections, default)
+        srv  = srv_var.get().strip() or info["srv"]
+        cs   = cs_var.get().strip()
+        csize = int(cs) if cs.isdigit() else int(info["chunking_size"])
+        result.update({"sel": m, "srv": srv, "csize": csize})
+        root.destroy()
+
+    def _cancel(_evt=None):
+        root.destroy()
+
+    btns = tk.Frame(root)
+    btns.grid(row=6, column=0, columnspan=2, sticky="e", pady=(12, 0))
+    tk.Button(btns, text="Launch", width=12, default="active",
+              command=_launch).pack(side="right", padx=(6, 0))
+    tk.Button(btns, text="Cancel", width=10,
+              command=_cancel).pack(side="right")
+
+    root.bind("<Return>", _launch)
+    root.bind("<Escape>", _cancel)
+    lb.bind("<Double-Button-1>", _launch)
+    root.mainloop()
+
+    if "sel" not in result:
+        sys.exit(0)        # cancelled / closed
+    return result["sel"], result["srv"], result["csize"]
+
+
+# ============================================================
 #  llama-server management
 # ============================================================
 
@@ -330,7 +504,13 @@ def _tee(proc: subprocess.Popen, logpath: Path):
 def _launch_llama(model_path: str, srv_str: str, mmproj: str | None):
     global _llama_proc
     cmd = _build_cmd(model_path, srv_str, mmproj)
-    p   = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    p   = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        creationflags=NO_WINDOW,   # llama-server is a console app -- without
+                                   # this it pops its own window under pythonw
+    )
+    _assign_to_job(p)
     with _llama_lock:
         _llama_proc = p
     _current["loaded"] = True
@@ -414,6 +594,7 @@ def _start_service(label: str, args: list):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+    _assign_to_job(p)
     _services.append(p)
     return p
 
@@ -634,10 +815,12 @@ def _build_menu(models: list[dict], ini_data: dict):
 def main():
     global _tray_icon
 
+    _redirect_output_to_log()   # MUST be first: no console under pythonw
+    _setup_job()                # OS kills our children when we exit
+
     # -- single-instance guard --------------------------------------------
     if not _claim_instance():
-        print("Selmo is already running.  Check the system tray.", flush=True)
-        time.sleep(3)
+        _notify("Selmo is already running.\nCheck the system tray.")
         sys.exit(0)
 
     ini_path          = BASE / "selmo-models.ini"
@@ -653,7 +836,7 @@ def main():
     print(border)
     print()
 
-    sel, srv, csize = _text_picker(models, sections, default)
+    sel, srv, csize = _gui_picker(models, sections, default)
     mmproj = _find_mmproj(sel["dir"])
 
     vis = f"on  ({Path(mmproj).name})" if mmproj else "text only"
@@ -684,7 +867,7 @@ def main():
     print(f"  Log: {LLAMA_LOG.name}")
     _launch_llama(sel["path"], srv, mmproj)
 
-    # -- tray path: detach console and hand off to pystray ----------------
+    # -- tray path: hand off to pystray (no console to detach) ------------
     if HAS_TRAY:
         ini_data = {"sections": sections, "default": default}
         menu_fn  = _build_menu(models, ini_data)
@@ -697,14 +880,7 @@ def main():
         )
         _tray_icon = icon
 
-        print()
-        print("  Tray icon active -- moving to tray now.")
-        print("  Right-click tray icon to switch models, view log, or exit.")
-        print()
-        time.sleep(1)       # let the user read the last messages
-
-        _detach_console()   # closes console window; process keeps running
-
+        print("  Tray icon active -- Selmo is now running in the tray.")
         icon.run()          # blocks until _do_exit calls icon.stop()
 
     # -- fallback: no tray, stay in console -------------------------------
