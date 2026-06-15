@@ -122,7 +122,16 @@ def _detach_console():
     except Exception:
         pass
     import ctypes
-    ctypes.windll.kernel32.FreeConsole()
+    hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+    # FreeConsole() removed: keeping process attached so that
+    # closing this window sends CTRL_CLOSE_EVENT -> _ctrl_handler
+    if hwnd:
+        print("Selmo is running in the tray.  "
+              "Close this window to quit.", flush=True)
+        ctypes.windll.user32.ShowWindow(hwnd, 6)  # SW_MINIMIZE
+    # Do NOT send WM_CLOSE here -- that can kill the host terminal.
+    # The window is already gone because FreeConsole released it;
+    # the tray icon is now the only way to quit Selmo.
 
 
 # ============================================================

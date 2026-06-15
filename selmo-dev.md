@@ -1,5 +1,5 @@
 # Selmo — Development documentation
-*Updated session 18 · 2026-06-15 · v0.821*
+*Updated session 19 · 2026-06-15 · v0.822*
 
 > **Read first:** the **Lessons learned** section near the end of this file, and **`selmo-bug-report.md`**.
 > **Project language:** English only — see `selmo-manifesto.md`. Conversation with Fabio can be any language; every file artifact is English.
@@ -271,4 +271,4 @@ llama.cpp (MIT) · faster-whisper + CTranslate2 + Whisper weights (MIT) · Kokor
 - **v0.802** — reasoning panel for `<think>` tags and reasoning-first models; generalised flush state machine.
 - **v0.801** — launcher runtime prompt for ngl/ctx; `Selmo.bat` translated to English.
 - **v0.800** — VAD hands-free conversation (Silero `@ricky0123/vad-web`).
-- **v0.716** �
+- **v0.716** �
