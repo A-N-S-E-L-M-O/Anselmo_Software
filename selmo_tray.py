@@ -348,6 +348,10 @@ def _notify(message: str, title: str = "Selmo"):
         import tkinter as tk
         from tkinter import messagebox
         root = tk.Tk()
+        try:
+            root.iconbitmap(str(BASE / "selmo.ico"))
+        except Exception:
+            pass
         root.withdraw()
         root.attributes("-topmost", True)
         messagebox.showinfo(title, message)
@@ -374,6 +378,10 @@ def _gui_picker(models, sections, default) -> tuple[dict, str, int]:
 
     root = tk.Tk()
     root.title("Selmo -- choose a model")
+    try:
+        root.iconbitmap(str(BASE / "selmo.ico"))
+    except Exception:
+        pass
     root.configure(padx=16, pady=14)
     root.resizable(False, False)
     root.attributes("-topmost", True)
@@ -695,7 +703,13 @@ if sys.platform == "win32":
 # ============================================================
 
 def _make_icon_image() -> "Image.Image":
-    """64x64 RGBA: rounded navy square + bold white S."""
+    """Tray icon: prefer the bundled selmo.ico, else draw a navy square + white S."""
+    ico = BASE / "selmo.ico"
+    if ico.exists():
+        try:
+            return Image.open(ico).convert("RGBA")
+        except Exception:
+            pass
     size = 64
     img  = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
