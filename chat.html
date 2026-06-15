@@ -509,7 +509,7 @@ body.custom .think-toggle{color:#9a9aa3;}
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.819</div>
+  <div class="hbadge">v0.820</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -650,9 +650,9 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
     </div>
   </div>
   <div class="input-area">
-    <input type="file" id="file-input" accept=".docx,.odt,.txt,.md,.csv,.xlsx,.xls,.ods,.pdf,.pptx,.odp" onchange="loadFile(this)">
+    <input type="file" id="file-input" accept=".docx,.odt,.txt,.md,.csv,.xlsx,.xls,.ods,.pdf,.pptx,.odp" multiple onchange="loadFile(this)">
     <button id="upload-btn" onclick="document.getElementById('file-input').click()">+ FILE</button>
-    <input type="file" id="file-input-img" accept="image/*,.pdf,.heic,.heif" onchange="loadFileAsImage(this)">
+    <input type="file" id="file-input-img" accept="image/*,.pdf,.heic,.heif" multiple onchange="loadFileAsImage(this)">
     <button id="upload-img-btn" onclick="document.getElementById('file-input-img').click()" title="Image or PDF for the model's vision / OCR">+ IMG/OCR</button>
     <div id="file-badge">
       <span id="file-name">-</span>
@@ -846,7 +846,7 @@ let gen=false,abort=null,tokSec=0,_genT0=0,_genTok=0,_tokScale=100,wh=0,whAll=0,
     chunks=[],chunkIdx=0,
     price=parseFloat(localStorage.getItem('sprice')||'0.28'),
     toks=parseInt(localStorage.getItem('stoks')||'0'),
-    sessStart=Date.now(),fileCtx=null,fileDoc=null,fileImage=null,fileChat=null,
+    sessStart=Date.now(),fileCtx=null,fileDoc=null,fileDocNames=[],fileImage=null,fileChat=null,
     gpuP=0,cpuP=-1,cpuTmp=0,cpuEst=true,gpuW=0,gpuT=0,gpuOk=false,sysW=0,cpuW=0,gpuPwr=0,lhmOk=false,
     whisperOk=false,mediaRecorder=null,audioChunks=[],pttAutoSend=false,pttForceTts=false,pttWebSearch=false,
     ttsOk=false,ttsEnabled=false,
@@ -1443,71 +1443,83 @@ async function imgToJpegDataUrl(file,MAX_SIDE,quality){
   return cv.toDataURL('image/jpeg',quality);
 }
 async function loadFileAsImage(inp){
-  const file=inp.files[0];if(!file)return;
-  const ext=file.name.split('.').pop().toLowerCase();
+  const files=Array.from(inp.files);if(!files.length)return;
   const btn=document.getElementById('upload-img-btn');
   btn.textContent='...';
   try{
-    let dataUrls=[],mimeType='image/jpeg';
     const IMG_EXTS=['jpg','jpeg','png','gif','webp','heic','heif','bmp'];
-    const isImg=(file.type&&file.type.indexOf('image/')===0)||IMG_EXTS.includes(ext);
-    if(isImg){
-      dataUrls=[await imgToJpegDataUrl(file,1280,0.85)];
-      mimeType='image/jpeg';
-    } else if(ext==='pdf'){
-      const buf=await file.arrayBuffer();
-      const pdf=await pdfjsLib.getDocument({data:buf}).promise;
-      const MAX_PAGES=8, MAX_SIDE=1280;
-      const numPages=Math.min(pdf.numPages,MAX_PAGES);
-      for(let i=1;i<=numPages;i++){
-        const pg=await pdf.getPage(i);
-        const base=pg.getViewport({scale:1});
-        const scale=Math.min(2.5, MAX_SIDE/Math.max(base.width,base.height));
-        const vp=pg.getViewport({scale});
-        const cv=document.createElement('canvas');
-        cv.width=Math.ceil(vp.width);cv.height=Math.ceil(vp.height);
-        const c2=cv.getContext('2d');
-        c2.fillStyle='#fff';c2.fillRect(0,0,cv.width,cv.height);
-        await pg.render({canvasContext:c2,viewport:vp}).promise;
-        dataUrls.push(cv.toDataURL('image/jpeg',0.85));
+    for(const file of files){
+      const ext=file.name.split('.').pop().toLowerCase();
+      let dataUrls=[];
+      const isImg=(file.type&&file.type.indexOf('image/')===0)||IMG_EXTS.includes(ext);
+      if(isImg){
+        dataUrls=[await imgToJpegDataUrl(file,1280,0.85)];
+      } else if(ext==='pdf'){
+        const buf=await file.arrayBuffer();
+        const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+        const MAX_PAGES=8, MAX_SIDE=1280;
+        const numPages=Math.min(pdf.numPages,MAX_PAGES);
+        for(let i=1;i<=numPages;i++){
+          const pg=await pdf.getPage(i);
+          const base=pg.getViewport({scale:1});
+          const scale=Math.min(2.5, MAX_SIDE/Math.max(base.width,base.height));
+          const vp=pg.getViewport({scale});
+          const cv=document.createElement('canvas');
+          cv.width=Math.ceil(vp.width);cv.height=Math.ceil(vp.height);
+          const c2=cv.getContext('2d');
+          c2.fillStyle='#fff';c2.fillRect(0,0,cv.width,cv.height);
+          await pg.render({canvasContext:c2,viewport:vp}).promise;
+          dataUrls.push(cv.toDataURL('image/jpeg',0.85));
+        }
+        if(numPages<pdf.numPages) console.warn('Long PDF: only the first '+MAX_PAGES+' pages of '+pdf.numPages);
+      } else {
+        alert('Unsupported format for vision: '+file.name+'. Use + FILE for text documents.');
+        continue;
       }
-      if(numPages<pdf.numPages) console.warn('Long PDF: only the first '+MAX_PAGES+' pages of '+pdf.numPages);
-    } else {
-      alert('Unsupported format for vision. Use + FILE for text documents.');
-      btn.textContent='+ IMG/OCR';inp.value='';return;
+      // Multiple images/PDFs accepted: append pages into one vision payload.
+      if(fileImage){fileImage.dataUrls=fileImage.dataUrls.concat(dataUrls);fileImage.names.push(file.name);fileImage.pages=fileImage.dataUrls.length;}
+      else{fileImage={dataUrls,mimeType:'image/jpeg',name:file.name,names:[file.name],pages:dataUrls.length};}
     }
-    fileImage={dataUrls,mimeType,name:file.name,pages:dataUrls.length};
-    fileDoc=null;fileCtx=null;chunks=[];chunkIdx=0;
-    document.getElementById('file-badge').style.display='flex';
-    document.getElementById('file-name').textContent='🖼️ '+file.name+(ext==='pdf'?' ('+dataUrls.length+'p)':'');
-    document.getElementById('input').placeholder='Image/PDF loaded for vision. Ask a question or request OCR...';
+    if(fileImage){
+      fileDoc=null;fileDocNames=[];fileCtx=null;chunks=[];chunkIdx=0;
+      document.getElementById('file-badge').style.display='flex';
+      const nm=fileImage.names.length>1?fileImage.names.length+' files':fileImage.name;
+      const pg=fileImage.pages>1?' ('+fileImage.pages+'p)':'';
+      document.getElementById('file-name').textContent='🖼️ '+nm+pg;
+      document.getElementById('input').placeholder='Image/PDF loaded for vision. Ask a question or request OCR...';
+    }
   }catch(e){console.error('loadFileAsImage:',e);alert('Error: '+e.message);}
   btn.textContent='+ IMG/OCR';inp.value='';
 }
 
 async function loadFile(inp){
-  const file=inp.files[0];if(!file)return;
-  const ext=file.name.split('.').pop().toLowerCase();
+  const files=Array.from(inp.files);if(!files.length)return;
   const btn=document.getElementById('upload-btn');
   btn.textContent='...';
   try{
-    let text='';
-    if(ext==='docx') text=await extractDocx(file);
-    else if(ext==='odt') text=await extractOdt(file);
-    else if(['xlsx','xls','ods'].includes(ext)) text=await extractSpreadsheet(file);
-    else if(ext==='pdf') text=await extractPdf(file);
-    else if(ext==='pptx') text=await extractPptx(file);
-    else if(ext==='odp') text=await extractOdp(file);
-    else text=await file.text();
-
-    if(!text.trim()){alert('Empty or unreadable file');btn.textContent='+ FILE';inp.value='';return;}
-
-    // Document loaded: store the raw text. The split happens on send,
-    // when the prompt is known and the chunk can be sized to the real context.
-    fileDoc=text;fileCtx=null;chunks=[];chunkIdx=0;fileImage=null;
-    document.getElementById('file-badge').style.display='flex';
-    document.getElementById('file-name').textContent=file.name+' \xb7 '+text.length.toLocaleString('en')+' char';
-    document.getElementById('input').placeholder='Document loaded. Type the task to run on the whole text (analysis, translation, extraction...).';
+    for(const file of files){
+      const ext=file.name.split('.').pop().toLowerCase();
+      let text='';
+      if(ext==='docx') text=await extractDocx(file);
+      else if(ext==='odt') text=await extractOdt(file);
+      else if(['xlsx','xls','ods'].includes(ext)) text=await extractSpreadsheet(file);
+      else if(ext==='pdf') text=await extractPdf(file);
+      else if(ext==='pptx') text=await extractPptx(file);
+      else if(ext==='odp') text=await extractOdp(file);
+      else text=await file.text();
+      if(!text.trim()){alert('Empty or unreadable file: '+file.name);continue;}
+      // Multiple documents accepted: append and mark each file boundary.
+      // On send, the combined text stays in context if it fits, otherwise
+      // processDoc chunks it serially starting from the first loaded file.
+      if(fileDoc){fileDoc=fileDoc+'\n\n===== FILE: '+file.name+' =====\n\n'+text;fileDocNames.push(file.name);}
+      else{fileDoc=text;fileDocNames=[file.name];}
+    }
+    fileCtx=null;chunks=[];chunkIdx=0;fileImage=null;
+    if(fileDoc){
+      document.getElementById('file-badge').style.display='flex';
+      document.getElementById('file-name').textContent=(fileDocNames.length>1?fileDocNames.length+' files \xb7 ':fileDocNames[0]+' \xb7 ')+fileDoc.length.toLocaleString('en')+' char';
+      document.getElementById('input').placeholder='Document loaded. Type the task to run on the whole text (analysis, translation, extraction...).';
+    }
   }catch(e){console.error('Error loadFile:',e);alert('Error: '+e.message+' (F12 for details)');}
   btn.textContent='+ FILE';inp.value='';
 }
@@ -1578,7 +1590,7 @@ function splitChunks(text,size){
 }
 
 function clearFile(){
-  fileCtx=null;fileDoc=null;fileImage=null;fileChat=null;chunks=[];chunkIdx=0;
+  fileCtx=null;fileDoc=null;fileDocNames=[];fileImage=null;fileChat=null;chunks=[];chunkIdx=0;
   document.getElementById('file-badge').style.display='none';
   document.getElementById('input').placeholder='Type a message...';
 }
