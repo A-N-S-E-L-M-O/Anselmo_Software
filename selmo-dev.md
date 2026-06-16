@@ -1,5 +1,5 @@
 # Selmo — Development documentation
-*Updated session 19 · 2026-06-16 · v0.824*
+*Updated session 20 · 2026-06-16 · v0.825*
 
 > **Read first:** the **Lessons learned** section near the end of this file, and **`selmo-bug-report.md`**.
 > **Project language:** English only — see `selmo-manifesto.md`. Conversation with Fabio can be any language; every file artifact is English.
@@ -247,6 +247,19 @@ llama.cpp (MIT) · faster-whisper + CTranslate2 + Whisper weights (MIT) · Kokor
 **Server timeout.** `--timeout 600` (phone uploads) or `0` to disable; `should_stop` in the log is client disconnect, not a fault. **IQ3_M vs Q3_K_M:** same footprint, IQ3_M slightly better (importance quantization preserves critical weights).
 
 **cmd `set /p`.** Each `set /p` must be on its own line — chaining with `&` does not run the second prompt.
+
+---
+
+## Nice-to-have / future work
+
+**tokens/Wh efficiency log** *(arxiv publication candidate)*
+Per-session append to a simple CSV or JSON: model name, quantization, average t/s, average system watts (GPU+CPU, already available from `selmo_gpu_monitor.py`), computed tokens/Wh. Data sources are all live: `/metrics` on llama-server for token counts, port 8082 for power. No UI needed — background logging only. Motivation: provides empirical MoE-vs-dense energy efficiency data on consumer hardware, directly in the spirit of the project's GDPR-by-design / local-first ethos. Magistral (dense 24B) vs Qwen3 (MoE 3B active / 30B total) on the same RTX 4070 Ti is a clean controlled experiment worth publishing.
+
+**RAG / persistent memory** *(community contribution candidate)*
+Index a local folder of documents (PDF, DOCX, TXT) into a persistent vector store; inject relevant chunks into context before each reply. Enables cross-session memory and corpus-level queries. Implementation: a local embedding model (`nomic-embed-text` or `all-MiniLM`) + `faiss` or `chromadb` for vector search — no external services. Out of scope for the core project (Selmo targets single-document, single-session workflows) but a natural extension for the open codebase. Not a priority until the base project stabilises.
+
+**`no_think` as ini flag** *(general, not model-specific)*
+Add `no_think=true` as an optional key in `selmo-models.ini`. `selmo_server.py` writes it to `selmo-config.json`; `chat.html` reads it and prepends `/no_think` to every user message. Works for any future model that supports the token, without hardcoding model names.
 
 ---
 

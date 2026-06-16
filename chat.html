@@ -509,7 +509,7 @@ body.custom .think-toggle{color:#9a9aa3;}
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.824</div>
+  <div class="hbadge">v0.825</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -1068,7 +1068,7 @@ async function webSearch(query, n=5){
 // Turn a conversational message + recent context into a clean, standalone
 // web-search query. Runs on the LOCAL model — nothing extra leaves localhost.
 // Falls back to the raw message on any error, so behaviour never regresses.
-async function rewriteQuery(rawMsg, history){
+async function rewriteQuery(rawMsg, history, docContext){
   try{
     const recent=(history||[])
       .filter(m=>m.role!=='system')
@@ -1091,13 +1091,18 @@ async function rewriteQuery(rawMsg, history){
     // = false — and retry without it if the server rejects the field. As a
     // safety net the budget is large and we parse the 'QUERY:' line out of the
     // reply even when a <think> block precedes it.
-    const sys='You are a search-query rewriter. Given the conversation and the '
-      +'user\'s latest message, write the single most effective web-search query '
-      +'to find pages that answer it. Resolve context and pronouns from the '
-      +'conversation: a short reply like "17 anni" must inherit the running topic. '
-      +'Use concise keywords; drop chit-chat, filler and punctuation; keep the '
-      +'user\'s language. Reply with EXACTLY one line, nothing else:\nQUERY: <keywords>';
-    const usr=(recent?'Conversation:\n'+recent+'\n\n':'')+'Latest message: '+rawMsg;
+    const sys='You are a search-query rewriter. '
+      +(docContext
+        ?'Document/image context is provided below. Your query MUST use the specific '
+         +'product names, model numbers, menu names, and technical terms from that context. '
+         +'Do NOT paraphrase the user\'s words — derive keywords from the context instead. '
+        :'Given the conversation and the user\'s latest message, ')
+      +'write the single most effective web-search query to find pages that answer it. '
+      +'Resolve pronouns from the conversation. Use concise keywords; drop filler. '
+      +'Keep the user\'s language. Reply with EXACTLY one line:\nQUERY: <keywords>';
+    const usr=(recent?'Conversation:\n'+recent+'\n\n':'')
+      +(docContext?'Loaded document/image context:\n'+String(docContext).slice(0,1500)+'\n\n':'')
+      +'Latest message: '+rawMsg;
     const callModel=extra=>fetch(`${API}/v1/chat/completions`,{
       method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.timeout(30000),
       body:JSON.stringify(Object.assign({model:'local',
@@ -1641,7 +1646,12 @@ function exportChat(){
   md+=`*${stamp} · model: ${model} · Wh: ${document.getElementById('wh-s').textContent}*\n\n---\n\n`;
   for(const m of msgs){
     const who=m.role==='user'?'**Tu**':`**${mode}**`;
-    md+=`${who}\n\n${m.content}\n\n---\n\n`;
+    let c=m._orig;
+    if(c==null){
+      c=m.content;
+      if(Array.isArray(c)) c=c.filter(p=>p&&p.type==='text').map(p=>p.text).join('\n');
+    }
+    md+=`${who}\n\n${c}\n\n---\n\n`;
   }
   const blob=new Blob([md],{type:'text/markdown'});
   const a=document.createElement('a');
@@ -2013,7 +2023,67 @@ async function sendMsg(){
     scrollBot();
     try{
       const rawQuery=webQuery;
-      webQuery=await rewriteQuery(rawQuery,chatHistory);
+      // STEP 1 — image: ask the model to describe the image AND emit a SEARCH: query.
+      // STEP 1 — doc:   pass a text snippet to rewriteQuery so the query is doc-aware.
+      const _docCtx=fileChat?fileChat.slice(0,1500):'';
+      let _imgAnalysis='';
+      if(fileImage){
+        bub.innerHTML=`<span style="color:var(--yellow)">&#x1F50D; Reading image...</span>`;
+        scrollBot();
+        try{
+          const _urls=fileImage.dataUrls;
+          const _imgMsg=_urls.map(u=>({type:'image_url',image_url:{url:u}}));
+          // BUG-WEB-IMG-01 fix: analyse the image AND compose the query in ONE call,
+          // with the user's question sitting next to the pixels. The old "describe
+          // everything (600 tok) -> hand the wall of text to rewriteQuery" split lost
+          // the link between the question and the one element it was about, so the
+          // rewriter fell back to paraphrasing the user's vague words. Forcing a
+          // structured SEEN/QUERY answer plus one worked example makes the model read
+          // the concrete identifiers off the image first, then build the query from them.
+          _imgMsg.push({type:'text',text:
+            'You are preparing a web search to answer the user\'s question about this image.\n'
+            +'User question: "'+rawQuery+'"\n\n'
+            +'Read the image and pull out the concrete things a search engine needs: exact '
+            +'product / brand / model names, software or OS name and version, menu / tab / setting '
+            +'names, error codes or messages, and any other visible text tied to the question. '
+            +'Then write ONE search query that joins those real, image-specific terms with what the '
+            +'user wants to know. Do not fall back on the user\'s vague wording when the image gives a '
+            +'precise term. Keep the user\'s language.\n\n'
+            +'Reply in EXACTLY this format and nothing else:\n'
+            +'SEEN: <the key identifiers you can read in the image>\n'
+            +'QUERY: <the search query>\n\n'
+            +'Example (image shows a camera menu, user asks "what does this setting do"):\n'
+            +'SEEN: Canon EOS R6, Shooting menu, "Highlight tone priority" set to D+\n'
+            +'QUERY: Canon EOS R6 Highlight tone priority D+ what it does'});
+          const _callImg=extra=>fetch(`${API}/v1/chat/completions`,{
+            method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.timeout(60000),
+            body:JSON.stringify(Object.assign({model:'local',messages:[{role:'user',content:_imgMsg}],
+              stream:false,temperature:0.2,top_p:0.9,max_tokens:800,repeat_penalty:1.1},extra))
+          });
+          let _ar=await _callImg({chat_template_kwargs:{enable_thinking:false}});
+          if(!_ar.ok) _ar=await _callImg({}); // server rejects the kwarg -> retry plain
+          if(_ar.ok){
+            const _ad=await _ar.json();
+            const _m=(_ad.choices&&_ad.choices[0]&&_ad.choices[0].message)||{};
+            const _body=((_m.content||'')+'\n'+(_m.reasoning_content||''))
+              .replace(/<think>[\s\S]*?<\/think>/gi,'').replace(/\[THINK\][\s\S]*?\[\/THINK\]/gi,'');
+            const _sm=_body.match(/SEEN\s*[:：]\s*([\s\S]*?)(?:\n\s*QUERY\s*[:：]|$)/i);
+            const _qm=_body.match(/QUERY\s*[:：]\s*(.+)/i);
+            _imgAnalysis=(_sm?_sm[1]:'').trim();
+            const _q=(_qm?_qm[1]:'').replace(/["'`]/g,'').trim();
+            console.log('[img-query] SEEN',JSON.stringify(_imgAnalysis.slice(0,200)),'| QUERY',JSON.stringify(_q));
+            if(_q.length>=2) webQuery=_q;
+            else webQuery=await rewriteQuery(rawQuery,chatHistory,_imgAnalysis.slice(0,1500)); // no QUERY line -> fall back to text rewriter
+          }
+        }catch(_e){console.warn('image analysis failed',_e);}
+      }else{
+        webQuery=await rewriteQuery(rawQuery,chatHistory,_docCtx);
+      }
+      if(fileImage){ // visible proof the image->query step ran and what it produced (no console needed)
+        const _dbg=document.createElement('div');_dbg.className='tok-meta';_dbg.style.color='var(--yellow)';
+        _dbg.textContent='\u26A1 img\u2192query: "'+webQuery+'"'+(webQuery===rawQuery?'  (RAW \u2014 image step did NOT rewrite it)':'');
+        um.inner.appendChild(_dbg);scrollBot();
+      }
       const _eq=webQuery.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       bub.innerHTML=`<span style="color:var(--yellow)">&#x1F50D; Searching: <em>${_eq}</em>...</span>`;
       scrollBot();
@@ -2039,9 +2109,13 @@ async function sendMsg(){
           const c=String(raw||'').replace(/\[THINK\][\s\S]*?\[\/THINK\]/g,'').trim().slice(0,400);
           return role+': '+c;
         }).join('\n');
+      const _hasDoc=!!fileChat;
+      const _hasImg=!!fileImage;
       const ctxMsg=(recentClean?'Recent conversation:\n'+recentClean+'\n\n':'')
+        +(_hasDoc?'Attached document:\n'+fileChat+'\n\n':'')
+        +(_imgAnalysis?'Image analysis:\n'+_imgAnalysis+'\n\n':'')
         +'Web search results for: '+webQuery+'\n\n'+formatted
-        +'\n\nBased on the conversation context and search results above, answer the user\'s latest message directly in the same language. Be specific and useful. Cite sources as [1], [2], etc.';
+        +'\n\nBased on the image analysis'+((_hasDoc||_hasImg)?' and attached document/image':'')+' and the web search results above, answer the user\'s latest message directly in the same language. Be specific and useful. Cite sources as [1], [2], etc.';
       if(fileImage){
         const urls=fileImage.dataUrls;
         const imgContent=urls.map(u=>({type:'image_url',image_url:{url:u}}));
@@ -2049,9 +2123,12 @@ async function sendMsg(){
         chatHistory.push({role:'user',content:imgContent,_orig:txt});
         um.inner.appendChild(imgThumbStrip(urls));
         fileImage=null;
+        fileChat=null; // clear doc too if both were loaded
         document.getElementById('file-badge').style.display='none';
       }else{
         chatHistory.push({role:'user',content:ctxMsg,_orig:txt});
+        fileChat=null; // clear doc after web+doc search
+        document.getElementById('file-badge').style.display='none';
       }
       bub.innerHTML='<span style="opacity:.5">&#x25CA;</span>';
       abort=new AbortController();
