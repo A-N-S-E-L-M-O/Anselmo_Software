@@ -6,6 +6,7 @@ Routes:
   /proxy/8082/...  →  http://127.0.0.1:8082/...   (selmo_gpu_monitor)
   /proxy/8083/...  →  http://127.0.0.1:8083/...   (selmo_whisper)
   /proxy/8084/...  →  http://127.0.0.1:8084/...   (selmo_tts)
+  /proxy/8086/...  →  http://127.0.0.1:8086/...   (selmo_image)
   everything else  →  http://127.0.0.1:8080/...   (llama-server)
 
 Purpose: enable getUserMedia (microphone) on mobile browsers over LAN
@@ -29,6 +30,7 @@ ROUTES = {
     "/proxy/8082": 8082,
     "/proxy/8083": 8083,
     "/proxy/8084": 8084,
+    "/proxy/8086": 8086,
 }
 
 
@@ -108,7 +110,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
         req = urllib.request.Request(url, data=body, headers=fwd, method=self.command)
         try:
-            with urllib.request.urlopen(req, timeout=310) as resp:
+            with urllib.request.urlopen(req, timeout=610) as resp:
                 self.send_response(resp.status)
                 for k, v in resp.headers.items():
                     if k.lower() in ("transfer-encoding", "connection"):

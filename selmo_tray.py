@@ -655,6 +655,7 @@ def _start_all_services(voice: str = "im_nicola"):
     _start_service("Whisper STT   [port 8083]", [str(BASE / "selmo_whisper.py")])
     _start_service("TTS Kokoro    [port 8084]",
                    [str(BASE / "selmo_tts.py"), "--voice", voice])
+    _start_service("Image SD.cpp  [port 8086]", [str(BASE / "selmo_image.py")])
     _start_service("HTTPS Proxy   [port 8443]", [str(BASE / "selmo_https_proxy.py")])
     _start_lhm()
 

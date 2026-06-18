@@ -46,17 +46,102 @@ PYTHONW = PYTHON.parent / "pythonw.exe"
 if not PYTHONW.exists():
     PYTHONW = PYTHON
 
-# Windows flag: create the process without a console window
-NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+# Windows flags
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)   # 0x08000000
 
-# List of child processes to terminate on exit
+# List of child processes (for graceful-shutdown messages)
 _procs: list[subprocess.Popen] = []
 
 
-# -- Cleanup -------------------------------------------------------------------
+# -- Windows Job Object --------------------------------------------------------
+# All child processes are assigned to this job.  When this process exits for
+# ANY reason (normal, exception, window X, Task Manager kill), Windows closes
+# the job handle and automatically terminates every process in the job.
+# This is more reliable than any cleanup handler.
+
+_WIN_JOB = None   # HANDLE; stays None on non-Windows or if creation fails
+
+if sys.platform == "win32":
+    import ctypes
+    import ctypes.wintypes
+
+    _k32 = ctypes.windll.kernel32
+
+    class _JOBOBJECT_BASIC_LIMIT_INFORMATION(ctypes.Structure):
+        _fields_ = [
+            ("PerProcessUserTimeLimit", ctypes.c_int64),
+            ("PerJobUserTimeLimit",     ctypes.c_int64),
+            ("LimitFlags",             ctypes.c_uint32),
+            ("MinimumWorkingSetSize",  ctypes.c_size_t),
+            ("MaximumWorkingSetSize",  ctypes.c_size_t),
+            ("ActiveProcessLimit",     ctypes.c_uint32),
+            ("Affinity",               ctypes.c_size_t),
+            ("PriorityClass",          ctypes.c_uint32),
+            ("SchedulingClass",        ctypes.c_uint32),
+        ]
+
+    class _IO_COUNTERS(ctypes.Structure):
+        _fields_ = [
+            ("ReadOperationCount",  ctypes.c_uint64),
+            ("WriteOperationCount", ctypes.c_uint64),
+            ("OtherOperationCount", ctypes.c_uint64),
+            ("ReadTransferCount",   ctypes.c_uint64),
+            ("WriteTransferCount",  ctypes.c_uint64),
+            ("OtherTransferCount",  ctypes.c_uint64),
+        ]
+
+    class _JOBOBJECT_EXTENDED_LIMIT_INFORMATION(ctypes.Structure):
+        _fields_ = [
+            ("BasicLimitInformation", _JOBOBJECT_BASIC_LIMIT_INFORMATION),
+            ("IoInfo",                _IO_COUNTERS),
+            ("ProcessMemoryLimit",    ctypes.c_size_t),
+            ("JobMemoryLimit",        ctypes.c_size_t),
+            ("PeakProcessMemoryUsed", ctypes.c_size_t),
+            ("PeakJobMemoryUsed",     ctypes.c_size_t),
+        ]
+
+    def _init_win_job():
+        global _WIN_JOB
+        job = _k32.CreateJobObjectW(None, None)
+        if not job:
+            return
+        info = _JOBOBJECT_EXTENDED_LIMIT_INFORMATION()
+        # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+        info.BasicLimitInformation.LimitFlags = 0x00002000
+        ok = _k32.SetInformationJobObject(
+            job,
+            9,                    # JobObjectExtendedLimitInformation
+            ctypes.byref(info),
+            ctypes.sizeof(info),
+        )
+        if ok:
+            _WIN_JOB = job
+            print("  [job] Child-kill job object created.", flush=True)
+        else:
+            _k32.CloseHandle(job)
+
+    _init_win_job()
+
+    def _assign_to_job(pid: int):
+        """Assign a child PID to the kill-on-close job."""
+        if not _WIN_JOB:
+            return
+        # Need at least PROCESS_SET_QUOTA | PROCESS_TERMINATE; use ALL_ACCESS.
+        h = _k32.OpenProcess(0x001F0FFF, False, pid)
+        if h:
+            _k32.AssignProcessToJobObject(_WIN_JOB, h)
+            _k32.CloseHandle(h)
+
+else:
+    def _assign_to_job(pid: int):
+        pass
+
+
+# -- Cleanup (graceful, belt-and-suspenders) -----------------------------------
 
 def _cleanup():
-    """Terminate all child processes started by this launcher."""
+    """Gracefully terminate child processes and print status.
+    The Job Object handles anything this misses."""
     if not _procs:
         return
     print("\n[Selmo] Stopping services...", flush=True)
@@ -65,7 +150,7 @@ def _cleanup():
             p.terminate()
         except Exception:
             pass
-    time.sleep(0.8)
+    time.sleep(0.5)
     for p in _procs:
         try:
             if p.poll() is None:
@@ -81,7 +166,6 @@ atexit.register(_cleanup)
 # -- Window-close (X button) handling on Windows ------------------------------
 
 if sys.platform == "win32":
-    import ctypes
 
     @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_uint)
     def _ctrl_handler(event):
@@ -90,7 +174,7 @@ if sys.platform == "win32":
         os._exit(0)
         return True
 
-    ctypes.windll.kernel32.SetConsoleCtrlHandler(_ctrl_handler, True)
+    _k32.SetConsoleCtrlHandler(_ctrl_handler, True)
 
 
 # -- Service startup -----------------------------------------------------------
@@ -105,6 +189,7 @@ def _start(label: str, args: list) -> subprocess.Popen:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+    _assign_to_job(p.pid)
     _procs.append(p)
     return p
 
@@ -212,6 +297,7 @@ def main():
     _start("Web Bridge    [port 8081]", [str(BASE / "selmo_web.py")])
     _start("Whisper STT   [port 8083]", [str(BASE / "selmo_whisper.py")])
     _start("TTS Kokoro    [port 8084]", [str(BASE / "selmo_tts.py"), "--voice", args.voice])
+    _start("Image SD.cpp  [port 8086]", [str(BASE / "selmo_image.py")])
     _start("HTTPS Proxy   [port 8443]", [str(BASE / "selmo_https_proxy.py")])
     start_lhm()  # system-power source (CPU+GPU watts) on port 8085
 
@@ -275,6 +361,7 @@ def main():
     print(f"  llama-server log: {LLAMA_LOG.name}")
     print()
     llama_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    _assign_to_job(llama_proc.pid)   # also kill llama-server when we die
     _procs.append(llama_proc)
     threading.Thread(target=_tee, args=(llama_proc, LLAMA_LOG), daemon=True).start()
 

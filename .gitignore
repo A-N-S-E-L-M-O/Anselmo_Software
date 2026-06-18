@@ -2,12 +2,14 @@
 models/
 bin/
 tts/
+image/
 *.dll
 *.exe
 *.zip
 *.onnx
 *.bin
 *.gguf
+*.safetensors
 
 # Backup e file troncati
 *.bak
