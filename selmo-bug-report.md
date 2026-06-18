@@ -70,6 +70,30 @@ def _do_exit(icon, item):
 
 ---
 
+## BUG-WEB-IMG-01 · Image + WEB search: query not derived from image content 🧪 SUPPOSEDLY RESOLVED — TESTING SOLUTION (session 20)
+
+**Symptom** — When an image is loaded and WEB is on, the web-search query is still based on the user's literal words (e.g. "why grayed out") rather than the specific content visible in the image (e.g. "MSI Z490-A PRO BIOS Wake Up Event Setup grayed out"). Web results are therefore irrelevant.
+
+**Desired flow**
+1. Analyse the image → model describes product names, model numbers, menu names, visible text
+2. `rewriteQuery` receives that description as `docContext` and derives specific keywords from it (NOT from the user's words)
+3. Web search with the image-informed query
+4. Final answer: model gets image + description + web results
+
+**What was tried (s19)**
+- Pre-analysis call outputting a `SEARCH:` tag → model keeps paraphrasing the user's question regardless of prompt
+- Passing image data URLs directly to `rewriteQuery` (multimodal rewrite) → same problem
+- Two-step: pure description call → feed description to `rewriteQuery` with a context-priority instruction → **not yet confirmed working**
+
+**Current code state (after s19 patches)**
+- `rewriteQuery(rawMsg, history, docContext)` — when `docContext` present, sys prompt says "use specific terms from context, do NOT paraphrase user's words"
+- Web search branch: if `fileImage` → description call (max 600 tok) → `_imgAnalysis` → `rewriteQuery(rawQuery, chatHistory, _imgAnalysis.slice(0,1500))`
+- `ctxMsg` includes `_imgAnalysis` + full image (multimodal) + web results
+
+**Solution under test (s20, v0.825)** — Replaced the two-step (describe → `rewriteQuery`) with a **single multimodal call** that keeps the user's question next to the pixels. The model must answer in a fixed shape — `SEEN: <identifiers read off the image>` then `QUERY: <search query>` — with one worked example (a Canon-camera case, deliberately *not* the MSI Z490 test image, so a real test can't be a false positive from example leakage). Forcing `SEEN` first makes it extract the concrete product/menu/error terms before composing the query, instead of paraphrasing the user's vague words. Thinking disabled the supported way (`chat_template_kwargs.enable_thinking:false` + plain retry); `QUERY:`/`SEEN:` parsed from `content`+`reasoning_content`; fall back to the text `rewriteQuery` if no `QUERY:` line. `_imgAnalysis` (= `SEEN`) still flows into the final answer's context. A visible yellow `⚡ img→query: "…"` line is appended to the user bubble (flags `RAW` when the image step didn't rewrite) so a test is conclusive without the console.
+
+**Next step — confirm with a hard reload (Ctrl+Shift+R).** The s19/first-s20 test searched the raw "why is option grayed out" — the pre-fix behaviour — because Firefox served a cached `chat.html`. Retest on the BIOS image with WEB on and read the yellow `img→query` line. If it still shows `RAW` after a hard reload, the single-call vision rewrite is likely failing on **Qwen3-MoE specifically** (llama.cpp vision for it is fresh) — isolate by testing the same image on Gemma 4 / Magistral. Also fixed this pass: `exportChat` dumped image turns as `[object Object]` (printed the raw content array) — now uses `_orig`/joined text parts.
+
 ## Resolved
 
 ### BUG-IMG-03 · Vision + web search together — ✓ RESOLVED in code (verify with a quick test)
