@@ -30,6 +30,7 @@ import subprocess
 import sys
 import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -72,11 +73,16 @@ _current = {
     "srv":    "",     # active srv string
     "mmproj": None,   # active mmproj path or None
     "loaded": False,  # True while llama-server is running
+    "swapped_for_image": False,  # True when the image bridge unloaded the LLM
+                                 # to free VRAM; the next chat reloads it lazily
 }
+
+CTRL_PORT = 8087  # tray control API (LLM load/unload coordination)
 
 _services: list[subprocess.Popen] = []      # background bridges (started once)
 _llama_proc: subprocess.Popen | None = None
 _llama_lock = threading.Lock()
+_ctrl_lock  = threading.Lock()   # serialises load/unload across tray + control API
 
 _tray_icon   = None   # pystray.Icon, set before icon.run()
 _mutex_handle = None  # Win32 mutex for single-instance guard
@@ -544,15 +550,124 @@ def _stop_llama():
             p.kill()
 
 
+def _reload_current_llm() -> bool:
+    """
+    Relaunch llama-server with the currently selected model + flags.
+    Clears the image-swap flag.  Returns True if a (re)launch happened.
+    Callers must already hold _ctrl_lock.
+    """
+    if _current["loaded"]:
+        _current["swapped_for_image"] = False
+        return False
+    models = _scan_models(BASE)
+    m = next((x for x in models if x["name"] == _current["name"]), None)
+    if m is None:
+        return False
+    _launch_llama(m["path"], _current["srv"], _current["mmproj"])
+    _current["swapped_for_image"] = False
+    return True
+
+
+# ============================================================
+#  Control API  (port 8087)  -- LLM load/unload coordination
+# ============================================================
+#
+#  The image bridge (selmo_image.py, 8086) runs in its own process and cannot
+#  touch the llama-server the tray owns.  Before an image generation it POSTs
+#  /llm/unload here so the LLM frees the GPU; the next chat turn POSTs
+#  /llm/reload (via chat.html's ensureLLM) to bring it back -- lazy reload.
+
+class _CtrlHandler(BaseHTTPRequestHandler):
+    def log_message(self, *a):
+        pass  # silence per-request logging
+
+    def _send(self, code, obj):
+        body = json.dumps(obj).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except Exception:
+            pass
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
+    def _status(self):
+        return {
+            "loaded":            _current["loaded"],
+            "name":              _current["name"],
+            "swapped_for_image": _current.get("swapped_for_image", False),
+        }
+
+    def _unload(self):
+        with _ctrl_lock:
+            was = _current["loaded"]
+            if was:
+                _stop_llama()
+                _current["swapped_for_image"] = True
+                if _tray_icon:
+                    _tray_icon.title = f"SelmoAI  --  {_current['name']}  [image mode]"
+        self._send(200, {"ok": True, "was_loaded": was,
+                         "swapped_for_image": _current.get("swapped_for_image", False)})
+
+    def _reload(self):
+        with _ctrl_lock:
+            relaunched = _reload_current_llm()
+        if _tray_icon and _current["loaded"]:
+            _tray_icon.title = f"SelmoAI  --  {_current['name']}"
+        self._send(200, {"ok": True, "relaunched": relaunched,
+                         "loaded": _current["loaded"]})
+
+    def do_GET(self):
+        p = self.path.split("?", 1)[0]
+        if p == "/status":
+            self._send(200, self._status())
+        elif p == "/llm/reload":
+            self._reload()
+        else:
+            self._send(404, {"error": "not found"})
+
+    def do_POST(self):
+        p = self.path.split("?", 1)[0]
+        if p == "/llm/unload":
+            self._unload()
+        elif p == "/llm/reload":
+            self._reload()
+        else:
+            self._send(404, {"error": "not found"})
+
+
+def _start_control_server():
+    try:
+        srv = ThreadingHTTPServer(("0.0.0.0", CTRL_PORT), _CtrlHandler)
+    except Exception as e:
+        print(f"  -> Control API   [port {CTRL_PORT}] FAILED to bind ({e})", flush=True)
+        return
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    print(f"  -> Control API   [port {CTRL_PORT}] (LLM load/unload)", flush=True)
+
+
 # ============================================================
 #  Tray actions
 # ============================================================
 
 def _action_unload(icon, item):
-    """Stop llama-server to free VRAM; all other services keep running."""
+    """Stop llama-server to free VRAM; all other services keep running.
+    A manual unload is intentional, so it does NOT set swapped_for_image
+    (the next chat must not silently reload)."""
     if not _current["loaded"]:
         return
-    _stop_llama()
+    with _ctrl_lock:
+        _stop_llama()
+        _current["swapped_for_image"] = False
     if icon:
         icon.title = f"SelmoAI  --  {_current['name']}  [unloaded]"
 
@@ -561,11 +676,8 @@ def _action_reload(icon, item):
     """Restart llama-server with the currently configured model."""
     if _current["loaded"]:
         return
-    models = _scan_models(BASE)
-    m = next((x for x in models if x["name"] == _current["name"]), None)
-    if m is None:
-        return
-    _launch_llama(m["path"], _current["srv"], _current["mmproj"])
+    with _ctrl_lock:
+        _reload_current_llm()
 
 
 def _action_switch(model: dict, ini_data: dict):
@@ -657,6 +769,7 @@ def _start_all_services(voice: str = "im_nicola"):
                    [str(BASE / "selmo_tts.py"), "--voice", voice])
     _start_service("Image SD.cpp  [port 8086]", [str(BASE / "selmo_image.py")])
     _start_service("HTTPS Proxy   [port 8443]", [str(BASE / "selmo_https_proxy.py")])
+    _start_control_server()
     _start_lhm()
 
 

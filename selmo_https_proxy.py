@@ -7,6 +7,7 @@ Routes:
   /proxy/8083/...  →  http://127.0.0.1:8083/...   (selmo_whisper)
   /proxy/8084/...  →  http://127.0.0.1:8084/...   (selmo_tts)
   /proxy/8086/...  →  http://127.0.0.1:8086/...   (selmo_image)
+  /proxy/8087/...  →  http://127.0.0.1:8087/...   (tray control API)
   everything else  →  http://127.0.0.1:8080/...   (llama-server)
 
 Purpose: enable getUserMedia (microphone) on mobile browsers over LAN
@@ -31,6 +32,7 @@ ROUTES = {
     "/proxy/8083": 8083,
     "/proxy/8084": 8084,
     "/proxy/8086": 8086,
+    "/proxy/8087": 8087,
 }
 
 

@@ -119,6 +119,7 @@ header{
 #web-btn,#think-btn{background:rgba(255,255,255,.025);border:1px solid var(--steel);color:var(--dim);}
 #web-btn:hover,#think-btn:hover{border-color:var(--cyan);color:var(--cyan);}
 #web-btn.on,#think-btn.on{border-color:var(--cyan);color:var(--cyan);background:rgba(68,221,238,.12);box-shadow:0 0 13px var(--glow-c);}
+#web-btn:disabled,#think-btn:disabled{opacity:.4!important;color:var(--dim)!important;border-color:var(--steel)!important;background:rgba(255,255,255,.02)!important;box-shadow:none!important;cursor:not-allowed;pointer-events:none;}
 
 /* reasoning panel */
 #think-toggle{font-size:11px;letter-spacing:.07em;padding:4px 9px;border-radius:var(--radius-xs);background:transparent;border:1px solid var(--dim);color:var(--dim);cursor:pointer;}
@@ -523,7 +524,7 @@ body.custom .think-toggle{color:#9a9aa3;}
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.829</div>
+  <div class="hbadge">v0.830</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -714,6 +715,7 @@ const _host=_http?location.hostname:'127.0.0.1';
 const API=_http?location.origin:'http://127.0.0.1:8080';
 const GMON=_https?'/proxy/8082':'http://'+_host+':8082';
 const WEB=_https?'/proxy/8081':'http://'+_host+':8081';
+const CTRL=_https?'/proxy/8087':'http://'+_host+':8087';
 let webOk=false;
 // Session constants must be declared early — renderSessionList() is called at init
 // before the session block at the bottom of the file. TDZ would silently kill getSessions().
@@ -2025,6 +2027,32 @@ function askFileMode(prompt){
   b2.onclick=()=>{wrap.remove();fileChat=fileDoc;fileDoc=null;document.getElementById('file-badge').style.display='none';document.getElementById('input').value=prompt;sendMsg();};
   wrap.appendChild(b1);wrap.appendChild(b2);bub.appendChild(wrap);scrollBot();
 }
+// VRAM swap coordination (v0.830). Image generation unloads the LLM to run on
+// the GPU; the tray control API (8087) is the source of truth. Before a chat
+// turn we reload the LLM if it was swapped out -- works even across devices.
+async function ensureLLM(){
+  let st=null;
+  try{ st=await fetch(`${CTRL}/status`,{signal:AbortSignal.timeout(2500)}).then(r=>r.json()); }
+  catch(e){ return; }                 // control API down -> assume LLM up, proceed
+  if(!st||!st.swapped_for_image)return;
+  const note=addMsg('assistant','',false);
+  // animated braille spinner so the reload never looks frozen
+  const _spin=['\u280b','\u2819','\u2839','\u2838','\u283c','\u2834','\u2826','\u2827','\u2807','\u280f'];
+  let _si=0;
+  const _draw=()=>{ note.bub.innerHTML='<span style="color:var(--cyan)">'+_spin[_si=(_si+1)%_spin.length]+'</span> reloading the model after image generation\u2026'; };
+  _draw();
+  const _timer=setInterval(_draw,120);
+  try{
+    await fetch(`${CTRL}/llm/reload`,{method:'POST',signal:AbortSignal.timeout(180000)});
+    for(let i=0;i<180;i++){
+      try{ if((await fetch(`${API}/props`,{signal:AbortSignal.timeout(2000)})).ok)break; }catch(e){}
+      await new Promise(r=>setTimeout(r,1000));
+    }
+  }catch(e){}
+  clearInterval(_timer);
+  if(note&&note.wrap)note.wrap.remove();
+  setImageMode(false);
+}
 async function sendMsg(){
   if(gen)return;
   const inp=document.getElementById('input');
@@ -2032,6 +2060,10 @@ async function sendMsg(){
   const stopBtn=document.getElementById('stop');
   const txt=inp.value.trim();if(!txt)return;
   inp.value='';inp.style.height='auto';
+
+  // VRAM swap (v0.830): if image generation unloaded the LLM, bring it back
+  // before this chat turn. No-op in the normal case (one fast /status check).
+  await ensureLLM();
 
   if(fileDoc){
     // Threshold: if the file exceeds 50% of the model's window we ask
@@ -2421,6 +2453,9 @@ const IMG_URL=_https?'/proxy/8086':'http://'+location.hostname+':8086';
 // Medium/Strong presets) -> image-to-image, reusing the loaded + IMG/OCR image.
 function toggleImgMenu(e){
   if(e)e.stopPropagation();
+  // No image loaded -> img2img makes no sense; go straight to text-to-image (one click less).
+  const hasImg=fileImage&&fileImage.dataUrls&&fileImage.dataUrls.length;
+  if(!hasImg){ genImage(); return; }
   const m=document.getElementById('img-menu');
   if(m)m.classList.toggle('open');
 }
@@ -2447,6 +2482,7 @@ async function genImage(strength){
   gen=true;
   const sendBtn=document.getElementById('send'),stopBtn=document.getElementById('stop');
   sendBtn.style.display='none';stopBtn.style.display='inline-block';
+  setImageMode(true);   // image mode starts now: the LLM is being unloaded
   try{
     const body={prompt:prompt,width:1024,height:1024};
     if(isI2I){
@@ -2479,6 +2515,7 @@ async function genImage(strength){
     bub.innerHTML='<span style="color:#f66">Image bridge unreachable - is selmo_image.py running on 8086? ('+e.message+')</span>';
   }finally{
     gen=false;sendBtn.style.display='inline-block';stopBtn.style.display='none';
+    try{ const s=await fetch(`${CTRL}/status`,{signal:AbortSignal.timeout(2500)}).then(r=>r.json()); setImageMode(s&&s.swapped_for_image); }catch(e){}
   }
 }
 let kokoroOk=false;
@@ -2591,6 +2628,11 @@ function sessionTitle(){
     .slice(0,50).trim()||'(chat)';
 }
 
+// Image mode = the LLM is unloaded for image generation. WEB and THINK need the
+// LLM, so grey them out until the next chat reloads it.
+function setImageMode(on){
+  ['web-btn','think-btn'].forEach(id=>{ const b=document.getElementById(id); if(b)b.disabled=!!on; });
+}
 function toggleWeb(){
   IS_WEB_ON=!IS_WEB_ON;
   const btn=document.getElementById('web-btn');

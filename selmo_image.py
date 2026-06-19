@@ -8,10 +8,12 @@ way down: stable-diffusion.cpp (MIT runtime), Z-Image-Turbo weights (Apache 2.0)
 Qwen3-4B text encoder (Apache 2.0), FLUX.1-schnell VAE (Apache 2.0).
 
 VRAM note (RTX 4070 Ti 12 GB): the LLM (~10.5 GB) and the image model do NOT
-fit on the GPU at the same time, so the CLI is launched with --offload-to-cpu:
-weights live in system RAM and stream to the GPU per step. Slower, but it
-coexists with a loaded llama-server. Drop the flag in selmo-models style if you
-ever run image gen with no LLM loaded.
+fit on the GPU at the same time. By default the bridge asks the tray control
+API (8087) to UNLOAD the LLM before generating, so the image model gets the
+whole GPU at full speed; the next chat reloads the LLM lazily. If that
+coordination is unavailable it falls back to --offload-to-cpu (weights stream
+from RAM, slower, but coexists with a loaded llama-server). --no-swap forces the
+offload fallback; --no-offload forces GPU and skips coordination entirely.
 
 External binary (place in Selmo\bin\):
     sd-cli.exe  (or sd.exe) — stable-diffusion.cpp CUDA build
@@ -31,6 +33,7 @@ Usage:
 
 import sys
 import os
+import json
 import time
 import uuid
 import shutil
@@ -38,6 +41,7 @@ import argparse
 import logging
 import threading
 import subprocess
+import urllib.request
 from pathlib import Path
 
 try:
@@ -52,8 +56,15 @@ parser.add_argument("--port",  type=int,   default=8086)
 parser.add_argument("--steps", type=int,   default=8,    help="Z-Image-Turbo is distilled to ~8 steps")
 parser.add_argument("--cfg",   type=float, default=1.0,  help="Turbo models want cfg ~1.0 (no guidance)")
 parser.add_argument("--no-offload", action="store_true",
-                    help="Keep weights on the GPU (only if no LLM is loaded; needs the full ~8 GB free)")
+                    help="Force weights on the GPU and skip LLM coordination (assumes no LLM loaded)")
+parser.add_argument("--no-swap", action="store_true",
+                    help="Never ask the tray to unload the LLM; always stream from RAM (--offload-to-cpu)")
 args = parser.parse_args()
+
+# Tray control API (selmo_tray.py): lets us free the GPU by unloading the LLM
+# before generating, then the next chat reloads it lazily. Same machine, so
+# 127.0.0.1 regardless of how the client reached this bridge.
+CTRL_URL = os.environ.get("SELMO_CTRL", "http://127.0.0.1:8087")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("selmo_image")
@@ -100,6 +111,26 @@ def _missing():
     return miss
 
 
+def _llm_unload() -> bool:
+    """
+    Ask the tray (8087) to unload the LLM so the image model gets the whole GPU.
+    Returns True when the GPU is free (run with no offload); False on any failure,
+    so the caller falls back to --offload-to-cpu and still generates alongside a
+    loaded LLM. The LLM is NOT reloaded here -- the next chat does that lazily.
+    """
+    try:
+        req = urllib.request.Request(CTRL_URL + "/llm/unload", data=b"", method="POST")
+        with urllib.request.urlopen(req, timeout=8) as r:
+            j = json.loads(r.read().decode("utf-8", "replace"))
+        if j.get("was_loaded"):
+            # Let CUDA actually release the freed VRAM before sd-cli claims it.
+            time.sleep(2.0)
+        return bool(j.get("ok"))
+    except Exception as e:
+        log.warning(f"LLM unload coordination unavailable ({e}); using --offload-to-cpu")
+        return False
+
+
 app = Flask(__name__)
 
 
@@ -113,6 +144,9 @@ def status():
         "binary": str(SD_BIN) if SD_BIN else None,
         "steps": args.steps,
         "cfg": args.cfg,
+        # Default policy. The actual per-generation mode is decided live: a GPU
+        # swap when the tray unloads the LLM, else CPU offload as a fallback.
+        "gpu_swap": (not args.no_offload and not args.no_swap),
         "offload_to_cpu": not args.no_offload,
         "missing": miss,
     })
@@ -187,14 +221,24 @@ def generate():
         # New sd.cpp CLI: image gen is the default "img_gen" mode; supplying an
         # init image (not a "-M img2img" mode, which was removed) triggers img2img.
         cmd += ["--init-img", str(init_path), "--strength", str(strength)]
-    if not args.no_offload:
-        cmd.append("--offload-to-cpu")
 
     NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     _mode = f"img2img s={strength} init={init_path.name}" if init_path is not None else "txt2img"
     log.info(f"{_mode} {width}x{height} steps={steps} cfg={cfg} seed={seed}: {prompt[:80]}")
 
     with _lock:
+        # Decide GPU vs CPU offload now (one generation at a time under the lock).
+        # Default: free the GPU by unloading the LLM. --no-offload forces GPU and
+        # skips coordination; --no-swap disables the swap (always offload).
+        if args.no_offload:
+            use_gpu = True
+        elif args.no_swap:
+            use_gpu = False
+        else:
+            use_gpu = _llm_unload()
+        if not use_gpu:
+            cmd.append("--offload-to-cpu")
+        log.info("GPU (LLM unloaded)" if use_gpu else "CPU offload (LLM coexists)")
         t0 = time.time()
         try:
             proc = subprocess.run(
