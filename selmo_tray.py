@@ -297,7 +297,10 @@ def _find_mmproj(model_dir: str) -> str | None:
 
 # Substrings that mark an auxiliary file (text encoder / VAE), not a diffusion
 # model. The scan keeps only the diffusion weights, like the LLM scan skips mmproj.
-_IMG_AUX = ("qwen", "clip", "t5", "umt5", "mmproj", "encoder", "text_enc")
+# NB: match "instruct", not bare "qwen" -- the Qwen-Image *diffusion* file is
+# named Qwen-Image-*.gguf, while the text encoders (Qwen3-4B-Instruct, the
+# Qwen2.5-VL-7B-Instruct used by Qwen-Image) carry "instruct".
+_IMG_AUX = ("instruct", "clip", "t5", "umt5", "mmproj", "encoder", "text_enc")
 _IMG_SKIP_DIRS = (".cache", "vae", "split_files", "out")
 
 
@@ -332,6 +335,7 @@ def _parse_image_ini(ini_path: Path):
         "files":  "--vae image\\ae.safetensors",
         "params": "--steps 8 --cfg-scale 1.0",
         "note":   "",
+        "offload": "",   # "always" -> bridge forces --offload-to-cpu (big models)
     }
     sections: list[tuple[str, dict]] = []
     if not ini_path.exists():
@@ -348,6 +352,7 @@ def _parse_image_ini(ini_path: Path):
             "files":  cur.get("files",  default["files"]),
             "params": cur.get("params", default["params"]),
             "note":   cur.get("note",   ""),
+            "offload": cur.get("offload", default["offload"]),
         }
         if cur_name == "default":
             default.update(d)
@@ -382,6 +387,7 @@ def _image_config(sel_img, isections, idefault, params=None) -> dict | None:
         "diffusion": sel_img["path"],
         "files":     info["files"],
         "params":    info["params"] if params is None else params,
+        "offload":   info.get("offload", ""),
     }
 
 

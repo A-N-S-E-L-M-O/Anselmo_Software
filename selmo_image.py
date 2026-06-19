@@ -36,6 +36,7 @@ import os
 import json
 import time
 import uuid
+import shlex
 import shutil
 import argparse
 import logging
@@ -91,10 +92,64 @@ def _find_binary():
 
 SD_BIN = _find_binary()
 
-# Model components. Override any of them with SELMO_SD_DIFF / _LLM / _VAE.
-DIFFUSION = Path(os.environ.get("SELMO_SD_DIFF", IMG_DIR / "z_image_turbo-Q6_K.gguf"))
-TEXT_ENC  = Path(os.environ.get("SELMO_SD_LLM",  IMG_DIR / "Qwen3-4B-Instruct-2507-Q4_K_M.gguf"))
-VAE       = Path(os.environ.get("SELMO_SD_VAE",  IMG_DIR / "ae.safetensors"))
+# ---------------------------------------------------------------------------
+# Model selection (v0.831): which generative model + parameters to run is chosen
+# at startup in the tray's two-column picker, which writes selmo-image-config.json
+#   { name, diffusion, files, params }
+# - diffusion : absolute path to the diffusion weights (the menu pick)
+# - files     : FIXED companion flags (text encoder + VAE), from the image ini
+# - params    : EDITABLE tuning flags (--steps / --cfg-scale)
+# If the config file is absent we fall back to the old hard-coded Z-Image-Turbo
+# layout (and SELMO_SD_DIFF / _LLM / _VAE overrides), so nothing breaks.
+# ---------------------------------------------------------------------------
+CONFIG_FILE = SCRIPT_DIR / "selmo-image-config.json"
+
+
+def _load_model():
+    diff = os.environ.get("SELMO_SD_DIFF") or str(IMG_DIR / "z_image_turbo-Q6_K.gguf")
+    enc  = os.environ.get("SELMO_SD_LLM")  or str(IMG_DIR / "Qwen3-4B-Instruct-2507-Q4_K_M.gguf")
+    vae  = os.environ.get("SELMO_SD_VAE")  or str(IMG_DIR / "ae.safetensors")
+    name   = Path(diff).name
+    files  = f'--llm "{enc}" --vae "{vae}"'
+    params = f"--steps {args.steps} --cfg-scale {args.cfg}"
+    offload = ""   # "always" -> stream from RAM even on a freed GPU (big models)
+    if CONFIG_FILE.exists():
+        try:
+            cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            diff    = cfg.get("diffusion") or diff
+            files   = cfg.get("files", files)
+            params  = cfg.get("params", params)
+            name    = cfg.get("name") or Path(diff).name
+            offload = cfg.get("offload", offload)
+        except Exception as e:
+            log.warning(f"bad {CONFIG_FILE.name} ({e}); using built-in default model")
+    return {"name": name, "diffusion": diff, "files": files, "params": params,
+            "offload": offload}
+
+
+MODEL = _load_model()
+
+# sd-cli flags the bridge manages itself; stripped from files/params if present.
+_SD_BOOL   = {"--offload-to-cpu", "--diffusion-fa"}
+_SD_VALUED = {"--diffusion-model", "-p", "--prompt", "-W", "--width", "-H",
+              "--height", "--seed", "-o", "--output", "--init-img",
+              "--strength", "-M", "--mode"}
+
+
+def _strip_struct(tokens):
+    """Drop flags the bridge controls (geometry, prompt, output, offload, fa)."""
+    out, i = [], 0
+    while i < len(tokens):
+        t = tokens[i]
+        if t in _SD_BOOL:
+            i += 1
+        elif t in _SD_VALUED:
+            i += 2
+        else:
+            out.append(t)
+            i += 1
+    return out
+
 
 # One generation at a time (the GPU/CPU can't run two diffusions in parallel).
 _lock = threading.Lock()
@@ -105,9 +160,8 @@ def _missing():
     miss = []
     if SD_BIN is None:
         miss.append("sd-cli.exe (stable-diffusion.cpp) in bin\\")
-    for label, p in (("diffusion model", DIFFUSION), ("text encoder", TEXT_ENC), ("VAE", VAE)):
-        if not p.exists():
-            miss.append(f"{label}: {p.name} in image\\")
+    if not Path(MODEL["diffusion"]).exists():
+        miss.append(f"diffusion model: {Path(MODEL['diffusion']).name} in image\\")
     return miss
 
 
@@ -140,14 +194,15 @@ def status():
     return jsonify({
         "ok": not miss,
         "engine": "stable-diffusion.cpp",
-        "model": "Z-Image-Turbo",
+        "model": MODEL["name"],
+        "files": MODEL["files"],
+        "params": MODEL["params"],
         "binary": str(SD_BIN) if SD_BIN else None,
-        "steps": args.steps,
-        "cfg": args.cfg,
         # Default policy. The actual per-generation mode is decided live: a GPU
         # swap when the tray unloads the LLM, else CPU offload as a fallback.
         "gpu_swap": (not args.no_offload and not args.no_swap),
         "offload_to_cpu": not args.no_offload,
+        "offload": MODEL.get("offload", ""),
         "missing": miss,
     })
 
@@ -197,25 +252,25 @@ def generate():
         return v - (v % 16)
     width  = _dim(data.get("width"),  1024)
     height = _dim(data.get("height"), 1024)
-    steps  = max(1, min(50, int(data.get("steps") or args.steps)))
-    cfg    = float(data.get("cfg") or args.cfg)
     seed   = data.get("seed")
     seed   = int(seed) if seed not in (None, "") else -1
 
     out_path = OUT_DIR / f"{uuid.uuid4().hex}.png"
-    cmd = [
-        str(SD_BIN),
-        "--diffusion-model", str(DIFFUSION),
-        "--llm",             str(TEXT_ENC),
-        "--vae",             str(VAE),
-        "-p",                prompt,
-        "--cfg-scale",       str(cfg),
-        "--steps",           str(steps),
-        "-W",                str(width),
-        "-H",                str(height),
-        "--seed",            str(seed),
+    # The model is config-driven: diffusion pick + fixed companion flags (files)
+    # + editable tuning (params, e.g. --steps/--cfg-scale). The bridge owns the
+    # geometry / prompt / output / offload flags, stripped from files+params.
+    # Normalise Windows backslashes to '/' before shlex (POSIX mode eats '\'),
+    # so paths like image\ae.safetensors survive; sd-cli accepts '/' on Windows.
+    cmd = [str(SD_BIN), "--diffusion-model", str(MODEL["diffusion"])]
+    cmd += _strip_struct(shlex.split(MODEL["files"].replace("\\", "/")))
+    cmd += _strip_struct(shlex.split(MODEL["params"].replace("\\", "/")))
+    cmd += [
+        "-p",    prompt,
+        "-W",    str(width),
+        "-H",    str(height),
+        "--seed", str(seed),
         "--diffusion-fa",
-        "-o",                str(out_path),
+        "-o",    str(out_path),
     ]
     if init_path is not None:
         # New sd.cpp CLI: image gen is the default "img_gen" mode; supplying an
@@ -224,7 +279,7 @@ def generate():
 
     NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     _mode = f"img2img s={strength} init={init_path.name}" if init_path is not None else "txt2img"
-    log.info(f"{_mode} {width}x{height} steps={steps} cfg={cfg} seed={seed}: {prompt[:80]}")
+    log.info(f"{MODEL['name']} {_mode} {width}x{height} seed={seed} [{MODEL['params']}]: {prompt[:80]}")
 
     with _lock:
         # Decide GPU vs CPU offload now (one generation at a time under the lock).
@@ -236,14 +291,23 @@ def generate():
             use_gpu = False
         else:
             use_gpu = _llm_unload()
-        if not use_gpu:
+        # Some models (e.g. Qwen-Image, 20B) do not fit 12 GB even with the LLM
+        # unloaded; their config sets offload=always so weights stream from RAM.
+        # An explicit --no-offload still wins (forces GPU, skips coordination).
+        force_offload = (not args.no_offload) and \
+                        (str(MODEL.get("offload", "")).lower() == "always")
+        if force_offload or not use_gpu:
             cmd.append("--offload-to-cpu")
-        log.info("GPU (LLM unloaded)" if use_gpu else "CPU offload (LLM coexists)")
+        if force_offload and use_gpu:
+            log.info("GPU freed (LLM unloaded) + --offload-to-cpu (model too big to be resident)")
+        else:
+            log.info("GPU (LLM unloaded)" if use_gpu else "CPU offload (LLM coexists)")
         t0 = time.time()
         try:
             proc = subprocess.run(
                 cmd, capture_output=True, text=True,
                 timeout=600, creationflags=NO_WINDOW,
+                cwd=str(SCRIPT_DIR),   # so relative image\ companion paths resolve
             )
         except subprocess.TimeoutExpired:
             log.error("sd-cli timed out (>600s)")
@@ -284,6 +348,7 @@ def cors(resp):
 
 if __name__ == "__main__":
     log.info(f"Selmo image (stable-diffusion.cpp) listening on http://0.0.0.0:{args.port}")
+    log.info(f"Model: {MODEL['name']}  files=[{MODEL['files']}]  params=[{MODEL['params']}]")
     miss = _missing()
     if miss:
         log.warning("Not ready yet — missing: " + "; ".join(miss))
