@@ -298,7 +298,7 @@ def main():
     _start("Whisper STT   [port 8083]", [str(BASE / "selmo_whisper.py")])
     _start("TTS Kokoro    [port 8084]", [str(BASE / "selmo_tts.py"), "--voice", args.voice])
     _start("Image SD.cpp  [port 8086]", [str(BASE / "selmo_image.py")])
-    _start("HTTPS Proxy   [port 8443]", [str(BASE / "selmo_https_proxy.py")])
+    _start("Front door    [8080+8443]", [str(BASE / "selmo_https_proxy.py")])
     start_lhm()  # system-power source (CPU+GPU watts) on port 8085
 
     # Small pause to give the services time to start
@@ -326,8 +326,11 @@ def main():
     cmd = [
         llama,
         "--model",  args.model,
-        "--host",   "0.0.0.0",
-        "--port",   "8080",
+        # Behind the front door now: selmo_https_proxy.py owns 8080 and
+        # serves chat.html; the LLM listens on private loopback 8089 and the
+        # front door proxies /proxy/8089 -> here.
+        "--host",   "127.0.0.1",
+        "--port",   "8089",
         "--path",   str(BASE),
     ]
     # Forward the user's server string, dropping any structural flag they may

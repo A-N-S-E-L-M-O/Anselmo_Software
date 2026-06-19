@@ -37,3 +37,8 @@ chat.fab
 
 # Runtime energy state (per-machine, written by selmo_gpu_monitor.py)
 selmo-wh.json
+selmo-cert-ip.txt
+
+# Runtime image-model pick (per-machine: holds an absolute diffusion path,
+# written by selmo_tray.py at startup; selmo-image-models.ini IS tracked)
+selmo-image-config.json

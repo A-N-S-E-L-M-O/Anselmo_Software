@@ -1,5 +1,5 @@
 # Selmo — Development documentation
-*Updated session 22 · 2026-06-19 · v0.830*
+*Updated session 23 · 2026-06-19 · v0.831*
 
 > **Read first:** the **Lessons learned** section near the end of this file, and **`selmo-bug-report.md`**.
 > **Project language:** English only — see `selmo-manifesto.md`. Conversation with Fabio can be any language; every file artifact is English.
@@ -14,7 +14,7 @@ Selmo is one `llama.cpp` server, a small set of single-purpose Python bridges, a
 
 | Port | Service | File |
 |---|---|---|
-| 8080 | llama-server (LLM, also serves `chat.html`) | `bin/` + `selmo_server.py` |
+| 8080 | **Front door** - serves `chat.html` + reverse-proxies every backend by port | `selmo_https_proxy.py` |
 | 8081 | Web search bridge (SearXNG + DDG fallback + trafilatura) | `selmo_web.py` |
 | 8082 | System-power monitor (system watts + Wh counter; GPU via NVML, CPU power estimated from load, LHM optional) | `selmo_gpu_monitor.py` |
 | 8083 | Whisper STT | `selmo_whisper.py` |
@@ -22,10 +22,11 @@ Selmo is one `llama.cpp` server, a small set of single-purpose Python bridges, a
 | 8085 | LibreHardwareMonitor remote web server (**optional** real CPU/GPU power) | external |
 | 8086 | Image generation (stable-diffusion.cpp / Z-Image-Turbo) | `selmo_image.py` |
 | 8087 | Tray control API (LLM load/unload coordination) | `selmo_tray.py` |
-| 8443 | HTTPS reverse proxy (mobile mic) | `selmo_https_proxy.py` |
+| 8089 | llama-server (LLM), now behind the front door (loopback only) | `bin/` + `selmo_tray.py` |
+| 8443 | Front door over HTTPS (mobile-mic secure context) | `selmo_https_proxy.py` |
 | 8888 | SearXNG (Podman container) | external |
 
-`selmo_server.py` launches llama-server and starts the bridges alongside it. The client talks to each service on its own port (or through the 8443 proxy when loaded over HTTPS).
+`selmo_tray.py` launches llama-server (on private `127.0.0.1:8089`) and the bridges. The client only ever talks to the front door on 8080 (HTTP) or 8443 (HTTPS); the front door serves the page and routes `/proxy/<port>` to each backend, so the UI stays reachable even while the LLM is unloaded for image generation.
 
 ### Reference hardware
 
@@ -200,7 +201,7 @@ Full loop: microphone → Whisper → Selmo → Kokoro TTS → speaker. `selmo_w
 
 ### Mobile / HTTPS
 
-Mobile browsers block `getUserMedia()` on plain HTTP, so the mic was broken on the phone. `selmo_https_proxy.py` (8443) is a self-signed HTTPS reverse proxy: it generates `selmo.crt`/`selmo.key` on first run (LAN IP in the SAN), routes `/proxy/808X/...` to the matching service and everything else to llama-server. The client switches to `/proxy/808X` paths when `location.protocol === 'https:'`. Phone access: `https://192.168.x.x:8443/chat.html`, accept the cert warning once. **Lesson:** delete `selmo.crt`/`selmo.key` if the LAN IP changes (the cert embeds it); the proxy regenerates them.
+Mobile browsers block `getUserMedia()` outside a secure context, and a LAN IP over plain HTTP is not one, so the mic is unavailable on the phone at `http://<ip>:8080` (it can chat, but never record). The front door (`selmo_https_proxy.py`) therefore also listens on HTTPS 8443 with a self-signed cert (`selmo.crt`/`selmo.key`, LAN IP in the SAN), giving the phone its secure context. Phone access: `https://192.168.x.x:8443/chat.html`, accept the cert warning once. Since v0.831 the cert **auto-regenerates when the LAN IP changes** (the IP is recorded in `selmo-cert-ip.txt`), so the old manual-delete step is gone. When `chat.html` is opened over insecure HTTP on a non-localhost host it shows a banner with a one-tap link to the 8443 page. See BUG-MIC-01 for the remaining cert-trust options (Firefox permanent exception / `about:config` / mkcert).
 
 ---
 
@@ -221,9 +222,9 @@ Selection filter (from the manifesto): permissive license as a hard gate; EuroLL
 
 ## Access
 
-- **Desktop:** `http://127.0.0.1:8080/chat.html`
-- **LAN:** `http://192.168.x.x:8080/chat.html` (Windows firewall confirms on first launch)
-- **HTTPS (mobile mic):** `https://192.168.x.x:8443/chat.html`
+- **Desktop:** `http://127.0.0.1:8080/chat.html` (front door; localhost is a secure context, mic works)
+- **LAN:** `http://192.168.x.x:8080/chat.html` (chat only - no mic, insecure context)
+- **HTTPS (mobile mic):** `https://192.168.x.x:8443/chat.html` (front door over TLS - use this on the phone)
 - **Remote:** VPN into the home router → the phone re-enters the LAN, no extra config
 
 ---
@@ -286,6 +287,7 @@ A single ~2,765-line, ~139 KB `chat.html` is the worst case for the mount/Edit-t
 
 ## Changelog (condensed, reverse chronological)
 
+- **v0.831** - single front door on port 8080 (`selmo_https_proxy.py`): it now serves `chat.html` and the static files itself and reverse-proxies every backend by port (`/proxy/8089` -> llama-server, `/proxy/808x` -> the bridges), so the UI always talks to one origin no matter which backend is loaded. Fixes the bug where loading the image model killed 8080: the v0.830 VRAM swap unloads llama-server (moved to private `127.0.0.1:8089`) without taking the page host down - while swapped, `/proxy/8089` returns 502 and `ensureLLM()` reloads on the next chat, but the page itself stays served. The front door listens on HTTP 8080 (desktop/localhost secure context) and HTTPS 8443 (phone), threaded, and auto-regenerates the TLS cert when the LAN IP changes (recorded in `selmo-cert-ip.txt`). `chat.html` backends moved to relative `/proxy/808x` paths (`API` = `/proxy/8089`); a mic-needs-HTTPS banner with a tap-link to the 8443 page appears when the phone loads over insecure 8080. The static server refuses to hand out `*.key`/`*.py`/`*.ini`/`*.bat`/`*.log`. Streaming uses HTTP/1.0 close-delimited framing so token streams terminate cleanly through the proxy.
 - **v0.830** — VRAM swap for image generation: the bridge unloads the LLM before generating so the image model runs on the full GPU (no more `--offload-to-cpu` streaming by default), and the LLM reloads lazily on the next chat. New tray **control API on 8087** (`/status` `/llm/unload` `/llm/reload`, stdlib `http.server`, serialised on `_ctrl_lock`); image bridge POSTs `/llm/unload` + a 2 s CUDA settle, falls back to `--offload-to-cpu` if the API is unreachable (`--no-swap` forces the fallback, `--no-offload` forces GPU). `chat.html` gained `ensureLLM()` — reloads the LLM before a chat turn when `swapped_for_image` is set (tray-authoritative, so a phone-triggered swap heals on desktop), with an animated braille spinner so the reload never looks frozen. While in image mode the WEB/THINK buttons grey out (`setImageMode`, fired the instant generation starts), and the palette button goes straight to text-to-image when no image is loaded (one click less). `/proxy/8087` added to the HTTPS proxy.
 - **v0.829** — image-gen mode picker embedded in the palette button: a popup menu (Text-to-image / Img2img Subtle·Medium·Strong) that opens upward and closes on outside-click, replacing the v0.828 `<select>` for a cleaner mobile row. (Recommitted onto v0.825 after a `.git` tree corruption — `fatal: empty filename in tree entry` — caused by running index-touching git from the sandbox; see Lessons. All writing git now stays on Windows.)
 - **v0.828** — image-to-image: `/generate` accepts a base64 `init_image` + `strength`; bridge appends `--init-img <path> --strength <s>` under sd.cpp's default `img_gen` mode (the old `-M img2img` mode was removed); Subtle/Medium/Strong presets (0.4/0.55/0.7) reuse the loaded `+ IMG/OCR` image at its native aspect; temp init cleaned up.

@@ -1,5 +1,5 @@
 # Selmo — Bug Report
-*Living document · updated session 18 · June 2026*
+*Living document · updated session 23 · June 2026*
 
 ---
 
@@ -52,6 +52,8 @@ Files written/edited via tools on this mount can end up full of NUL bytes (`\x00
 
 *(Chrome's `unsafely-treat-insecure-origin-as-secure` flag does **not** apply — Selmo runs on Firefox.)*
 
+**Status (s23, v0.831) — mitigated by the front door.** `selmo_https_proxy.py` is now the single entry point and serves the same `chat.html` over HTTPS on 8443, so the phone gets a secure context there and the mic + VAD work after a one-time cert acceptance. The cert now auto-regenerates when the LAN IP changes (recorded in `selmo-cert-ip.txt`), so the manual delete step is gone. `chat.html` shows a banner with a tap-link to the 8443 page when it is opened over insecure HTTP on a non-localhost host (e.g. the phone on 8080), where the mic can never run. The one remaining friction is the self-signed-cert warning itself; the three trust options above (Firefox permanent exception / `about:config` / mkcert) still apply. Kept OPEN until a phone retest confirms mic + VAD over 8443.
+
 ---
 
 ## BUG-EXIT-01 · Python processes hang on exit ⚠️ FIXED (session 18)
@@ -95,6 +97,12 @@ def _do_exit(icon, item):
 **Next step — confirm with a hard reload (Ctrl+Shift+R).** The s19/first-s20 test searched the raw "why is option grayed out" — the pre-fix behaviour — because Firefox served a cached `chat.html`. Retest on the BIOS image with WEB on and read the yellow `img→query` line. If it still shows `RAW` after a hard reload, the single-call vision rewrite is likely failing on **Qwen3-MoE specifically** (llama.cpp vision for it is fresh) — isolate by testing the same image on Gemma 4 / Magistral. Also fixed this pass: `exportChat` dumped image turns as `[object Object]` (printed the raw content array) — now uses `_orig`/joined text parts.
 
 ## Resolved
+
+### BUG-IMG-04 · Image model loaded -> 8080 stops responding — ✓ RESOLVED (v0.831)
+
+**Symptom** — With the v0.830 VRAM swap, starting image generation unloaded llama-server to free the GPU. But llama-server also served `chat.html` on 8080, so unloading it took the whole web UI down: 8080 stopped answering until the next chat turn reloaded the model. A page refresh during image mode left nothing to load.
+
+**Fix** — Decoupled the static UI host from the swappable LLM. `selmo_https_proxy.py` became an always-up front door on 8080 that serves `chat.html` from disk and reverse-proxies the backends; llama-server moved to private `127.0.0.1:8089` behind it (`/proxy/8089`). Unloading the LLM no longer touches the page host: while swapped, `/proxy/8089` returns 502 and `ensureLLM()` reloads on the next chat, but the page stays served. The client (`chat.html`) talks only to the front door via relative `/proxy/808x` paths, so the GUI uses one port regardless of which backend is loaded.
 
 ### BUG-IMG-03 · Vision + web search together — ✓ RESOLVED in code (verify with a quick test)
 

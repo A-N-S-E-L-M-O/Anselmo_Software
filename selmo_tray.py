@@ -292,6 +292,100 @@ def _find_mmproj(model_dir: str) -> str | None:
 
 
 # ============================================================
+#  Image / generative model scanning  (twin of the LLM scan)
+# ============================================================
+
+# Substrings that mark an auxiliary file (text encoder / VAE), not a diffusion
+# model. The scan keeps only the diffusion weights, like the LLM scan skips mmproj.
+_IMG_AUX = ("qwen", "clip", "t5", "umt5", "mmproj", "encoder", "text_enc")
+_IMG_SKIP_DIRS = (".cache", "vae", "split_files", "out")
+
+
+def _scan_image_models(base: Path) -> list[dict]:
+    """Recursive scan of image\\ for diffusion models (encoders + VAEs skipped)."""
+    idir = base / "image"
+    if not idir.exists():
+        return []
+    found = []
+    for f in sorted(idir.rglob("*")):
+        if not f.is_file() or f.suffix.lower() not in (".gguf", ".safetensors"):
+            continue
+        low = f.name.lower()
+        if any(k in low for k in _IMG_AUX):
+            continue
+        if low == "ae.safetensors" or "vae" in low:
+            continue
+        if any(seg.lower() in _IMG_SKIP_DIRS for seg in f.relative_to(idir).parts[:-1]):
+            continue
+        found.append({"name": f.name, "path": str(f), "dir": str(f.parent)})
+    return found
+
+
+def _parse_image_ini(ini_path: Path):
+    """
+    Twin of _parse_ini for selmo-image-models.ini.
+      sections = [(name_lower, {files, params, note}), ...]
+      default  = dict with the same keys.
+    First-match wins, matched as a substring of the diffusion file name.
+    """
+    default = {
+        "files":  "--vae image\\ae.safetensors",
+        "params": "--steps 8 --cfg-scale 1.0",
+        "note":   "",
+    }
+    sections: list[tuple[str, dict]] = []
+    if not ini_path.exists():
+        return sections, default
+
+    cur_name: str | None = None
+    cur: dict = {}
+
+    def _commit():
+        nonlocal cur_name, cur
+        if cur_name is None:
+            return
+        d = {
+            "files":  cur.get("files",  default["files"]),
+            "params": cur.get("params", default["params"]),
+            "note":   cur.get("note",   ""),
+        }
+        if cur_name == "default":
+            default.update(d)
+        else:
+            sections.append((cur_name, d))
+        cur_name = None
+        cur = {}
+
+    with open(ini_path, encoding="utf-8", errors="replace") as fh:
+        for raw in fh:
+            line = raw.strip()
+            if not line or line.startswith(";"):
+                continue
+            if line.startswith("["):
+                _commit()
+                cur_name = line[1:].rstrip("]").strip().lower()
+                cur = {}
+            elif "=" in line:
+                k, _, v = line.partition("=")
+                cur[k.strip().lower()] = v.strip()
+    _commit()
+    return sections, default
+
+
+def _image_config(sel_img, isections, idefault, params=None) -> dict | None:
+    """Resolve a chosen diffusion model + its ini match into the bridge config."""
+    if not sel_img:
+        return None
+    info = _match_ini(sel_img["name"], isections, idefault)
+    return {
+        "name":      sel_img["name"],
+        "diffusion": sel_img["path"],
+        "files":     info["files"],
+        "params":    info["params"] if params is None else params,
+    }
+
+
+# ============================================================
 #  Console text picker  (same UX as Selmo.bat)
 # ============================================================
 
@@ -366,11 +460,13 @@ def _notify(message: str, title: str = "SelmoAI"):
         pass
 
 
-def _gui_picker(models, sections, default) -> tuple[dict, str, int]:
+def _gui_picker(models, sections, default,
+                img_models, isections, idefault):
     """
-    Tkinter replacement for the console picker.  Lists the models, lets the
-    user edit the server args and chunking size, and returns
-    (model_dict, srv_str, chunking_size).  Cancel / close exits cleanly.
+    Two-column Tkinter picker. LEFT = language model (model + server args +
+    chunking). RIGHT = image / generative model (model + editable steps/cfg).
+    Returns (llm_model, srv_str, chunking_size, img_model_or_None, img_params).
+    Cancel / close exits cleanly.
     """
     import tkinter as tk
 
@@ -383,45 +479,45 @@ def _gui_picker(models, sections, default) -> tuple[dict, str, int]:
     result: dict = {}
 
     root = tk.Tk()
-    root.title("SelmoAI -- choose a model")
+    root.title("SelmoAI -- choose your models")
     try:
         root.iconbitmap(str(BASE / "selmo.ico"))
     except Exception:
         pass
-    root.configure(padx=16, pady=14)
+    root.configure(padx=14, pady=12)
     root.resizable(False, False)
     root.attributes("-topmost", True)
     root.after(400, lambda: root.attributes("-topmost", False))
 
-    tk.Label(root, text="Local model", font=("Segoe UI", 11, "bold")) \
-        .grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 6))
+    # ---- LEFT column: language model ------------------------------------
+    left = tk.LabelFrame(root, text=" Language model (LLM) ",
+                         font=("Segoe UI", 10, "bold"), padx=10, pady=8)
+    left.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
 
-    lb = tk.Listbox(root, height=min(len(models), 10), width=100,
+    lb = tk.Listbox(left, height=min(max(len(models), 4), 12), width=58,
                     activestyle="dotbox", exportselection=False)
     for m in models:
         info = _match_ini(m["name"], sections, default)
         note = info.get("note", "")
         lb.insert("end", f"{m['name']}  --  {note}" if note else m["name"])
     lb.selection_set(0)
-    lb.grid(row=1, column=0, columnspan=2, sticky="we")
+    lb.grid(row=0, column=0, columnspan=2, sticky="we")
 
     note_var = tk.StringVar()
     srv_var  = tk.StringVar()
     cs_var   = tk.StringVar()
 
-    tk.Label(root, textvariable=note_var, fg="#555", wraplength=700,
-             justify="left").grid(row=2, column=0, columnspan=2,
+    tk.Label(left, textvariable=note_var, fg="#555", wraplength=420,
+             justify="left").grid(row=1, column=0, columnspan=2,
                                   sticky="w", pady=(6, 8))
+    tk.Label(left, text="Server args").grid(row=2, column=0, sticky="w")
+    tk.Entry(left, textvariable=srv_var, width=56) \
+        .grid(row=3, column=0, columnspan=2, sticky="we", pady=(0, 8))
+    tk.Label(left, text="Chunking size").grid(row=4, column=0, sticky="w")
+    tk.Entry(left, textvariable=cs_var, width=12) \
+        .grid(row=4, column=1, sticky="w")
 
-    tk.Label(root, text="Server args").grid(row=3, column=0, sticky="w")
-    tk.Entry(root, textvariable=srv_var, width=90) \
-        .grid(row=4, column=0, columnspan=2, sticky="we", pady=(0, 8))
-
-    tk.Label(root, text="Chunking size").grid(row=5, column=0, sticky="w")
-    tk.Entry(root, textvariable=cs_var, width=12) \
-        .grid(row=5, column=1, sticky="w")
-
-    def _on_select(_evt=None):
+    def _on_llm(_evt=None):
         idx = lb.curselection()
         if not idx:
             return
@@ -430,9 +526,57 @@ def _gui_picker(models, sections, default) -> tuple[dict, str, int]:
         srv_var.set(info["srv"])
         cs_var.set(str(info["chunking_size"]))
 
-    lb.bind("<<ListboxSelect>>", _on_select)
-    _on_select()
+    lb.bind("<<ListboxSelect>>", _on_llm)
+    _on_llm()
 
+    # ---- RIGHT column: image / generative model -------------------------
+    right = tk.LabelFrame(root, text=" Image model (generative) ",
+                          font=("Segoe UI", 10, "bold"), padx=10, pady=8)
+    right.grid(row=0, column=1, sticky="nsew")
+
+    inote_var   = tk.StringVar()
+    ifiles_var  = tk.StringVar()
+    iparams_var = tk.StringVar()
+
+    ilb = tk.Listbox(right, height=min(max(len(img_models), 4), 12), width=58,
+                     activestyle="dotbox", exportselection=False)
+    if img_models:
+        for m in img_models:
+            info = _match_ini(m["name"], isections, idefault)
+            note = info.get("note", "")
+            ilb.insert("end", f"{m['name']}  --  {note}" if note else m["name"])
+        ilb.selection_set(0)
+    else:
+        ilb.insert("end", "(no diffusion model found in image\\)")
+        ilb.configure(state="disabled", fg="#999")
+    ilb.grid(row=0, column=0, columnspan=2, sticky="we")
+
+    tk.Label(right, textvariable=inote_var, fg="#555", wraplength=420,
+             justify="left").grid(row=1, column=0, columnspan=2,
+                                  sticky="w", pady=(6, 4))
+    tk.Label(right, textvariable=ifiles_var, fg="#888", wraplength=420,
+             justify="left", font=("Consolas", 8)) \
+        .grid(row=2, column=0, columnspan=2, sticky="w", pady=(0, 8))
+    tk.Label(right, text="Params (steps, cfg)").grid(row=3, column=0, sticky="w")
+    tk.Entry(right, textvariable=iparams_var, width=56) \
+        .grid(row=4, column=0, columnspan=2, sticky="we", pady=(0, 8))
+
+    def _on_img(_evt=None):
+        if not img_models:
+            return
+        idx = ilb.curselection()
+        if not idx:
+            return
+        info = _match_ini(img_models[idx[0]]["name"], isections, idefault)
+        inote_var.set(info.get("note", "") or "(no note)")
+        ifiles_var.set("fixed: " + info["files"])
+        iparams_var.set(info["params"])
+
+    if img_models:
+        ilb.bind("<<ListboxSelect>>", _on_img)
+        _on_img()
+
+    # ---- buttons ---------------------------------------------------------
     def _launch(_evt=None):
         idx = lb.curselection()
         if not idx:
@@ -442,14 +586,22 @@ def _gui_picker(models, sections, default) -> tuple[dict, str, int]:
         srv  = srv_var.get().strip() or info["srv"]
         cs   = cs_var.get().strip()
         csize = int(cs) if cs.isdigit() else int(info["chunking_size"])
-        result.update({"sel": m, "srv": srv, "csize": csize})
+        sel_img = None
+        iparams = ""
+        if img_models:
+            iidx = ilb.curselection()
+            if iidx:
+                sel_img = img_models[iidx[0]]
+                iparams = iparams_var.get().strip()
+        result.update({"sel": m, "srv": srv, "csize": csize,
+                       "img": sel_img, "iparams": iparams})
         root.destroy()
 
     def _cancel(_evt=None):
         root.destroy()
 
     btns = tk.Frame(root)
-    btns.grid(row=6, column=0, columnspan=2, sticky="e", pady=(12, 0))
+    btns.grid(row=1, column=0, columnspan=2, sticky="e", pady=(12, 0))
     tk.Button(btns, text="Launch", width=12, default="active",
               command=_launch).pack(side="right", padx=(6, 0))
     tk.Button(btns, text="Cancel", width=10,
@@ -458,11 +610,14 @@ def _gui_picker(models, sections, default) -> tuple[dict, str, int]:
     root.bind("<Return>", _launch)
     root.bind("<Escape>", _cancel)
     lb.bind("<Double-Button-1>", _launch)
+    if img_models:
+        ilb.bind("<Double-Button-1>", _launch)
     root.mainloop()
 
     if "sel" not in result:
         sys.exit(0)        # cancelled / closed
-    return result["sel"], result["srv"], result["csize"]
+    return (result["sel"], result["srv"], result["csize"],
+            result["img"], result["iparams"])
 
 
 # ============================================================
@@ -476,8 +631,13 @@ def _build_cmd(model_path: str, srv_str: str, mmproj: str | None) -> list[str]:
     cmd = [
         str(LLAMA_EXE),
         "--model", model_path,
-        "--host",  "0.0.0.0",
-        "--port",  "8080",
+        # llama-server now sits BEHIND the front door (selmo_https_proxy.py
+        # owns 8080 and serves chat.html). The LLM listens on a private
+        # loopback port; the front door proxies /proxy/8089 -> here. This
+        # lets the v0.830 VRAM swap unload/reload the LLM without taking
+        # the web UI (now served by the front door) down with it.
+        "--host",  "127.0.0.1",
+        "--port",  "8089",
         "--path",  str(BASE),
     ]
     toks = shlex.split(srv_str) if srv_str else []
@@ -768,7 +928,7 @@ def _start_all_services(voice: str = "im_nicola"):
     _start_service("TTS Kokoro    [port 8084]",
                    [str(BASE / "selmo_tts.py"), "--voice", voice])
     _start_service("Image SD.cpp  [port 8086]", [str(BASE / "selmo_image.py")])
-    _start_service("HTTPS Proxy   [port 8443]", [str(BASE / "selmo_https_proxy.py")])
+    _start_service("Front door    [8080+8443]", [str(BASE / "selmo_https_proxy.py")])
     _start_control_server()
     _start_lhm()
 
@@ -956,6 +1116,10 @@ def main():
     sections, default = _parse_ini(ini_path)
     models            = _scan_models(BASE)
 
+    img_ini_path        = BASE / "selmo-image-models.ini"
+    isections, idefault = _parse_image_ini(img_ini_path)
+    img_models          = _scan_image_models(BASE)
+
     border  = "  +" + "-" * 44 + "+"
     boxline = lambda s: "  |" + s.center(44) + "|"
     print()
@@ -965,13 +1129,24 @@ def main():
     print(border)
     print()
 
-    sel, srv, csize = _gui_picker(models, sections, default)
+    sel, srv, csize, sel_img, iparams = _gui_picker(
+        models, sections, default, img_models, isections, idefault)
     mmproj = _find_mmproj(sel["dir"])
 
     vis = f"on  ({Path(mmproj).name})" if mmproj else "text only"
     print(f"  Launching:  {sel['name']}")
     print(f"  Vision   :  {vis}")
     print(f"  Chunking :  {csize} tokens / chunk")
+
+    # Image / generative model: write its config for the bridge (8086) to read.
+    img_cfg = _image_config(sel_img, isections, idefault, iparams or None)
+    if img_cfg:
+        (BASE / "selmo-image-config.json").write_text(
+            json.dumps(img_cfg), encoding="utf-8"
+        )
+        print(f"  Image    :  {img_cfg['name']}  ({img_cfg['params']})")
+    else:
+        print("  Image    :  none selected (bridge uses its built-in default)")
     print()
 
     (BASE / "selmo-config.json").write_text(

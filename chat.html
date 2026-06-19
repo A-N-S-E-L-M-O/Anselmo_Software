@@ -524,7 +524,7 @@ body.custom .think-toggle{color:#9a9aa3;}
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.830</div>
+  <div class="hbadge">v0.831</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -712,10 +712,16 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
 const _http=(location.protocol==='http:'||location.protocol==='https:');
 const _https=(location.protocol==='https:');
 const _host=_http?location.hostname:'127.0.0.1';
-const API=_http?location.origin:'http://127.0.0.1:8080';
-const GMON=_https?'/proxy/8082':'http://'+_host+':8082';
-const WEB=_https?'/proxy/8081':'http://'+_host+':8081';
-const CTRL=_https?'/proxy/8087':'http://'+_host+':8087';
+// Single entry point: the front door (selmo_https_proxy.py) serves chat.html
+// and reverse-proxies every backend by port on THIS same origin, so the UI
+// talks to one port no matter which backend is loaded -- the LLM can be
+// unloaded for image generation without the page going away. Relative paths
+// when served over http/https; absolute to the 8080 front door for file://.
+const _ORIGIN=_http?'':'http://127.0.0.1:8080';
+const API=_ORIGIN+'/proxy/8089';     // llama-server (LLM), now behind the front door
+const GMON=_ORIGIN+'/proxy/8082';
+const WEB=_ORIGIN+'/proxy/8081';
+const CTRL=_ORIGIN+'/proxy/8087';
 let webOk=false;
 // Session constants must be declared early — renderSessionList() is called at init
 // before the session block at the bottom of the file. TDZ would silently kill getSessions().
@@ -976,7 +982,7 @@ checkWebBridge();
 setInterval(checkWebBridge, 30000);
 
 // ── Whisper bridge ────────────────────────────────────────────────────────────
-const WHISPER=_https?'/proxy/8083':'http://'+location.hostname+':8083';
+const WHISPER=_ORIGIN+'/proxy/8083';
 
 async function checkWhisperBridge(){
   try{
@@ -2445,8 +2451,8 @@ async function toggleVad(){
 
 
 // ── TTS — Kokoro (port 8084) with Web Speech API fallback ────────────────────
-const TTS_URL=_https?'/proxy/8084':'http://'+location.hostname+':8084';
-const IMG_URL=_https?'/proxy/8086':'http://'+location.hostname+':8086';
+const TTS_URL=_ORIGIN+'/proxy/8084';
+const IMG_URL=_ORIGIN+'/proxy/8086';
 
 // Image generation (port 8086, stable-diffusion.cpp / Z-Image-Turbo).
 // No arg -> text-to-image (prompt only). A strength value (from the Subtle/
@@ -2839,6 +2845,31 @@ if(window.visualViewport){
 }
 
 
+
+// Mic needs a secure context. Browsers treat localhost as secure but a LAN IP
+// over plain HTTP is not, so on the phone at http://<ip>:8080 getUserMedia (and
+// the VAD library) are blocked. Show a one-tap link to the HTTPS front door
+// (8443), which serves this same page over TLS. See BUG-MIC-01.
+function _micHttpsBanner(){
+  try{
+    var h=location.hostname;
+    var local=(h==='localhost'||h==='127.0.0.1'||h==='::1'||h==='');
+    if(window.isSecureContext||local)return;
+    if(document.getElementById('mic-https-banner'))return;
+    var url='https://'+h+':8443'+location.pathname+location.search;
+    var b=document.createElement('div');
+    b.id='mic-https-banner';
+    b.style.cssText='position:sticky;top:0;z-index:99999;background:#3a2a00;'
+      +'color:#ffcc66;border-bottom:1px solid #6b5300;padding:8px 12px;'
+      +'font-size:13px;line-height:1.4;text-align:center;font-family:inherit';
+    b.innerHTML='\uD83C\uDFA4 Microphone needs HTTPS on a phone. '
+      +'<a href="'+url+'" style="color:#ffe28a;text-decoration:underline;'
+      +'font-weight:bold">Open the secure page \u2192</a>'
+      +' <span style="opacity:.7;cursor:pointer" onclick="this.parentNode.remove()">\u2715</span>';
+    document.body.insertBefore(b,document.body.firstChild);
+  }catch(e){}
+}
+_micHttpsBanner();
 </script>
 </body>
 </html>
