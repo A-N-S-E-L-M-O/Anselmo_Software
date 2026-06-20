@@ -1,0 +1,21 @@
+Selmo
+Copyright 2026 Fabio (Selmo project)
+
+This software is part of the Selmo project, inspired by the book
+"Dialoghi con la lavatrice".
+
+ATTRIBUTION REQUIRED. Any redistribution, fork, or derivative work must credit,
+in its documentation and/or its visible credits:
+  - the Selmo project, and
+  - the book "Dialoghi con la lavatrice".
+
+LICENSE. This software is licensed under the Apache License, Version 2.0, with
+the "Commons Clause" License Condition v1.0 (the Software may not be Sold). See
+the LICENSE file for the full terms.
+
+THIRD-PARTY COMPONENTS. Selmo bundles or relies on third-party open-source
+software, each under its own license (MIT / Apache 2.0 / BSD / ISC / OFL). The
+full list is in selmo-dev.md > "Credits & licenses". Notably, SearXNG (AGPL-3.0)
+runs as a separate process in its own container and is neither bundled nor
+linked, so its copyleft does not extend to Selmo's source. Model weights are not
+distributed with this repository and remain under their respective licenses.

@@ -66,8 +66,9 @@ Write-Host "  .gitignore scritto" -ForegroundColor Green
 
 # 4) Init + config
 git init -b main | Out-Null
+# Set your own git identity here, or configure git globally beforehand.
 git config user.email "you@example.com"
-git config user.name  "Fabio"
+git config user.name  "Your Name"
 git config core.autocrlf false
 
 # 5) Stage di tutto cio' che non e' ignorato
