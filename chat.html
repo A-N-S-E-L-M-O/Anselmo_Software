@@ -524,7 +524,7 @@ body.custom .think-toggle{color:#9a9aa3;}
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.832</div>
+  <div class="hbadge">v0.834</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -673,7 +673,7 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
       <span id="file-name">-</span>
       <button id="file-clear" onclick="clearFile()">&#x2715;</button>
     </div>
-    <textarea id="input" rows="1" placeholder="Type a message..." onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+    <textarea id="input" rows="1" placeholder="Type a message..." onkeydown="handleKey(event)" oninput="autoResize(this)" onpaste="handlePaste(event)"></textarea>
 
     <button id="send" onclick="sendMsg()" title="Generate document">&#x1F4C4;</button>
     <span id="img-wrap"><button id="gen-img-btn" onclick="toggleImgMenu(event)" title="Image generation (Z-Image-Turbo) - click to choose mode">&#x1F3A8;</button><div id="img-menu"><button onclick="pickImg(event)">Text-to-image</button><button onclick="pickImg(event,0.4)">Img2img: Subtle</button><button onclick="pickImg(event,0.55)">Img2img: Medium</button><button onclick="pickImg(event,0.7)">Img2img: Strong</button></div></span>
@@ -1465,54 +1465,72 @@ async function imgToJpegDataUrl(file,MAX_SIDE,quality){
   if(bmp&&bmp.close) bmp.close();
   return cv.toDataURL('image/jpeg',quality);
 }
+// Shared image-attach pipeline: used by the + IMG/OCR picker AND clipboard paste.
+async function addImageFiles(files){
+  const IMG_EXTS=['jpg','jpeg','png','gif','webp','heic','heif','bmp'];
+  for(const file of files){
+    const ext=(file.name||'').split('.').pop().toLowerCase();
+    let dataUrls=[];
+    const isImg=(file.type&&file.type.indexOf('image/')===0)||IMG_EXTS.includes(ext);
+    if(isImg){
+      dataUrls=[await imgToJpegDataUrl(file,1280,0.85)];
+    } else if(ext==='pdf'){
+      const buf=await file.arrayBuffer();
+      const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+      const MAX_PAGES=8, MAX_SIDE=1280;
+      const numPages=Math.min(pdf.numPages,MAX_PAGES);
+      for(let i=1;i<=numPages;i++){
+        const pg=await pdf.getPage(i);
+        const base=pg.getViewport({scale:1});
+        const scale=Math.min(2.5, MAX_SIDE/Math.max(base.width,base.height));
+        const vp=pg.getViewport({scale});
+        const cv=document.createElement('canvas');
+        cv.width=Math.ceil(vp.width);cv.height=Math.ceil(vp.height);
+        const c2=cv.getContext('2d');
+        c2.fillStyle='#fff';c2.fillRect(0,0,cv.width,cv.height);
+        await pg.render({canvasContext:c2,viewport:vp}).promise;
+        dataUrls.push(cv.toDataURL('image/jpeg',0.85));
+      }
+      if(numPages<pdf.numPages) console.warn('Long PDF: only the first '+MAX_PAGES+' pages of '+pdf.numPages);
+    } else {
+      alert('Unsupported format for vision: '+(file.name||'(clipboard)')+'. Use + FILE for text documents.');
+      continue;
+    }
+    const nm=file.name||('pasted-'+Date.now()+'.jpg');
+    if(fileImage){fileImage.dataUrls=fileImage.dataUrls.concat(dataUrls);fileImage.names.push(nm);fileImage.pages=fileImage.dataUrls.length;}
+    else{fileImage={dataUrls,mimeType:'image/jpeg',name:nm,names:[nm],pages:dataUrls.length};}
+  }
+  if(fileImage){
+    fileDoc=null;fileDocNames=[];fileCtx=null;chunks=[];chunkIdx=0;
+    document.getElementById('file-badge').style.display='flex';
+    const nm=fileImage.names.length>1?fileImage.names.length+' files':fileImage.name;
+    const pg=fileImage.pages>1?' ('+fileImage.pages+'p)':'';
+    document.getElementById('file-name').textContent='🖼️ '+nm+pg;
+    document.getElementById('input').placeholder='Image/PDF loaded for vision. Ask a question or request OCR...';
+  }
+}
 async function loadFileAsImage(inp){
   const files=Array.from(inp.files);if(!files.length)return;
   const btn=document.getElementById('upload-img-btn');
   btn.textContent='...';
-  try{
-    const IMG_EXTS=['jpg','jpeg','png','gif','webp','heic','heif','bmp'];
-    for(const file of files){
-      const ext=file.name.split('.').pop().toLowerCase();
-      let dataUrls=[];
-      const isImg=(file.type&&file.type.indexOf('image/')===0)||IMG_EXTS.includes(ext);
-      if(isImg){
-        dataUrls=[await imgToJpegDataUrl(file,1280,0.85)];
-      } else if(ext==='pdf'){
-        const buf=await file.arrayBuffer();
-        const pdf=await pdfjsLib.getDocument({data:buf}).promise;
-        const MAX_PAGES=8, MAX_SIDE=1280;
-        const numPages=Math.min(pdf.numPages,MAX_PAGES);
-        for(let i=1;i<=numPages;i++){
-          const pg=await pdf.getPage(i);
-          const base=pg.getViewport({scale:1});
-          const scale=Math.min(2.5, MAX_SIDE/Math.max(base.width,base.height));
-          const vp=pg.getViewport({scale});
-          const cv=document.createElement('canvas');
-          cv.width=Math.ceil(vp.width);cv.height=Math.ceil(vp.height);
-          const c2=cv.getContext('2d');
-          c2.fillStyle='#fff';c2.fillRect(0,0,cv.width,cv.height);
-          await pg.render({canvasContext:c2,viewport:vp}).promise;
-          dataUrls.push(cv.toDataURL('image/jpeg',0.85));
-        }
-        if(numPages<pdf.numPages) console.warn('Long PDF: only the first '+MAX_PAGES+' pages of '+pdf.numPages);
-      } else {
-        alert('Unsupported format for vision: '+file.name+'. Use + FILE for text documents.');
-        continue;
-      }
-      // Multiple images/PDFs accepted: append pages into one vision payload.
-      if(fileImage){fileImage.dataUrls=fileImage.dataUrls.concat(dataUrls);fileImage.names.push(file.name);fileImage.pages=fileImage.dataUrls.length;}
-      else{fileImage={dataUrls,mimeType:'image/jpeg',name:file.name,names:[file.name],pages:dataUrls.length};}
-    }
-    if(fileImage){
-      fileDoc=null;fileDocNames=[];fileCtx=null;chunks=[];chunkIdx=0;
-      document.getElementById('file-badge').style.display='flex';
-      const nm=fileImage.names.length>1?fileImage.names.length+' files':fileImage.name;
-      const pg=fileImage.pages>1?' ('+fileImage.pages+'p)':'';
-      document.getElementById('file-name').textContent='🖼️ '+nm+pg;
-      document.getElementById('input').placeholder='Image/PDF loaded for vision. Ask a question or request OCR...';
-    }
-  }catch(e){console.error('loadFileAsImage:',e);alert('Error: '+e.message);}
+  try{ await addImageFiles(files); }
+  catch(e){console.error('loadFileAsImage:',e);alert('Error: '+e.message);}
   btn.textContent='+ IMG/OCR';inp.value='';
+}
+// Clipboard paste: an image in the clipboard (screenshot, copied picture) is
+// attached exactly like + IMG/OCR. Non-image pastes fall through to text paste.
+async function handlePaste(e){
+  const items=(e.clipboardData&&e.clipboardData.items)?Array.from(e.clipboardData.items):[];
+  const imgs=items.filter(it=>it.kind==='file'&&it.type&&it.type.indexOf('image/')===0)
+                  .map(it=>it.getAsFile()).filter(Boolean);
+  if(!imgs.length)return;           // not an image: let the browser paste text
+  e.preventDefault();
+  const btn=document.getElementById('upload-img-btn');
+  const prev=btn?btn.textContent:'';
+  if(btn)btn.textContent='...';
+  try{ await addImageFiles(imgs); }
+  catch(err){console.error('paste image:',err);alert('Error: '+err.message);}
+  if(btn)btn.textContent=prev||'+ IMG/OCR';
 }
 
 async function loadFile(inp){
@@ -1714,6 +1732,23 @@ function dlReplyTsv(md){
   if(!tsv){alert('No table in this reply. Ask the model to format the data as a Markdown table, then download .tsv.');return;}
   dlBlob('\uFEFF'+tsv,'selmo-output-'+stamp()+'.tsv','text/tab-separated-values;charset=utf-8');
 }
+// Copy text to the clipboard. Uses the async Clipboard API on a secure context
+// (HTTPS / localhost); falls back to a hidden-textarea execCommand on plain HTTP
+// (the phone over 8080), where navigator.clipboard is unavailable.
+function copyToClipboard(text,btn){
+  const flash=(label)=>{if(btn){const o=btn.textContent;btn.textContent=label;setTimeout(()=>{btn.textContent=o;},1300);}};
+  const ok=()=>flash('✓ copied'), fail=()=>flash('✕ blocked');
+  if(navigator.clipboard&&navigator.clipboard.writeText&&window.isSecureContext){
+    navigator.clipboard.writeText(text).then(ok,fail);return;
+  }
+  try{
+    const ta=document.createElement('textarea');ta.value=text;
+    ta.style.cssText='position:fixed;top:-1000px;left:-1000px;opacity:0';
+    document.body.appendChild(ta);ta.focus();ta.select();
+    const done=document.execCommand('copy');document.body.removeChild(ta);
+    done?ok():fail();
+  }catch(_){fail();}
+}
 function addDownloadBar(bub,inner,md){
   if(!md||!md.trim())return;
   const bar=document.createElement('div');
@@ -1722,6 +1757,7 @@ function addDownloadBar(bub,inner,md){
     b.style.cssText='background:none;border:1px solid var(--steel);color:var(--dim);border-radius:4px;padding:2px 9px;cursor:pointer;font-family:inherit;font-size:12px;';
     b.onclick=fn;b.onmouseover=()=>{b.style.borderColor='var(--cyan)';b.style.color='var(--cyan)';};
     b.onmouseout=()=>{b.style.borderColor='var(--steel)';b.style.color='var(--dim)';};return b;};
+  bar.appendChild(mk('⧉ copy',function(){copyToClipboard(md,this);}));
   bar.appendChild(mk('↓ .md',()=>dlReplyMd(md)));
   bar.appendChild(mk('↓ .tsv',()=>dlReplyTsv(md)));
   inner.appendChild(bar);
@@ -2288,7 +2324,7 @@ async function sendMsg(){
   } else {
     let apiContent=content;
     if(fileChat){apiContent='[Attached file]\n\n'+fileChat+'\n\n---\n\n'+content;fileChat=null;}
-    chatHistory.push({role:'user',content:apiContent});
+    chatHistory.push({role:'user',content:apiContent,_orig:content});
     addMsg('user',content);
   }
   const{bub,inner}=addMsg('assistant','',true);
@@ -2506,6 +2542,7 @@ async function genImage(strength){
       bub.innerHTML='<span style="color:#f66">Image generation failed - '+msg+'</span>';return;
     }
     const secs=r.headers.get('X-Selmo-Gen-Seconds')||'?';
+    const mdl=(r.headers.get('X-Selmo-Model')||'image').replace(/\.gguf$/i,'');
     const url=URL.createObjectURL(await r.blob());
     bub.innerHTML='';
     const im=new Image();
@@ -2515,7 +2552,7 @@ async function genImage(strength){
     bub.appendChild(im);
     const cap=document.createElement('div');
     cap.style.cssText='font-size:11px;color:var(--dim);margin-top:4px';
-    cap.textContent='Z-Image-Turbo · '+(isI2I?('img2img '+strength+' · '):'')+secs+'s · '+(prompt||'(from image)');
+    cap.textContent=mdl+' · '+(isI2I?('img2img '+strength+' · '):'')+secs+'s · '+(prompt||'(from image)');
     bub.appendChild(cap);scrollBot();
   }catch(e){
     bub.innerHTML='<span style="color:#f66">Image bridge unreachable - is selmo_image.py running on 8086? ('+e.message+')</span>';
@@ -2715,36 +2752,77 @@ function toggleThink(){
   if(btn){btn.classList.toggle('on',IS_THINK_ON);btn.textContent=IS_THINK_ON?'THINK ●':'THINK';}
 }
 
+// Reduce a live chatHistory message to a small, JSON-safe record for storage.
+// Base64 image data is dropped (kept only as an image COUNT): full-res images in
+// localStorage overflowed the phone quota, so the whole session save threw and
+// the conversation vanished. The live session keeps its thumbnails in the DOM;
+// only reloaded-from-history turns show a placeholder marker.
+function storableMsg(m){
+  if(Array.isArray(m.content)){
+    const imgs=m.content.filter(p=>p&&p.type==='image_url').length;
+    const txt=(m._orig!=null)?m._orig
+      :m.content.filter(p=>p&&p.type==='text').map(p=>(p&&p.text)||'').join('\n');
+    const r={role:m.role,content:String(txt==null?'':txt)};
+    if(imgs)r.imgs=imgs;
+    return r;
+  }
+  // User turns: the bubble shows clean text while content may carry injected
+  // web/doc context — store the clean text (_orig) so reloaded bubbles read
+  // cleanly. Assistant turns have no _orig: keep full content ([THINK] + answer).
+  let c=(m.role==='user'&&m._orig!=null)?m._orig:m.content;
+  const r={role:m.role,content:(c==null?'':String(c))};
+  if(m.imgs)r.imgs=m.imgs;
+  return r;
+}
 function saveSession(){
   const msgs=chatHistory.slice(1);
   if(!msgs.length)return;
   const title=sessionTitle();if(!title)return;
-  const sessions=getSessions();
+  let sessions=getSessions();
   const idx=sessions.findIndex(s=>s.id===currentSessionId);
-  const entry={id:currentSessionId,date:new Date().toISOString().slice(0,16),title,history:msgs};
+  const entry={id:currentSessionId,date:new Date().toISOString().slice(0,16),title,history:msgs.map(storableMsg)};
   if(idx>=0){sessions[idx]=entry;}else{sessions.unshift(entry);}
   while(sessions.length>MAX_SESS)sessions.pop();
-  try{localStorage.setItem(SESS_KEY,JSON.stringify(sessions));}catch(e){console.warn('session save failed',e);}
+  // Persist. If the quota is hit, evict the oldest OTHER session and retry, so
+  // the current conversation is never the one dropped (and never silently).
+  while(true){
+    try{localStorage.setItem(SESS_KEY,JSON.stringify(sessions));break;}
+    catch(e){
+      let i=sessions.length-1;
+      for(;i>=0;i--){if(sessions[i].id!==currentSessionId)break;}
+      if(i<0){console.warn('session save failed (quota) even alone',e);break;}
+      sessions.splice(i,1);
+    }
+  }
   renderSessionList();
 }
 
-// Saved assistant turns are stored as [THINK]reasoning[/THINK]answer. On reload
-// put the reasoning back into a collapsible panel instead of the main bubble.
+// Render one stored turn. A saved turn may be a clean record
+// {role,content:<string>,imgs?}, an assistant string carrying
+// [THINK]reasoning[/THINK]answer, or (legacy sessions) a raw multimodal array.
+// Everything is normalized to a string + an image count, so the bubble can
+// never show [object Object] and text is never lost; dropped images render as a
+// placeholder marker.
 function renderStored(m){
-  if(m.role==='assistant' && typeof m.content==='string' && m.content.indexOf('[THINK]')!==-1){
-    const text=m.content, a=text.indexOf('[THINK]'), b=text.indexOf('[/THINK]');
-    if(b>a){
-      const reason=text.slice(a+7,b);
-      const answer=(text.slice(0,a)+text.slice(b+8)).trim();
-      const r=addMsg('assistant','',false);
-      const tp=makeThinkPanel(r.inner);
-      if(reason)tp.append(reason);
-      tp.seal();
-      r.bub.textContent=answer;
-      return;
-    }
+  let role=m.role, content=m.content, imgs=m.imgs||0;
+  if(Array.isArray(content)){
+    imgs=imgs||content.filter(p=>p&&p.type==='image_url').length;
+    content=(m._orig!=null)?m._orig
+      :content.filter(p=>p&&p.type==='text').map(p=>(p&&p.text)||'').join('\n');
+  } else if(content==null){ content=''; }
+  else if(typeof content!=='string'){ content=String(content); }
+  if(role==='assistant'){
+    const a=content.indexOf('[THINK]'), b=content.indexOf('[/THINK]');
+    let reason='', answer=content;
+    if(a!==-1&&b>a){ reason=content.slice(a+7,b); answer=(content.slice(0,a)+content.slice(b+8)).trim(); }
+    const r=addMsg('assistant','',false);
+    if(reason){ const tp=makeThinkPanel(r.inner); tp.append(reason); tp.seal(); }
+    try{ r.bub.innerHTML=marked.parse(answer); }catch(_){ r.bub.textContent=answer; }
+    addDownloadBar(r.bub,r.inner,answer);
+    return;
   }
-  addMsg(m.role,m.content,false);
+  const prefix=imgs?('🖼️ '+(imgs>1?'['+imgs+'p] ':'')):'';
+  addMsg(role, prefix+content, false);
 }
 function loadSession(id){
   if(gen)return;
