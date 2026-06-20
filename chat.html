@@ -528,7 +528,7 @@ body.custom .think-toggle{color:#9a9aa3;}
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.836</div>
+  <div class="hbadge">v0.837</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -970,7 +970,9 @@ setInterval(function(){['status','web','whisper','tts'].forEach(function(k){var 
 fetch('/selmo-config.json').then(function(r){return r.ok?r.json():null;}).then(function(cfg){
   if(!cfg)return;
   if(cfg.chunking_size) CHUNK_SIZE_TOK=cfg.chunking_size;
+  if(typeof cfg.think==='string') THINK_MODE=cfg.think.trim().toLowerCase();
   CHUNK_SIZE=Math.floor(CHUNK_SIZE_TOK*3.8); // chars for display
+  configureThink(); // re-derive once the declared mode is known (idempotent)
 }).catch(function(){});
 
 // ── Web bridge ────────────────────────────────────────────────────────────────
@@ -1203,11 +1205,7 @@ renderSessionList();
       // Reads the real n_ctx and calibrates CHUNK_SIZE on the active model
       fetch(`${API}/props`).then(r=>r.json()).then(p=>{
         const _ct=(typeof p?.chat_template==='string')?p.chat_template:'';
-        REASON_FIRST=_ct.includes('<think>')&&_ct.lastIndexOf('<think>')>_ct.lastIndexOf('</think>');
-        THINK_CAPABLE=_ct.toLowerCase().includes('think'); // any thinking model -> button shown, on by default
-        INSTRUCTED=THINK_CAPABLE&&!REASON_FIRST&&!_ct.includes('<|think|>'); // only Magistral-style needs the [THINK] instruction
-        console.log('Selmo think-capable:',THINK_CAPABLE,'| reasoning-first:',REASON_FIRST,'| instructed:',INSTRUCTED);
-        applyThinkMode();
+        configureThink(_ct);
         const nCtx=p?.default_generation_settings?.n_ctx||p?.n_ctx||0;
         if(nCtx>=1024){N_CTX=nCtx;
           const CPT=3.8;            // char per token (italiano, conservativo)
@@ -1230,7 +1228,11 @@ let IS_THINK_ON=false;
 let IS_WEB_ON=false; // reasoning toggle — off di default
 let REASON_FIRST=false; // model opens <think> in its prompt template (Olmo): stream starts in reasoning
 let THINK_CAPABLE=true;  // template references thinking -> THINK shown and ON by default; else hidden
-let INSTRUCTED=false;    // model needs the manual [THINK] instruction (Magistral); native reasoners (Olmo/Gemma) do not
+let INSTRUCTED=false;    // 'instr': reasoning driven by the [THINK] system instruction (Magistral)
+let THINK_NATIVE=false;  // 'native': model always reasons (Olmo/Gemma) -> button locked ON
+let THINK_KWARG=false;   // 'kwarg': toggle via chat_template_kwargs.enable_thinking (Qwen3)
+let THINK_MODE='';       // mode declared in selmo-models.ini (via selmo-config.json); '' = auto-detect
+let _chatTpl='';         // last chat_template seen (for re-deriving when config arrives after /props)
 let MODEL_FULL='local';  // active model name, shown in the conversation trace
 const THINK_INSTR='\n\nFirst draft your thinking process (inner monologue) until you arrive at a response. Format your response using Markdown. Write both your thoughts and the response in the same language as the input.\n\nYour thinking process must follow the template below:[THINK]Your thoughts or/and draft, like working through an exercise on scratch paper. Be as casual and as long as you want until you are confident to generate the response. Use the same language as the input.[/THINK]Here, provide a self-contained response.';
 
@@ -2305,8 +2307,8 @@ async function sendMsg(){
       abort=new AbortController();
       const res=await fetch(`${API}/v1/chat/completions`,{
         method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
-        body:JSON.stringify({model:'local',messages:apiMessages(),stream:true,
-          temperature:currentTemp,top_p:currentTopP,top_k:currentTopK,max_tokens:maxTok(),repeat_penalty:1.1})
+        body:JSON.stringify(Object.assign({model:'local',messages:apiMessages(),stream:true,
+          temperature:currentTemp,top_p:currentTopP,top_k:currentTopK,max_tokens:maxTok(),repeat_penalty:1.1},thinkKwargs()))
       });
       if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(no server header)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (empty body)'));}
       bub.innerHTML='';
@@ -2371,8 +2373,8 @@ async function sendMsg(){
   try{
     const res=await fetch(`${API}/v1/chat/completions`,{
       method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
-      body:JSON.stringify({model:'local',messages:apiMessages(),stream:true,
-        temperature:currentTemp,top_p:currentTopP,top_k:currentTopK,max_tokens:maxTok(),repeat_penalty:1.1})
+      body:JSON.stringify(Object.assign({model:'local',messages:apiMessages(),stream:true,
+        temperature:currentTemp,top_p:currentTopP,top_k:currentTopK,max_tokens:maxTok(),repeat_penalty:1.1},thinkKwargs()))
     });
     if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(no server header)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (empty body)'));}
     bub.innerHTML='';
@@ -2736,16 +2738,53 @@ function setThinkEnabled(on){
 function syncThinkPrompt(){
   if(chatHistory[0])chatHistory[0].content=(IS_THINK_ON&&INSTRUCTED)?(activeSP()+THINK_INSTR):activeSP();
 }
-// Simple rule: 'think' in template -> THINK shown and ON by default; else hidden.
+// For 'kwarg' models (Qwen3 hybrid): the supported, template-proof reasoning
+// switch. Sent ONLY for that mode (some llama.cpp builds 400 on an unknown
+// kwarg), so it is gated strictly on THINK_KWARG.
+function thinkKwargs(){
+  return THINK_KWARG?{chat_template_kwargs:{enable_thinking:IS_THINK_ON}}:{};
+}
+// Derive the reasoning-control mode. The ini (THINK_MODE) is authoritative; when
+// it is empty we fall back to sniffing the chat template (the old behaviour).
+// Called from /props (with the template) and from the config fetch (no arg).
+function configureThink(_ct){
+  if(typeof _ct==='string')_chatTpl=_ct; _ct=_chatTpl||'';
+  // REASON_FIRST is a STREAM-PARSING hint (Olmo opens <think> in its prompt
+  // template), independent of control, so it always comes from the template.
+  REASON_FIRST=_ct.includes('<think>')&&_ct.lastIndexOf('<think>')>_ct.lastIndexOf('</think>');
+  if(THINK_MODE){                       // declared in the ini -> authoritative
+    THINK_CAPABLE = THINK_MODE!=='off';
+    INSTRUCTED    = THINK_MODE==='instr';
+    THINK_KWARG   = THINK_MODE==='kwarg';
+    THINK_NATIVE  = THINK_MODE==='native';
+  }else{                                // undeclared -> best-effort detection
+    THINK_CAPABLE=_ct.toLowerCase().includes('think');
+    INSTRUCTED=THINK_CAPABLE&&!REASON_FIRST&&!_ct.includes('<|think|>');
+    THINK_KWARG=false;
+    THINK_NATIVE=THINK_CAPABLE&&!INSTRUCTED;
+  }
+  console.log('Selmo think:',{mode:THINK_MODE||'(auto)',capable:THINK_CAPABLE,instr:INSTRUCTED,kwarg:THINK_KWARG,native:THINK_NATIVE});
+  applyThinkMode();
+}
+// The THINK button is the single source of truth for controllable models
+// (instr/kwarg): ON = reason, OFF = don't, and the choice is remembered across
+// reloads. 'native' models always reason, so the button is locked ON.
 function applyThinkMode(){
   const btn=document.getElementById('think-btn');
   if(!btn)return;
   if(!THINK_CAPABLE){btn.style.display='none';IS_THINK_ON=false;syncThinkPrompt();return;}
   btn.style.display='';
-  IS_THINK_ON=true;                  // on by default for any thinking model
-  btn.disabled=false;btn.style.opacity='';btn.style.cursor='';
-  btn.classList.add('on');btn.textContent='THINK ●';
-  btn.title='Extended reasoning ON/OFF';
+  if(THINK_NATIVE){
+    IS_THINK_ON=true;
+    btn.disabled=true;btn.style.opacity='.6';btn.style.cursor='default';
+    btn.classList.add('on');btn.textContent='THINK ●';
+    btn.title='This model always reasons';
+  }else{
+    IS_THINK_ON=localStorage.getItem('sthink')!=='0'; // default ON, remembered
+    btn.disabled=false;btn.style.opacity='';btn.style.cursor='';
+    btn.classList.toggle('on',IS_THINK_ON);btn.textContent=IS_THINK_ON?'THINK ●':'THINK';
+    btn.title='Extended reasoning ON/OFF';
+  }
   syncThinkPrompt();
 }
 function modelInfoLine(){
@@ -2779,16 +2818,22 @@ function announceModel(startupOnly){
   info.textContent=modelInfoLine();
   r.inner.appendChild(info);
 }
-// The model started reasoning during the stream: the model is in charge, so
-// reflect it on the button even if the user had turned THINK off (or we hid it).
+// A reasoning token arrived mid-stream. When the model's mode is declared in the
+// ini (or it is a controllable model) the button is the single source of truth,
+// so we never latch it on from the stream -- that was the v0.806 regression that
+// made Magistral's THINK-off impossible to hold. Only an UNDECLARED, otherwise
+// non-controllable model (an unexpected reasoner behind [default]) surfaces the
+// panel this way.
 function markThinking(){
-  THINK_CAPABLE=true; IS_THINK_ON=true;
+  if(THINK_MODE||INSTRUCTED||THINK_KWARG)return;
+  THINK_CAPABLE=true; THINK_NATIVE=true; IS_THINK_ON=true;
   const btn=document.getElementById('think-btn');
   if(btn){btn.style.display='';btn.classList.add('on');btn.textContent='THINK ●';}
   syncThinkPrompt();
 }
 function toggleThink(){
   IS_THINK_ON=!IS_THINK_ON;
+  localStorage.setItem('sthink',IS_THINK_ON?'1':'0');
   syncThinkPrompt();
   const btn=document.getElementById('think-btn');
   if(btn){btn.classList.toggle('on',IS_THINK_ON);btn.textContent=IS_THINK_ON?'THINK ●':'THINK';}

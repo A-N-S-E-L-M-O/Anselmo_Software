@@ -215,7 +215,7 @@ def _parse_ini(ini_path: Path):
     """
     default = {
         "srv": DEFAULT_SRV, "max": "unknown",
-        "note": "", "chunking_size": DEFAULT_CSIZE,
+        "note": "", "chunking_size": DEFAULT_CSIZE, "think": "",
     }
     sections: list[tuple[str, dict]] = []
 
@@ -234,6 +234,7 @@ def _parse_ini(ini_path: Path):
             "max":           cur.get("max",           "unknown"),
             "note":          cur.get("note",          ""),
             "chunking_size": int(cur.get("chunking_size", DEFAULT_CSIZE)),
+            "think":         cur.get("think",          ""),
         }
         if cur_name == "default":
             default.update(d)
@@ -858,7 +859,8 @@ def _action_switch(model: dict, ini_data: dict):
     mmproj   = _find_mmproj(model["dir"])
 
     (BASE / "selmo-config.json").write_text(
-        json.dumps({"chunking_size": csize}), encoding="utf-8"
+        json.dumps({"chunking_size": csize, "think": info.get("think", "")}),
+        encoding="utf-8"
     )
     _current.update({"name": model["name"], "srv": srv, "mmproj": mmproj})
 
@@ -1155,8 +1157,10 @@ def main():
         print("  Image    :  none selected (bridge uses its built-in default)")
     print()
 
+    _sel_info = _match_ini(sel["name"], sections, default)
     (BASE / "selmo-config.json").write_text(
-        json.dumps({"chunking_size": csize}), encoding="utf-8"
+        json.dumps({"chunking_size": csize, "think": _sel_info.get("think", "")}),
+        encoding="utf-8"
     )
     _current.update({"name": sel["name"], "srv": srv, "mmproj": mmproj, "loaded": False})
 

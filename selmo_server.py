@@ -265,11 +265,12 @@ def main():
     parser.add_argument("--mmproj",      default=None,             help="mmproj path (vision)")
     parser.add_argument("--voice",       default="im_nicola",      help="TTS voice")
     parser.add_argument("--chunking-size", type=int, default=2000, help="Input tokens per chunk (model-specific ceiling; output gets what's left)")
+    parser.add_argument("--think", default="", help="How the THINK button toggles reasoning for this model: instr | kwarg | native | '' (auto-detect). SELMO-only, written to selmo-config.json for chat.html.")
     args = parser.parse_args()
 
     # Write selmo-config.json so chat.html can read per-model chunking params at startup.
     # llama-server serves static files from --path BASE, so /selmo-config.json is reachable.
-    config = {"chunking_size": args.chunking_size}
+    config = {"chunking_size": args.chunking_size, "think": args.think}
     (BASE / "selmo-config.json").write_text(json.dumps(config), encoding="utf-8")
 
     model_name = Path(args.model).name
