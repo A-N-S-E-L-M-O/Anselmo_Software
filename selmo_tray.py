@@ -215,7 +215,7 @@ def _parse_ini(ini_path: Path):
     """
     default = {
         "srv": DEFAULT_SRV, "max": "unknown",
-        "note": "", "chunking_size": DEFAULT_CSIZE, "think": "",
+        "note": "", "tip": "", "chunking_size": DEFAULT_CSIZE, "think": "",
     }
     sections: list[tuple[str, dict]] = []
 
@@ -233,6 +233,7 @@ def _parse_ini(ini_path: Path):
             "srv":           cur.get("srv",           DEFAULT_SRV),
             "max":           cur.get("max",           "unknown"),
             "note":          cur.get("note",          ""),
+            "tip":           cur.get("tip",           ""),
             "chunking_size": int(cur.get("chunking_size", DEFAULT_CSIZE)),
             "think":         cur.get("think",          ""),
         }
@@ -336,6 +337,7 @@ def _parse_image_ini(ini_path: Path):
         "files":  "--vae image\\ae.safetensors",
         "params": "--steps 8 --cfg-scale 1.0",
         "note":   "",
+        "tip":    "",
         "offload": "",   # "always" -> bridge forces --offload-to-cpu (big models)
     }
     sections: list[tuple[str, dict]] = []
@@ -353,6 +355,7 @@ def _parse_image_ini(ini_path: Path):
             "files":  cur.get("files",  default["files"]),
             "params": cur.get("params", default["params"]),
             "note":   cur.get("note",   ""),
+            "tip":    cur.get("tip",    ""),
             "offload": cur.get("offload", default["offload"]),
         }
         if cur_name == "default":
@@ -536,6 +539,41 @@ def _gui_picker(models, sections, default,
     lb.bind("<<ListboxSelect>>", _on_llm)
     _on_llm()
 
+    # ---- hover tooltip: the long bird description per model -------------
+    _tip = {"win": None, "idx": -1}
+
+    def _tip_hide(_evt=None):
+        if _tip["win"] is not None:
+            _tip["win"].destroy()
+            _tip["win"] = None
+        _tip["idx"] = -1
+
+    def _tip_motion(ev):
+        if not models:
+            return
+        idx = lb.nearest(ev.y)
+        if idx < 0 or idx >= len(models):
+            _tip_hide()
+            return
+        if idx == _tip["idx"]:
+            return
+        info = _match_ini(models[idx]["name"], sections, default)
+        text = info.get("tip", "") or info.get("note", "")
+        _tip_hide()
+        if not text:
+            return
+        tw = tk.Toplevel(lb)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{lb.winfo_pointerx() + 16}+{lb.winfo_pointery() + 14}")
+        tk.Label(tw, text=text, justify="left", bg="#ffffe0", fg="#333",
+                 relief="solid", borderwidth=1, wraplength=340,
+                 font=("Segoe UI", 9), padx=6, pady=4).pack()
+        _tip["win"] = tw
+        _tip["idx"] = idx
+
+    lb.bind("<Motion>", _tip_motion)
+    lb.bind("<Leave>", _tip_hide)
+
     # ---- RIGHT column: image / generative model -------------------------
     right = tk.LabelFrame(root, text=" Image model (generative) ",
                           font=("Segoe UI", 10, "bold"), padx=10, pady=8)
@@ -582,6 +620,42 @@ def _gui_picker(models, sections, default,
     if img_models:
         ilb.bind("<<ListboxSelect>>", _on_img)
         _on_img()
+
+    # ---- hover tooltip: the long description per image model ------------
+    _itip = {"win": None, "idx": -1}
+
+    def _itip_hide(_evt=None):
+        if _itip["win"] is not None:
+            _itip["win"].destroy()
+            _itip["win"] = None
+        _itip["idx"] = -1
+
+    def _itip_motion(ev):
+        if not img_models:
+            return
+        idx = ilb.nearest(ev.y)
+        if idx < 0 or idx >= len(img_models):
+            _itip_hide()
+            return
+        if idx == _itip["idx"]:
+            return
+        info = _match_ini(img_models[idx]["name"], isections, idefault)
+        text = info.get("tip", "") or info.get("note", "")
+        _itip_hide()
+        if not text:
+            return
+        tw = tk.Toplevel(ilb)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{ilb.winfo_pointerx() + 16}+{ilb.winfo_pointery() + 14}")
+        tk.Label(tw, text=text, justify="left", bg="#ffffe0", fg="#333",
+                 relief="solid", borderwidth=1, wraplength=340,
+                 font=("Segoe UI", 9), padx=6, pady=4).pack()
+        _itip["win"] = tw
+        _itip["idx"] = idx
+
+    if img_models:
+        ilb.bind("<Motion>", _itip_motion)
+        ilb.bind("<Leave>", _itip_hide)
 
     # ---- buttons ---------------------------------------------------------
     def _launch(_evt=None):
