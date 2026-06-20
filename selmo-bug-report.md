@@ -96,6 +96,18 @@ def _do_exit(icon, item):
 
 **Next step — confirm with a hard reload (Ctrl+Shift+R).** The s19/first-s20 test searched the raw "why is option grayed out" — the pre-fix behaviour — because Firefox served a cached `chat.html`. Retest on the BIOS image with WEB on and read the yellow `img→query` line. If it still shows `RAW` after a hard reload, the single-call vision rewrite is likely failing on **Qwen3-MoE specifically** (llama.cpp vision for it is fresh) — isolate by testing the same image on Gemma 4 / Magistral. Also fixed this pass: `exportChat` dumped image turns as `[object Object]` (printed the raw content array) — now uses `_orig`/joined text parts.
 
+---
+
+## BUG-NOANS-01 · Reasoning completes, then no answer — from the 2nd turn 🧪 FIX UNDER TEST (session 24)
+
+**Symptom** — On the phone (and reproducible in general), the model finishes its reasoning (the panel fills, e.g. "reasoning complete (96 tok)") and then emits **no answer**: the bubble stays empty, "0 tok". It happens **from the second interaction onward**, with several different models, and **even with small contexts** — so it is not a context-overflow problem.
+
+**Root cause** — Each finished turn is stored in `chatHistory` as `[THINK]reasoning[/THINK]answer` (needed for the collapsible panel and for saved sessions). But the chat send-sites passed `chatHistory` **verbatim** to llama-server (`messages:chatHistory`), so every follow-up request fed the model its **own prior reasoning** back inside the prompt. A reasoning model that sees a completed `[THINK]...[/THINK]` block in the history tends to open a fresh reasoning block and then stop — generating zero answer tokens. Turn 1 has no prior assistant reasoning, so it works; turn 2+ carries it and breaks. Model- and ctx-independent, exactly as reported. (The web path's `recentClean` already stripped `[THINK]` from the conversation summary — confirming reasoning was never meant to be re-fed as text; the main message array just wasn't doing the same.)
+
+**Fix (v0.836, code)** — New `apiMessages()` helper (`chat.html`, just above `maxTok()`) returns `chatHistory` with each assistant turn's `[THINK]...[/THINK]` block stripped, leaving only the clean answer. The two streaming send-sites (normal chat and web) now send `messages:apiMessages()` instead of `messages:chatHistory`. `chatHistory` itself is untouched, so the THINK panel and session save/restore (`renderStored`) keep working; only the model stops seeing stale reasoning. The chunk pipeline builds its own `chunkHistory` and is unaffected.
+
+**Next step — confirm on the phone.** Hard-reload (Ctrl+F5 / clear cache), restart `llama-server`, then have a multi-turn conversation with a reasoning model (the one in the screenshot, plus one more). The answer must appear on the 2nd, 3rd, … turns. If an answer is still ever empty after this, the remaining suspect is a single transition delta carrying both `reasoning_content` and `content` (the `if/else if` in `streamTokens` drops `content` on that delta) — but that would lose at most a fragment, not the whole answer.
+
 ## Resolved
 
 ### BUG-IMG-04 · Image model loaded -> 8080 stops responding — ✓ RESOLVED (v0.831)

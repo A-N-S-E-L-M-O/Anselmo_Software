@@ -41,8 +41,7 @@
   --shadow:0 8px 28px rgba(0,0,0,.45);
   --ease:cubic-bezier(.4,0,.2,1);
   --header-h:58px;
-  --topbar-h:16px;
-  --topbar-h:16px;
+  --topbar-h:66px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;overflow-x:hidden;}
@@ -362,14 +361,19 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 #watt-bar-track{width:100%;height:22px;background:#00040f;border:1px solid var(--steel);border-radius:var(--radius-xs);position:relative;overflow:hidden;}
 #watt-bar-fill{height:100%;width:0%;background:var(--green);transition:width .4s,background .4s;box-shadow:0 0 8px var(--glow-g);}
 #watt-bar-label{font-size:13px;color:var(--white);text-align:center;margin-top:4px;letter-spacing:.06em;}
-/* ── full-width GPU topbar (phone only) ── */
+/* ── full-width usage topbar (tablet + phone): SYS|CPU|GPU over VRAM|RAM ── */
 #gpu-topbar{display:none;grid-column:1/-1;grid-row:2;position:relative;
-  background:#00040f;border-bottom:1px solid var(--steel);overflow:hidden;}
-#gpu-topbar-fill{position:absolute;top:0;left:0;bottom:0;width:0%;
-  background:var(--green);transition:width .5s,background .5s;box-shadow:0 0 8px var(--glow-g);}
-#gpu-topbar-lbl{position:absolute;right:10px;top:50%;transform:translateY(-50%);
-  font-size:10px;font-family:var(--mono);color:#fff;letter-spacing:.06em;white-space:nowrap;
-  text-shadow:0 0 4px rgba(0,0,0,.9);}
+  background:#00040f;border-bottom:1px solid var(--steel);overflow:hidden;
+  flex-direction:column;}
+#gpu-topbar .tb-row{display:flex;flex:1;align-items:stretch;}
+#gpu-topbar .tb-row + .tb-row{border-top:1px solid var(--steel);}
+#gpu-topbar .tb-seg{position:relative;flex:1;overflow:hidden;display:flex;align-items:center;
+  border-right:1px solid var(--steel);}
+#gpu-topbar .tb-seg:last-child{border-right:none;}
+.tb-fill{position:absolute;left:0;top:0;bottom:0;width:0%;
+  background:var(--green);transition:width .5s,background .5s;}
+.tb-lbl{position:relative;z-index:1;padding-left:8px;font-size:10px;font-family:var(--mono);
+  color:#fff;letter-spacing:.04em;white-space:nowrap;text-shadow:0 0 4px rgba(0,0,0,.9);}
 
 /* mobile overlay backdrop */
 #mob-overlay{display:none;position:fixed;inset:0;z-index:190;background:rgba(0,0,0,.55);backdrop-filter:blur(2px);}
@@ -378,10 +382,11 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
 /* ═══════════════════════════════════════════════════════
    TABLET + PHONE  (≤ 1024px) — side panels become drawers
    ═══════════════════════════════════════════════════════ */
-@media (max-width:1024px){
+@media (max-width:1024px), (max-width:1366px) and (pointer:coarse){
   body{grid-template-columns:1fr;grid-template-rows:var(--header-h) var(--topbar-h) minmax(0,1fr);height:100dvh;}
   header{padding:0 12px;gap:9px;}
   .hstat,#conn{display:none;}
+  #gpu-topbar{display:flex;}
 
   #mob-nav-btn,#mob-dash-btn{
     display:flex;align-items:center;justify-content:center;
@@ -422,8 +427,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
   #mob-nav-btn,#mob-dash-btn{width:34px;height:34px;font-size:16px;}
   #new-chat{padding:6px 9px;font-size:11px;}
   #web-btn,#think-btn{padding:6px 8px;font-size:11px;}
-  #gpu-topbar{display:block;}
-  #gpu-topbar{display:block;}
+  /* usage topbar shown via the tablet+phone breakpoint above */
 
   #messages{padding:14px 12px;gap:13px;}
   .msg{max-width:100%;}
@@ -524,7 +528,7 @@ body.custom .think-toggle{color:#9a9aa3;}
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.834</div>
+  <div class="hbadge">v0.836</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -537,7 +541,7 @@ body.custom .think-toggle{color:#9a9aa3;}
   <div class="hstat">session: <span id="hdr-session">00:00</span></div>
   <div id="conn"></div>
 </header>
-<div id="gpu-topbar"><div id="gpu-topbar-fill"></div><span id="gpu-topbar-lbl">-- %</span></div>
+<div id="gpu-topbar"><div class="tb-row"><div class="tb-seg"><div id="gpu-topbar-fill" class="tb-fill"></div><span id="gpu-topbar-lbl" class="tb-lbl">-- W</span></div></div><div class="tb-row"><div class="tb-seg"><div id="tb-cpu-fill" class="tb-fill"></div><span id="tb-cpu-lbl" class="tb-lbl">CPU --%</span></div><div class="tb-seg"><div id="tb-gpu-fill" class="tb-fill"></div><span id="tb-gpu-lbl" class="tb-lbl">GPU --%</span></div></div><div class="tb-row"><div class="tb-seg"><div id="tb-ram-fill" class="tb-fill"></div><span id="tb-ram-lbl" class="tb-lbl">RAM --%</span></div><div class="tb-seg"><div id="tb-vram-fill" class="tb-fill"></div><span id="tb-vram-lbl" class="tb-lbl">VRAM --%</span></div></div></div>
 
 <nav>
   <div class="panel-label">history</div>
@@ -843,6 +847,20 @@ function setGauge(pct,watts,real){
   }
   const tbFill=document.getElementById('gpu-topbar-fill');
   if(tbFill){tbFill.style.width=Math.min(pct,100)+'%';tbFill.style.background=col;tbFill.style.boxShadow='0 0 6px '+col;}
+  // CPU + GPU utilisation segments (device topbar)
+  const _uc=v=>v<50?'var(--green)':v<80?'var(--yellow)':'var(--red)';
+  const cpuFill=document.getElementById('tb-cpu-fill'),cpuLbl=document.getElementById('tb-cpu-lbl');
+  if(cpuFill){const v=cpuP>=0?cpuP:0;cpuFill.style.width=Math.min(v,100)+'%';cpuFill.style.background=_uc(v);}
+  if(cpuLbl)cpuLbl.textContent='CPU '+(cpuP>=0?Math.round(cpuP)+'%':'--');
+  const gFill=document.getElementById('tb-gpu-fill'),gLbl=document.getElementById('tb-gpu-lbl');
+  if(gFill){const v=gpuOk?gpuP:0;gFill.style.width=Math.min(v,100)+'%';gFill.style.background=_uc(v);}
+  if(gLbl)gLbl.textContent='GPU '+(gpuOk?Math.round(gpuP)+'%':'--');
+  const vF=document.getElementById('tb-vram-fill'),vL=document.getElementById('tb-vram-lbl');
+  if(vF){const v=vramPct>=0?vramPct:0;vF.style.width=Math.min(v,100)+'%';vF.style.background=_uc(v);}
+  if(vL)vL.textContent='VRAM '+(vramPct>=0?Math.round(vramPct)+'%':'--');
+  const rF=document.getElementById('tb-ram-fill'),rL=document.getElementById('tb-ram-lbl');
+  if(rF){const v=ramPct>=0?ramPct:0;rF.style.width=Math.min(v,100)+'%';rF.style.background=_uc(v);}
+  if(rL)rL.textContent='RAM '+(ramPct>=0?Math.round(ramPct)+'%':'--');
 }
 
 // ODOMETER
@@ -870,7 +888,7 @@ let gen=false,abort=null,tokSec=0,_genT0=0,_genTok=0,_tokScale=100,wh=0,whAll=0,
     price=parseFloat(localStorage.getItem('sprice')||'0.28'),
     toks=parseInt(localStorage.getItem('stoks')||'0'),
     sessStart=Date.now(),fileCtx=null,fileDoc=null,fileDocNames=[],fileImage=null,fileChat=null,
-    gpuP=0,cpuP=-1,cpuTmp=0,cpuEst=true,gpuW=0,gpuT=0,gpuOk=false,sysW=0,cpuW=0,gpuPwr=0,lhmOk=false,
+    gpuP=0,cpuP=-1,cpuTmp=0,cpuEst=true,gpuW=0,gpuT=0,gpuOk=false,sysW=0,cpuW=0,gpuPwr=0,lhmOk=false,vramPct=-1,ramPct=-1,
     whisperOk=false,mediaRecorder=null,audioChunks=[],pttAutoSend=false,pttForceTts=false,pttWebSearch=false,
     ttsOk=false,ttsEnabled=false,
     currentTemp=0.75,
@@ -895,6 +913,8 @@ setInterval(async()=>{
     {const _dev=[];if(gpuOk)_dev.push(`GPU ${gpuP}% - ${gpuT}C`);if(cpuP>=0)_dev.push(`CPU ${cpuP}%`+(cpuTmp>0?` - ${cpuTmp}C`:''));if(_dev.length)document.getElementById('hw-mode').textContent=_dev.join(' \u00b7 ');}
     if(setVram&&d.vram_total>0)setVram(d.vram_used/d.vram_total*100,d.vram_used.toFixed(1)+' / '+d.vram_total.toFixed(1)+' GB');
     if(setRam&&d.ram_total>0)setRam(d.ram_used/d.ram_total*100,d.ram_used.toFixed(1)+' / '+d.ram_total.toFixed(1)+' GB');
+    vramPct=d.vram_total>0?d.vram_used/d.vram_total*100:-1;
+    ramPct=d.ram_total>0?d.ram_used/d.ram_total*100:-1;
   }catch{gpuOk=false;}
 },1500);
 
@@ -929,7 +949,7 @@ async function poll(){
   setOdo(wh);
   document.getElementById('wh-s').textContent=wh.toFixed(3);
   const _tbLbl=document.getElementById('gpu-topbar-lbl');
-  if(_tbLbl)_tbLbl.textContent=(real?'':'~')+Math.round(watts)+'W  ·  '+wh.toFixed(3)+' Wh';
+  if(_tbLbl)_tbLbl.textContent='SYS '+(real?'':'~')+Math.round(watts)+'W';
   document.getElementById('wh-total').textContent=whAll.toFixed(3);
   updCost();
   document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
@@ -1291,6 +1311,25 @@ setProfile(currentProfile);
 let CHUNK_SIZE=11000;
 let N_CTX=4096; // updated from /props at startup
 let CHUNK_SIZE_TOK=2000; // input tokens per chunk — overridden by selmo-config.json
+// Build the message array actually sent to the model. We store assistant turns
+// as [THINK]reasoning[/THINK]answer (for the panel + saved sessions), but a
+// completed reasoning block must NEVER be fed back to a reasoning model: seeing
+// a finished [THINK]...[/THINK] in the history makes it emit a fresh think block
+// and then stop, producing zero answer tokens (the "reasoning complete, no
+// answer" failure that appears from the 2nd turn on, any model, any ctx size).
+// So the model only ever sees the clean answer of past turns. (BUG-NOANS-01)
+function apiMessages(){
+  return chatHistory.map(m=>{
+    if(m&&m.role==='assistant'&&typeof m.content==='string'){
+      const a=m.content.indexOf('[THINK]'),b=m.content.indexOf('[/THINK]');
+      if(a!==-1&&b>a){
+        const clean=(m.content.slice(0,a)+m.content.slice(b+8)).trim();
+        return {role:'assistant',content:clean};
+      }
+    }
+    return m;
+  });
+}
 function maxTok(){
   try{
     for(let i=chatHistory.length-1;i>=0;i--){
@@ -2266,7 +2305,7 @@ async function sendMsg(){
       abort=new AbortController();
       const res=await fetch(`${API}/v1/chat/completions`,{
         method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
-        body:JSON.stringify({model:'local',messages:chatHistory,stream:true,
+        body:JSON.stringify({model:'local',messages:apiMessages(),stream:true,
           temperature:currentTemp,top_p:currentTopP,top_k:currentTopK,max_tokens:maxTok(),repeat_penalty:1.1})
       });
       if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(no server header)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (empty body)'));}
@@ -2332,7 +2371,7 @@ async function sendMsg(){
   try{
     const res=await fetch(`${API}/v1/chat/completions`,{
       method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
-      body:JSON.stringify({model:'local',messages:chatHistory,stream:true,
+      body:JSON.stringify({model:'local',messages:apiMessages(),stream:true,
         temperature:currentTemp,top_p:currentTopP,top_k:currentTopK,max_tokens:maxTok(),repeat_penalty:1.1})
     });
     if(!res.ok){let _d='';try{_d=(await res.text()).slice(0,400);}catch(_){}const _srv=res.headers.get('server')||'(no server header)';const _cl=res.headers.get('content-length');const _ct=res.headers.get('content-type')||'?';throw new Error('HTTP '+res.status+' '+(res.statusText||'')+' [server='+_srv+' ct='+_ct+' len='+(_cl==null?'?':_cl)+']'+(_d?' \u2014 '+_d:' \u2014 (empty body)'));}
@@ -2588,6 +2627,9 @@ async function checkKokoroBridge(){
     txt.textContent='tts n/d';
   }
 }
+// Poll until the Kokoro bridge finishes loading its 325MB model, then stop
+// (one-shot check used to get stuck on the Web-Speech fallback). Whisper polls too.
+let _kokoroPoll=setInterval(function(){if(kokoroOk){clearInterval(_kokoroPoll);_kokoroPoll=null;return;}checkKokoroBridge();},4000);
 checkKokoroBridge();
 
 function toggleTts(){
