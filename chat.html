@@ -569,6 +569,16 @@ body.custom .think-toggle{color:#9a9aa3;}
 .ml-title em{color:var(--cyan);font-style:normal;}
 .ml-text{font-size:12px;color:var(--dim);margin-top:9px;letter-spacing:.05em;}
 .ml-text b{color:var(--cyan);font-weight:normal;}
+.ml-btn{margin-top:12px;padding:8px 14px;border:1px solid var(--cyan);border-radius:var(--radius-sm);background:rgba(68,221,238,.12);color:var(--cyan);font-family:var(--mono);font-size:12px;cursor:pointer;}
+.ml-btn:hover{background:rgba(68,221,238,.22);}
+/* unloaded / inactive palette: grey the UI, keep the model button lit as the CTA */
+body.unloaded main,
+body.unloaded nav,
+body.unloaded aside,
+body.unloaded #gpu-topbar,
+body.unloaded .h-left,
+body.unloaded .h-center{filter:grayscale(.92) brightness(.78);transition:filter .3s;}
+body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c);border-color:var(--cyan)!important;color:var(--cyan)!important;}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
@@ -585,7 +595,7 @@ body.custom .think-toggle{color:#9a9aa3;}
   </div>
   <div class="h-center">
     <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-    <div class="hbadge">v0.911</div>
+    <div class="hbadge">v0.913</div>
   </div>
   <div class="h-right">
     <button id="model-btn" onclick="openSettings()" title="Click to change model / runtime settings"><span class="model-pre">model:</span>&nbsp;<span id="hdr-model">-</span></button>
@@ -796,7 +806,7 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
   </div>
 </div>
 
-<div id="model-loading" onclick="this.classList.remove('show')" title="click to dismiss">
+<div id="model-loading" onclick="if(event.target===this){_overlayDismissed=true;this.classList.remove('show');}" title="tap outside to dismiss">
   <div class="ml-box">
     <svg class="ml-art" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" fill="none">
       <circle cx="60" cy="9" r="3.5" fill="var(--yellow)"/>
@@ -811,7 +821,7 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
       </g>
     </svg>
     <div class="ml-title">Selmo<em>AI</em></div>
-    <div class="ml-text">loading the model<b>...</b> twiddling thumbs</div>
+    <div class="ml-text" id="ml-text">loading the model<b>...</b> twiddling thumbs</div>
   </div>
 </div>
 
@@ -823,7 +833,7 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
 <script src="selmo-send.js?v=0.903"></script>
 <script src="selmo-media.js?v=0.903"></script>
 <script src="selmo-sessions.js?v=0.903"></script>
-<script src="selmo-settings.js?v=0.905"></script>
-<script src="selmo-boot.js?v=0.906"></script>
+<script src="selmo-settings.js?v=0.913"></script>
+<script src="selmo-boot.js?v=0.913"></script>
 </body>
 </html>

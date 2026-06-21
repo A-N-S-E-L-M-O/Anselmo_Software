@@ -56,6 +56,7 @@ async function confirmSwitch(){
   if(!confirm('Load model:\n'+name+'\n\nThis stops the current model and starts the new one.'))return;
   document.getElementById('set-load-btn').disabled=true;
   _setStatus('switching to '+name+' ...');
+  if(typeof setModelState==='function')setModelState('loading');
   try{
     var r=await fetch(CTRL+'/llm/switch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,srv:srv,chunking_size:chunk})});
     var d=await r.json().catch(function(){return{};});
@@ -126,8 +127,8 @@ async function waitLLMReady(tries){
   }
   return false;
 }
-async function unloadLLM(){_setStatus('unloading (freeing VRAM)...');try{await fetch(CTRL+'/llm/unload',{method:'POST'});}catch(e){}setTimeout(loadSettingsModels,700);}
-async function reloadLLM(){_setStatus('reloading model...');try{await fetch(CTRL+'/llm/reload',{method:'POST'});await waitLLMReady(120);}catch(e){}loadSettingsModels();}
+async function unloadLLM(){_setStatus('unloading (freeing VRAM)...');try{await fetch(CTRL+'/llm/unload',{method:'POST'});}catch(e){}if(typeof setModelState==='function')setModelState('unloaded');setTimeout(loadSettingsModels,700);}
+async function reloadLLM(){_setStatus('reloading model...');if(typeof setModelState==='function')setModelState('loading');try{await fetch(CTRL+'/llm/reload',{method:'POST'});await waitLLMReady(120);location.reload();return;}catch(e){}loadSettingsModels();}
 async function exitSelmo(){
   if(!confirm('Exit Selmo?\n\nThis stops the model AND all services. The web UI will be unreachable until you start Selmo again from your computer.'))return;
   _setStatus('shutting down...');

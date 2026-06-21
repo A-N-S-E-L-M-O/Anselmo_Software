@@ -138,16 +138,33 @@ updCost();
 renderSessionList();
 
 
-// MODEL — poll until the server has REALLY loaded a model, with a loading
-// overlay; auto-recovers (no manual refresh) when the model comes up. A 200
-// from /v1/models with no model id is treated as "not ready yet" and retried,
-// so we never get stuck on the 'local' fallback while the model is still loading.
-let _modelReadyShown=false;
-// Only show the overlay if the model isn't up within 500ms (avoids a flash on a
-// plain refresh when the model is already loaded).
-setTimeout(function(){
-  if(!_modelReadyShown){var ml=document.getElementById('model-loading');if(ml)ml.classList.add('show');}
-},500);
+// MODEL state machine:
+//   'loading'  -> the twiddling-thumbs overlay (a NEW model is coming up)
+//   'unloaded' -> a grey "inactive" palette over the UI (model off on purpose),
+//                 NO overlay; the model button stays lit as the call-to-action
+//   'ready'    -> normal palette, no overlay
+// checkServer polls /v1/models and auto-recovers the moment a model appears.
+let _modelReadyShown=false, _overlayDismissed=false, _checkTries=0;
+function setModelState(s){
+  const b=document.body, ov=document.getElementById('model-loading');
+  if(s==='loading'){
+    b.classList.remove('unloaded');
+    const t=document.getElementById('ml-text'); if(t)t.innerHTML='loading the model<b>...</b> twiddling thumbs';
+    const th=document.querySelector('.ml-thumbs'); if(th)th.style.display='';
+    if(ov)ov.classList.add('show');
+  }else if(s==='unloaded'){
+    _overlayDismissed=false; b.classList.add('unloaded');
+    if(ov)ov.classList.remove('show');
+    const h=document.getElementById('hdr-model'); if(h)h.textContent='no model';
+    const c=document.getElementById('conn'); if(c)c.style.background='var(--red)';
+  }else{ // ready
+    _overlayDismissed=false; b.classList.remove('unloaded');
+    if(ov)ov.classList.remove('show');
+  }
+}
+// show the loading overlay only if the model isn't up within 500ms (no flash on
+// a refresh when it is already loaded)
+setTimeout(function(){ if(!_modelReadyShown && !_overlayDismissed && !document.body.classList.contains('unloaded')) setModelState('loading'); },500);
 (function checkServer(){
   fetch(`${API}/v1/models`,{cache:'no-store'})
     .then(r=> r.ok ? r.json() : Promise.reject(r.status))
@@ -156,17 +173,21 @@ setTimeout(function(){
       if(!id) return Promise.reject('no model yet');   // server up but model still loading
       MODEL_FULL=id.split(/[\\/]/).pop()||id;
       const short=MODEL_FULL.length>22?MODEL_FULL.slice(0,22)+'...':MODEL_FULL;
+      setModelState('ready');
       document.getElementById('hdr-model').textContent=short;
       const fm=document.getElementById('foot-model');if(fm)fm.textContent=short;
       document.getElementById('conn').style.background='#55FF55';
-      _modelReadyShown=true;
-      var ml=document.getElementById('model-loading');if(ml)ml.classList.remove('show');
-      // Reads the real n_ctx and calibrates CHUNK_SIZE; retries until /props answers
-      loadProps();
+      _modelReadyShown=true; _checkTries=0;
+      loadProps();   // reads the real n_ctx and calibrates CHUNK_SIZE
     }).catch(()=>{
+      _checkTries++;
       document.getElementById('conn').style.background='var(--red)';
-      document.getElementById('hdr-model').textContent='loading...';
-      if(!_modelReadyShown){var ml=document.getElementById('model-loading');if(ml)ml.classList.add('show');}
+      if(_checkTries>=7){                       // ~14s with no model: it was off, not just starting
+        setModelState('unloaded');
+      }else if(!_modelReadyShown && !_overlayDismissed){
+        document.getElementById('hdr-model').textContent='loading...';
+        setModelState('loading');
+      }
       setTimeout(checkServer,2000);
     });
 }());
