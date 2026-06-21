@@ -1,5 +1,5 @@
 # Selmo — Bug Report
-*Living document · updated session 23 · June 2026*
+*Living document · updated session 26 · June 2026*
 
 ---
 
@@ -107,6 +107,16 @@ def _do_exit(icon, item):
 **Fix (v0.836, code)** — New `apiMessages()` helper (`chat.html`, just above `maxTok()`) returns `chatHistory` with each assistant turn's `[THINK]...[/THINK]` block stripped, leaving only the clean answer. The two streaming send-sites (normal chat and web) now send `messages:apiMessages()` instead of `messages:chatHistory`. `chatHistory` itself is untouched, so the THINK panel and session save/restore (`renderStored`) keep working; only the model stops seeing stale reasoning. The chunk pipeline builds its own `chunkHistory` and is unaffected.
 
 **Next step — confirm on the phone.** Hard-reload (Ctrl+F5 / clear cache), restart `llama-server`, then have a multi-turn conversation with a reasoning model (the one in the screenshot, plus one more). The answer must appear on the 2nd, 3rd, … turns. If an answer is still ever empty after this, the remaining suspect is a single transition delta carrying both `reasoning_content` and `content` (the `if/else if` in `streamTokens` drops `content` on that delta) — but that would lose at most a fragment, not the whole answer.
+
+## BUG-CHUNK-01 · Chunk task silently capped at ~512 output tokens 🧪 UNDER OBSERVATION (session 26)
+
+**Symptom** — A chunked task (translation, analysis, extraction — *any* chunk job) returns every chunk truncated mid-sentence at exactly ~511 output tokens, losing most of each chunk. Seen translating a book with LFM2-8B-A1B (Swallow) at ctx 16384: 24/24 chunks reported "done" but each one cut after a few paragraphs.
+
+**Root cause** — `processDoc` computes `maxTok = max(512, (N_CTX - system - prompt - 256) - chunking_size)`. The `max(512, …)` floor fires whenever `N_CTX` is too small relative to `chunking_size`. In practice `N_CTX` was the **fallback default 4096**, not the model's real ctx: the real value is read from `/props` once at page load (inside `checkServer`), and that fetch had **no retry**. If it failed or arrived late — e.g. the LLM was swapped out for image generation when the page loaded, so `/props` returned 502, then `ensureLLM` reloaded the model but never re-read `/props` — `N_CTX` stayed 4096. With `chunking_size` 4000 that gives `maxTok = 512`, while the input chunk (sized from `chunking_size`, *not* from N_CTX) still filled the window. So input ~fills 4096, output is floored to 512, the rest of each chunk is dropped. The header showing **"local"** instead of the model name is the same degraded state (model id missing from `/v1/models`). Not translation-specific — every chunk pipeline is affected.
+
+**Mitigation (code, UNDER OBSERVATION)** — `chat.html`: new `MODEL_READY` flag, true only when `loadProps()` reads a real ctx (`n_ctx ≥ 1024`); `loadProps()` retries `/props` up to 10× (1.5 s apart) and is also called from `ensureLLM()` after a post-image reload, so `N_CTX` refreshes instead of staying stale. Pre-flight guard added to **both** chunk pipelines: `processDoc` aborts if `!MODEL_READY || maxTok<=512`, `processChunks` aborts if `!MODEL_READY`, showing a neutral message that asks the user to Ctrl+F5 and retry once the model name appears — instead of burning time and energy on 24 capped chunks.
+
+**Next step — observe.** (1) Normal chunk tasks still run. (2) Force the degraded state (open the page while the LLM is swapped out / before it loads) and verify the task aborts with the message rather than truncating. (3) After an image generation, run a chunk task and confirm `N_CTX` is the real value. Residual design smell: the input chunk size derives from `chunking_size` alone, not from the live window, so a genuinely small-ctx model with an oversized `chunking_size` could still starve output (the `maxTok<=512` guard catches the extreme case; mid-range starvation is still possible). Consider clamping `inT` to `(N_CTX - overhead)/2` for output-heavy tasks.
 
 ## Resolved
 

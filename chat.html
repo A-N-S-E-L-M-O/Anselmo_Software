@@ -528,7 +528,7 @@ body.custom .think-toggle{color:#9a9aa3;}
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
   <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.838</div>
+  <div class="hbadge">v0.839</div>
   <div class="hbadge">GDPR</div>
   <div class="hspacer"></div>
   <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
@@ -1187,6 +1187,24 @@ document.getElementById('wh-total').textContent=whAll.toFixed(3);
 updCost();
 renderSessionList();
 
+function loadProps(tries){
+  tries=tries||0;
+  fetch(`${API}/props`).then(r=>r.json()).then(p=>{
+    const _ct=(typeof p?.chat_template==='string')?p.chat_template:'';
+    configureThink(_ct);
+    const nCtx=p?.default_generation_settings?.n_ctx||p?.n_ctx||0;
+    if(nCtx>=1024){
+      N_CTX=nCtx; MODEL_READY=true;
+      CHUNK_SIZE=Math.floor(CHUNK_SIZE_TOK*3.8);
+      document.getElementById('hdr-model').title=`ctx: ${nCtx.toLocaleString()} tok  ·  chunk max: ${CHUNK_SIZE.toLocaleString()} char`;
+    } else if(tries<10){ setTimeout(()=>loadProps(tries+1),1500); }
+    if(!_traceDone){_traceDone=true;showStartupTrace();}
+  }).catch(()=>{
+    if(!_traceDone){_traceDone=true;showStartupTrace();}
+    if(tries<10)setTimeout(()=>loadProps(tries+1),1500);
+  });
+}
+
 // MODEL — retry until the server is ready
 (function checkServer(){
   fetch(`${API}/v1/models`)
@@ -1202,20 +1220,8 @@ renderSessionList();
       // so the thinking instructions must be added manually to the system message.
 
 
-      // Reads the real n_ctx and calibrates CHUNK_SIZE on the active model
-      fetch(`${API}/props`).then(r=>r.json()).then(p=>{
-        const _ct=(typeof p?.chat_template==='string')?p.chat_template:'';
-        configureThink(_ct);
-        const nCtx=p?.default_generation_settings?.n_ctx||p?.n_ctx||0;
-        if(nCtx>=1024){N_CTX=nCtx;
-          const CPT=3.8;            // char per token (italiano, conservativo)
-          CHUNK_SIZE=Math.floor(CHUNK_SIZE_TOK*CPT); // tokens from INI via selmo-config.json
-          console.log(`Selmo chunking: chunking_size=${CHUNK_SIZE_TOK} tok → CHUNK_SIZE=${CHUNK_SIZE} char`);
-          document.getElementById('hdr-model').title=
-            `ctx: ${nCtx.toLocaleString()} tok  ·  chunk max: ${CHUNK_SIZE.toLocaleString()} char`;
-        }
-        showStartupTrace(); // append model + params under the welcome message
-      }).catch(()=>{/* /props unavailable: keep the default */});
+      // Reads the real n_ctx and calibrates CHUNK_SIZE; retries until /props answers
+      loadProps();
     }).catch(()=>{
       document.getElementById('conn').style.background='var(--red)';
       document.getElementById('hdr-model').textContent='starting...';
@@ -1227,6 +1233,8 @@ renderSessionList();
 let IS_THINK_ON=false;
 let IS_WEB_ON=false; // reasoning toggle — off di default
 let REASON_FIRST=false; // model opens <think> in its prompt template (Olmo): stream starts in reasoning
+let MODEL_READY=false; // true only once /props returned a real ctx; chunk tasks gate on it
+let _traceDone=false;
 let THINK_CAPABLE=true;  // template references thinking -> THINK shown and ON by default; else hidden
 let INSTRUCTED=false;    // 'instr': reasoning driven by the [THINK] system instruction (Magistral)
 let THINK_NATIVE=false;  // 'native': model always reasons (Olmo/Gemma) -> button locked ON
@@ -1906,6 +1914,9 @@ function splitDoc(text,size){
 // Chunked document analysis. The chunk size depends ON THE PROMPT and on
 // the model's real context: ctx - system - prompt - response - margin. This way
 // it never overflows, with any model, and stays GPU-friendly (small context).
+function notReadyMsg(){
+  addMsg('assistant','\u26A0 Model not ready: the header still shows "local" and the context window is the 4 KB fallback, so each chunk would be capped at ~512 output tokens and most of the result lost. Refresh the page (Ctrl+F5), wait for the model name to appear in the header, then start the job again.');
+}
 async function processDoc(prompt){
   const btn=document.getElementById('send'),stopBtn=document.getElementById('stop');
   const tk=s=>Math.ceil((s||'').length/3.2);   // stima conservativa char->token
@@ -1919,6 +1930,7 @@ async function processDoc(prompt){
   const parts=splitDoc(fileDoc,chunkChars);
   const total=parts.length;
   console.log('Selmo chunking: ctx='+N_CTX+' chunk='+chunkChars+'char x'+total+' max_tokens='+maxTok);
+  if(!MODEL_READY||maxTok<=512){ notReadyMsg(); return; }
 
   gen=true;_genT0=Date.now();_genTok=0;btn.style.display='none';stopBtn.style.display='inline-block';
   addMsg('user',prompt+'  ('+total+' chunk \xb7 '+fileDoc.length.toLocaleString('en')+' char)');
@@ -1983,6 +1995,7 @@ async function processChunks(prompt){
   const btn=document.getElementById('send');
   const stopBtn=document.getElementById('stop');
   const total=chunks.length;
+  if(!MODEL_READY){ notReadyMsg(); return; }
   gen=true;_genT0=Date.now();_genTok=0;btn.style.display='none';stopBtn.style.display='inline-block';
 
   addMsg('user',prompt+' ('+total+' chunks)');
@@ -2132,6 +2145,7 @@ async function ensureLLM(){
       await new Promise(r=>setTimeout(r,1000));
     }
   }catch(e){}
+  loadProps();          // re-read the real ctx after the model came back
   clearInterval(_timer);
   if(note&&note.wrap)note.wrap.remove();
   setImageMode(false);
