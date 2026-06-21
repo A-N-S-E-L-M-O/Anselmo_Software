@@ -144,7 +144,7 @@ renderSessionList();
 //                 NO overlay; the model button stays lit as the call-to-action
 //   'ready'    -> normal palette, no overlay
 // checkServer polls /v1/models and auto-recovers the moment a model appears.
-let _modelReadyShown=false, _overlayDismissed=false, _checkTries=0;
+let _modelReadyShown=false, _overlayDismissed=false, _checkTries=0, _reloading=false;
 function setModelState(s){
   const b=document.body, ov=document.getElementById('model-loading');
   if(s==='loading'){
@@ -152,22 +152,65 @@ function setModelState(s){
     const t=document.getElementById('ml-text'); if(t)t.innerHTML='loading the model<b>...</b> twiddling thumbs';
     const th=document.querySelector('.ml-thumbs'); if(th)th.style.display='';
     if(ov)ov.classList.add('show');
+    _hideReviveBanner();
   }else if(s==='unloaded'){
     _overlayDismissed=false; b.classList.add('unloaded');
     if(ov)ov.classList.remove('show');
     const h=document.getElementById('hdr-model'); if(h)h.textContent='no model';
     const c=document.getElementById('conn'); if(c)c.style.background='var(--red)';
+    _showReviveBanner('No model loaded - click to reload');
   }else if(s==='imaging'){
-    // LLM intentionally swapped out for image generation: NOT a model load,
-    // so no twiddling-thumbs overlay; grey palette + a neutral "image mode".
-    _overlayDismissed=false; b.classList.add('unloaded');
+    // LLM swapped out for image generation: this is an ACTIVE mode, not a dead one,
+    // so keep the normal palette (NO grey). The 'unloaded' grayscale is reserved for
+    // "no model". Image mode is flagged by the "image mode" label + the yellow
+    // connection dot + the revive banner, never by greying the whole UI.
+    _overlayDismissed=false; b.classList.remove('unloaded');
     if(ov)ov.classList.remove('show');
     const h=document.getElementById('hdr-model'); if(h)h.textContent='image mode';
     const c=document.getElementById('conn'); if(c)c.style.background='var(--yellow)';
+    // during the actual generation the banner would be noise; show it only once
+    // the page is sitting idle in image mode (e.g. after a refresh).
+    if(gen){ _hideReviveBanner(); }
+    else{ _showReviveBanner('Model unloaded for an image - click to reload'); }
   }else{ // ready
     _overlayDismissed=false; b.classList.remove('unloaded');
     if(ov)ov.classList.remove('show');
+    _hideReviveBanner();
   }
+}
+// One-click revive for the grey states: the model button is the lit CTA, but it
+// opens settings -- too indirect. This banner reloads the LLM directly so the
+// user never has to type a throwaway message to wake it (s28).
+function _showReviveBanner(msg){
+  let el=document.getElementById('revive-banner');
+  if(!el){
+    el=document.createElement('div');
+    el.id='revive-banner';
+    el.style.cssText='position:fixed;left:50%;bottom:20px;transform:translateX(-50%);'
+      +'z-index:500;cursor:pointer;background:var(--cyan,#37e0ff);color:#001018;'
+      +'padding:10px 18px;border-radius:9px;font-size:13px;font-weight:600;'
+      +'box-shadow:0 3px 14px rgba(0,0,0,.5);user-select:none;';
+    el.onclick=reviveModel;
+    document.body.appendChild(el);
+  }
+  el.textContent=msg;
+}
+function _hideReviveBanner(){ const el=document.getElementById('revive-banner'); if(el)el.remove(); }
+async function reviveModel(){
+  if(gen)return;                       // an image is generating: don't fight it
+  _hideReviveBanner();
+  _reloading=true;                     // tell checkServer this is a deliberate reload (thumbs, not grey)
+  setModelState('loading');            // honest thumbs overlay while the LLM comes back
+  try{
+    await fetch(CTRL+'/llm/reload',{method:'POST',signal:AbortSignal.timeout(180000)});
+    for(let i=0;i<180;i++){
+      try{ if((await fetch(`${API}/props`,{signal:AbortSignal.timeout(2000)})).ok){ location.reload(); return; } }
+      catch(e){}
+      await new Promise(r=>setTimeout(r,1000));
+    }
+  }catch(e){}
+  _reloading=false;
+  location.reload();                    // fallback: reload the page to re-sync state
 }
 // show the loading overlay only if the model isn't up within 500ms (no flash on
 // a refresh when it is already loaded)
@@ -178,14 +221,25 @@ setTimeout(function(){ if(!_modelReadyShown && !_overlayDismissed && !document.b
     .then(d=>{
       const id=d&&d.data&&d.data[0]&&d.data[0].id;
       if(!id) return Promise.reject('no model yet');   // server up but model still loading
-      MODEL_FULL=id.split(/[\\/]/).pop()||id;
-      const short=MODEL_FULL.length>22?MODEL_FULL.slice(0,22)+'...':MODEL_FULL;
-      setModelState('ready');
-      document.getElementById('hdr-model').textContent=short;
-      const fm=document.getElementById('foot-model');if(fm)fm.textContent=short;
-      document.getElementById('conn').style.background='#55FF55';
+      // Keep polling even once ready, so the header never falls behind the real
+      // backend state (LLM swapped out for image gen, a switch from another device,
+      // an unload). Don't disturb an in-progress image generation: genImage owns
+      // the label until it finishes.
+      if(gen){ setTimeout(checkServer,3000); return; }
+      const full=id.split(/[\\/]/).pop()||id;
+      const short=full.length>22?full.slice(0,22)+'...':full;
+      const h=document.getElementById('hdr-model');
+      const changed=(MODEL_FULL!==full)||(h&&h.textContent!==short)||!_modelReadyShown;
+      MODEL_FULL=full;
+      if(changed){
+        setModelState('ready');
+        if(h)h.textContent=short;
+        const fm=document.getElementById('foot-model');if(fm)fm.textContent=short;
+        document.getElementById('conn').style.background='#55FF55';
+        loadProps();   // re-read ctx + recalibrate CHUNK_SIZE, only when the model actually changed
+      }
       _modelReadyShown=true; _checkTries=0;
-      loadProps();   // reads the real n_ctx and calibrates CHUNK_SIZE
+      setTimeout(checkServer,60000);   // re-poll so the header stays honest
     }).catch(()=>{
       _checkTries++;
       // /v1/models failed -> ask the tray WHY: if the LLM was swapped out for
@@ -194,6 +248,8 @@ setTimeout(function(){ if(!_modelReadyShown && !_overlayDismissed && !document.b
       fetch(CTRL+'/status',{cache:'no-store'}).then(r=> r.ok?r.json():null).then(st=>{
         if(st && st.swapped_for_image){
           setModelState('imaging');
+        }else if(_reloading){
+          setModelState('loading');   // a deliberate LLM reload is in flight: thumbs, not grey "no model"
         }else if(_checkTries>=7){
           setModelState('unloaded');
         }else if(!_modelReadyShown && !_overlayDismissed){
@@ -203,7 +259,8 @@ setTimeout(function(){ if(!_modelReadyShown && !_overlayDismissed && !document.b
         setTimeout(checkServer,2000);
       }).catch(()=>{   // control API unreachable: previous behaviour
         document.getElementById('conn').style.background='var(--red)';
-        if(_checkTries>=7){ setModelState('unloaded'); }
+        if(_reloading){ setModelState('loading'); }
+        else if(_checkTries>=7){ setModelState('unloaded'); }
         else if(!_modelReadyShown && !_overlayDismissed){ document.getElementById('hdr-model').textContent='loading...'; setModelState('loading'); }
         setTimeout(checkServer,2000);
       });

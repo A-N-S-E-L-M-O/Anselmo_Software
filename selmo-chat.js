@@ -438,6 +438,7 @@ async function ensureLLM(){
   try{ st=await fetch(`${CTRL}/status`,{signal:AbortSignal.timeout(2500)}).then(r=>r.json()); }
   catch(e){ return; }                 // control API down -> assume LLM up, proceed
   if(!st||!st.swapped_for_image)return;
+  _reloading=true;                    // a deliberate reload: checkServer shows thumbs, not grey
   const note=addMsg('assistant','',false);
   // animated braille spinner so the reload never looks frozen
   const _spin=['\u280b','\u2819','\u2839','\u2838','\u283c','\u2834','\u2826','\u2827','\u2807','\u280f'];
@@ -452,6 +453,7 @@ async function ensureLLM(){
       await new Promise(r=>setTimeout(r,1000));
     }
   }catch(e){}
+  _reloading=false;
   loadProps();          // re-read the real ctx after the model came back
   clearInterval(_timer);
   if(note&&note.wrap)note.wrap.remove();

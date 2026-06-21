@@ -127,6 +127,7 @@ async function genImage(strength){
   const sendBtn=document.getElementById('send'),stopBtn=document.getElementById('stop');
   sendBtn.style.display='none';stopBtn.style.display='inline-block';
   setImageMode(true);   // image mode starts now: the LLM is being unloaded
+  setModelState('imaging');   // flip the header to "image mode" immediately, don't wait for the next poll
   try{
     const body={prompt:prompt,width:1024,height:1024};
     if(isI2I){
