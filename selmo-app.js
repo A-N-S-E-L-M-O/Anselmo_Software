@@ -1137,8 +1137,8 @@ async function streamTokens(res,onContent,onReason){
       if(!line.startsWith('data:'))continue;
       const raw=line.slice(5).trim();if(!raw||raw==='[DONE]')continue;
       try{const dl=JSON.parse(raw).choices?.[0]?.delta||{};
-        if(dl.reasoning_content&&onReason){inTk=false;onReason(dl.reasoning_content);}  // Gemma: reasoning_content (disarm implicit-open)
-        else if(dl.content){tb+=dl.content;flush();}                          // Magistral: [THINK]...[/THINK] nel content
+        if(dl.reasoning_content&&onReason){inTk=false;onReason(dl.reasoning_content);}  // Gemma/Qwen: reasoning_content (disarm implicit-open)
+        if(dl.content){tb+=dl.content;flush();}  // independent if, NOT else-if (v0.901, BUG-NOANS-01): a delta carrying BOTH reasoning_content and content must not drop the answer (Qwen short answers rode along combined deltas -> 0 tok)
       }catch{}
     }
   }
@@ -1619,7 +1619,7 @@ async function sendMsg(){
       const tp=makeThinkPanel(inner);
       await streamTokens(res,
         c=>{full+=c;t++;_genTok++;bub.textContent=full;scrollBot();},
-        r=>{_genTok++;if(!rthink)markThinking();rthink+=r;tp.append(r);});
+        r=>{_genTok++;if(!IS_THINK_ON){full+=r;t++;bub.textContent=full;scrollBot();return;}if(!rthink)markThinking();rthink+=r;tp.append(r);});
       tp.seal();
       bub.innerHTML=marked.parse(full);addDownloadBar(bub,inner,full);
       toks+=t;localStorage.setItem('stoks',toks);
@@ -1685,7 +1685,7 @@ async function sendMsg(){
     const tp=makeThinkPanel(inner);
     await streamTokens(res,
       c=>{full+=c;t++;_genTok++;bub.textContent=full;scrollBot();},
-      r=>{_genTok++;if(!rthink)markThinking();rthink+=r;tp.append(r);});
+      r=>{_genTok++;if(!IS_THINK_ON){full+=r;t++;bub.textContent=full;scrollBot();return;}if(!rthink)markThinking();rthink+=r;tp.append(r);});
     tp.seal();
     bub.innerHTML=marked.parse(full);addDownloadBar(bub,inner,full);
     toks+=t;localStorage.setItem('stoks',toks);

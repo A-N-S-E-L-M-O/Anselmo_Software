@@ -98,7 +98,7 @@ def _do_exit(icon, item):
 
 ---
 
-## BUG-NOANS-01 · Reasoning completes, then no answer — from the 2nd turn 🧪 FIX UNDER TEST (session 24)
+## BUG-NOANS-01 · Reasoning completes, then no answer — from the 2nd turn ✓ RESOLVED (v0.901, session 27)
 
 **Symptom** — On the phone (and reproducible in general), the model finishes its reasoning (the panel fills, e.g. "reasoning complete (96 tok)") and then emits **no answer**: the bubble stays empty, "0 tok". It happens **from the second interaction onward**, with several different models, and **even with small contexts** — so it is not a context-overflow problem.
 
@@ -107,6 +107,8 @@ def _do_exit(icon, item):
 **Fix (v0.836, code)** — New `apiMessages()` helper (`chat.html`, just above `maxTok()`) returns `chatHistory` with each assistant turn's `[THINK]...[/THINK]` block stripped, leaving only the clean answer. The two streaming send-sites (normal chat and web) now send `messages:apiMessages()` instead of `messages:chatHistory`. `chatHistory` itself is untouched, so the THINK panel and session save/restore (`renderStored`) keep working; only the model stops seeing stale reasoning. The chunk pipeline builds its own `chunkHistory` and is unaffected.
 
 **Next step — confirm on the phone.** Hard-reload (Ctrl+F5 / clear cache), restart `llama-server`, then have a multi-turn conversation with a reasoning model (the one in the screenshot, plus one more). The answer must appear on the 2nd, 3rd, … turns. If an answer is still ever empty after this, the remaining suspect is a single transition delta carrying both `reasoning_content` and `content` (the `if/else if` in `streamTokens` drops `content` on that delta) — but that would lose at most a fragment, not the whole answer.
+
+**Resolution (v0.901, session 27).** The residual suspect above was the actual cause for Qwen. With Qwen3-MoE the answer was empty even on **turn 1** (so not the history-feedback path, which v0.836 already fixed). Two fixes in `selmo-app.js`: (1) the `reasoning_content` / `content` branches in `streamTokens` became **independent `if`s** instead of `if/else if`, so a delta bundling both fields no longer drops the answer — for a short Qwen reply the whole answer could ride on combined deltas and vanish, which is exactly what was seen; (2) **no-think routing** — when the THINK toggle is OFF, any output still arriving as `reasoning_content` is forced into the answer bubble (the lazily-created think panel is removed empty by `seal()`), per Fabio's call that in no-think mode every response must land in the bubble. Confirmed on Qwen: THINK-off answers in the bubble with no panel, THINK-on multi-turn answers on every turn.
 
 ## BUG-CHUNK-01 · Chunk task silently capped at ~512 output tokens 🧪 UNDER OBSERVATION (session 26)
 
