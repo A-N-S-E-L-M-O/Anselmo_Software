@@ -544,6 +544,12 @@ body.custom .think-toggle{color:#9a9aa3;}
 .set-btn:hover{border-color:var(--cyan);color:var(--cyan);}
 .set-danger:hover{border-color:var(--red);color:var(--red);}
 .set-empty{color:var(--dim);font-size:11px;padding:8px;}
+.set-editor{margin:8px 0 4px;padding:10px;border:1px solid var(--steel-soft);border-radius:var(--radius-sm);background:rgba(0,0,0,.25);display:flex;flex-direction:column;gap:7px;}
+.set-lbl{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);}
+.set-editor textarea,.set-editor input{background:#00040f;border:1px solid var(--steel);border-radius:var(--radius-xs);color:var(--white);font-family:var(--mono);font-size:12px;padding:7px 9px;outline:none;width:100%;box-sizing:border-box;resize:vertical;}
+.set-editor textarea:focus,.set-editor input:focus{border-color:var(--cyan);box-shadow:0 0 0 2px var(--glow-c);}
+.set-go{background:rgba(68,221,238,.12)!important;border-color:var(--cyan)!important;color:var(--cyan)!important;margin-top:2px;}
+.set-go:disabled{opacity:.5;cursor:wait;}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
@@ -560,7 +566,7 @@ body.custom .think-toggle{color:#9a9aa3;}
   </div>
   <div class="h-center">
     <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-    <div class="hbadge">v0.904</div>
+    <div class="hbadge">v0.905</div>
   </div>
   <div class="h-right">
     <button id="model-btn" onclick="openSettings()" title="Click to change model / runtime settings"><span class="model-pre">model:</span>&nbsp;<span id="hdr-model">-</span></button>
@@ -743,8 +749,25 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
       <button class="pm-x" onclick="closeSettings()">&#x2715;</button>
     </div>
     <div class="set-status" id="set-status">...</div>
+
     <div class="set-section-label">LLM model</div>
     <div class="set-list" id="set-model-list"><div class="set-empty">loading...</div></div>
+    <div class="set-editor" id="set-llm-editor" style="display:none">
+      <label class="set-lbl">server flags (srv)</label>
+      <textarea id="set-srv" rows="4" spellcheck="false"></textarea>
+      <label class="set-lbl">chunking size (tokens)</label>
+      <input id="set-chunk" type="number" min="0" step="100">
+      <button class="set-btn set-go" id="set-load-btn" onclick="confirmSwitch()">Load <span id="set-load-name"></span></button>
+    </div>
+
+    <div class="set-section-label">Image model</div>
+    <div class="set-list" id="set-img-list"><div class="set-empty">loading...</div></div>
+    <div class="set-editor" id="set-img-editor" style="display:none">
+      <label class="set-lbl">image params</label>
+      <textarea id="set-img-params" rows="2" spellcheck="false"></textarea>
+      <button class="set-btn set-go" id="set-img-btn" onclick="confirmImage()">Apply <span id="set-img-name"></span></button>
+    </div>
+
     <div class="set-section-label">Service</div>
     <div class="set-actions">
       <button class="set-btn" onclick="unloadLLM()">Unload (free VRAM)</button>
@@ -762,7 +785,7 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
 <script src="selmo-send.js?v=0.903"></script>
 <script src="selmo-media.js?v=0.903"></script>
 <script src="selmo-sessions.js?v=0.903"></script>
-<script src="selmo-settings.js?v=0.903"></script>
+<script src="selmo-settings.js?v=0.905"></script>
 <script src="selmo-boot.js?v=0.903"></script>
 </body>
 </html>

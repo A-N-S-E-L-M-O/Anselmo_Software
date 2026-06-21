@@ -293,6 +293,22 @@ def _find_mmproj(model_dir: str) -> str | None:
     return None
 
 
+# -- last-used model persistence (selmo-state.json) -----------------------
+STATE_FILE = BASE / "selmo-state.json"
+
+def _load_last_model() -> str:
+    try:
+        return json.loads(STATE_FILE.read_text(encoding="utf-8")).get("last_model", "")
+    except Exception:
+        return ""
+
+def _save_last_model(name: str):
+    try:
+        STATE_FILE.write_text(json.dumps({"last_model": name}), encoding="utf-8")
+    except Exception:
+        pass
+
+
 # ============================================================
 #  Image / generative model scanning  (twin of the LLM scan)
 # ============================================================
@@ -867,10 +883,101 @@ class _CtrlHandler(BaseHTTPRequestHandler):
         self._send(200, {"ok": True, "relaunched": relaunched,
                          "loaded": _current["loaded"]})
 
+    # -- model switching (tray-in-browser, v0.903) ------------------------
+    def _read_json(self):
+        try:
+            n = int(self.headers.get("Content-Length", 0) or 0)
+            if n <= 0:
+                return {}
+            return json.loads(self.rfile.read(n).decode("utf-8") or "{}")
+        except Exception:
+            return {}
+
+    def _models(self):
+        sections, default = _parse_ini(BASE / "selmo-models.ini")
+        out = []
+        for m in _scan_models(BASE):
+            info = _match_ini(m["name"], sections, default)
+            out.append({"name": m["name"], "srv": info["srv"],
+                        "chunking_size": info["chunking_size"]})
+        return {
+            "models":            out,
+            "current":           _current["name"],
+            "loaded":            _current["loaded"],
+            "swapped_for_image": _current.get("swapped_for_image", False),
+        }
+
+    def _switch(self):
+        body = self._read_json()
+        name = (body.get("name") or "").strip()
+        if not name:
+            self._send(400, {"ok": False, "error": "missing 'name'"})
+            return
+        model = next((m for m in _scan_models(BASE) if m["name"] == name), None)
+        if model is None:
+            self._send(404, {"ok": False, "error": "model not found: " + name})
+            return
+        srv = body.get("srv")
+        srv = srv.strip() if isinstance(srv, str) and srv.strip() else None
+        csize = body.get("chunking_size")
+        try:
+            csize = int(csize) if csize not in (None, "") else None
+        except (TypeError, ValueError):
+            csize = None
+        sections, default = _parse_ini(BASE / "selmo-models.ini")
+        with _ctrl_lock:
+            _action_switch(model, {"sections": sections, "default": default}, srv, csize)
+        self._send(200, {"ok": True, "name": name, "loaded": _current["loaded"]})
+
+    def _image_models(self):
+        isec, idef = _parse_image_ini(BASE / "selmo-image-models.ini")
+        cur = ""
+        try:
+            cur = json.loads((BASE / "selmo-image-config.json").read_text(
+                encoding="utf-8")).get("name", "")
+        except Exception:
+            pass
+        out = []
+        for m in _scan_image_models(BASE):
+            info = _match_ini(m["name"], isec, idef)
+            out.append({"name": m["name"], "params": info["params"]})
+        return {"models": out, "current": cur}
+
+    def _image_select(self):
+        body = self._read_json()
+        name = (body.get("name") or "").strip()
+        if not name:
+            self._send(400, {"ok": False, "error": "missing 'name'"})
+            return
+        model = next((m for m in _scan_image_models(BASE) if m["name"] == name), None)
+        if model is None:
+            self._send(404, {"ok": False, "error": "image model not found: " + name})
+            return
+        isec, idef = _parse_image_ini(BASE / "selmo-image-models.ini")
+        params = body.get("params")
+        params = params.strip() if isinstance(params, str) and params.strip() else None
+        cfg = _image_config(model, isec, idef, params)
+        (BASE / "selmo-image-config.json").write_text(json.dumps(cfg), encoding="utf-8")
+        self._send(200, {"ok": True, "name": name})
+
+    def _exit(self):
+        # Reply first, then tear everything down off-thread so the response
+        # actually reaches the browser before the process dies.
+        self._send(200, {"ok": True})
+        try:
+            self.wfile.flush()
+        except Exception:
+            pass
+        threading.Timer(0.4, lambda: (_cleanup(), os._exit(0))).start()
+
     def do_GET(self):
         p = self.path.split("?", 1)[0]
         if p == "/status":
             self._send(200, self._status())
+        elif p == "/models":
+            self._send(200, self._models())
+        elif p == "/image/models":
+            self._send(200, self._image_models())
         elif p == "/llm/reload":
             self._reload()
         else:
@@ -882,6 +989,12 @@ class _CtrlHandler(BaseHTTPRequestHandler):
             self._unload()
         elif p == "/llm/reload":
             self._reload()
+        elif p == "/llm/switch":
+            self._switch()
+        elif p == "/image/select":
+            self._image_select()
+        elif p == "/control/exit":
+            self._exit()
         else:
             self._send(404, {"error": "not found"})
 
@@ -921,15 +1034,20 @@ def _action_reload(icon, item):
         _reload_current_llm()
 
 
-def _action_switch(model: dict, ini_data: dict):
-    """Stop current llama-server and start a new one."""
+def _action_switch(model: dict, ini_data: dict, srv_override=None, csize_override=None):
+    """Stop current llama-server and start a new one.
+
+    srv_override / csize_override let the browser settings panel edit the exact
+    server flags + chunking size at switch time (the old tray 'show + retype').
+    The chosen model is persisted to selmo-state.json so the next startup
+    auto-loads it without any picker."""
     _stop_llama()
 
     sections = ini_data["sections"]
     default  = ini_data["default"]
     info     = _match_ini(model["name"], sections, default)
-    srv      = info["srv"]
-    csize    = info["chunking_size"]
+    srv      = info["srv"]            if srv_override   is None else srv_override
+    csize    = info["chunking_size"]  if csize_override is None else csize_override
     mmproj   = _find_mmproj(model["dir"])
 
     (BASE / "selmo-config.json").write_text(
@@ -937,6 +1055,7 @@ def _action_switch(model: dict, ini_data: dict):
         encoding="utf-8"
     )
     _current.update({"name": model["name"], "srv": srv, "mmproj": mmproj})
+    _save_last_model(model["name"])
 
     _launch_llama(model["path"], srv, mmproj)
 
@@ -1142,21 +1261,8 @@ def _build_menu(models: list[dict], ini_data: dict):
             pystray.MenuItem("View log file",          _view_log),
             pystray.Menu.SEPARATOR,
 
-            # model switcher submenu
-            pystray.MenuItem(
-                "Switch model",
-                pystray.Menu(*[
-                    pystray.MenuItem(
-                        m["name"][:52],
-                        _make_switch(m),
-                        checked=lambda item, mn=m["name"]: _current["name"] == mn,
-                        radio=True,
-                    )
-                    for m in models
-                ]),
-            ),
-            pystray.Menu.SEPARATOR,
-
+            # model switching now lives in the browser settings panel; the tray
+            # only manages the backend and shows the model in use (status header).
             pystray.MenuItem(
                 "Unload model  (free VRAM)",
                 lambda icon, item: threading.Thread(
@@ -1211,32 +1317,30 @@ def main():
     print(border)
     print()
 
-    sel, srv, csize, sel_img, iparams = _gui_picker(
-        models, sections, default, img_models, isections, idefault)
-    mmproj = _find_mmproj(sel["dir"])
-
-    vis = f"on  ({Path(mmproj).name})" if mmproj else "text only"
-    print(f"  Launching:  {sel['name']}")
-    print(f"  Vision   :  {vis}")
-    print(f"  Chunking :  {csize} tokens / chunk")
-
-    # Image / generative model: write its config for the bridge (8086) to read.
-    img_cfg = _image_config(sel_img, isections, idefault, iparams or None)
-    if img_cfg:
-        (BASE / "selmo-image-config.json").write_text(
-            json.dumps(img_cfg), encoding="utf-8"
-        )
-        print(f"  Image    :  {img_cfg['name']}  ({img_cfg['params']})")
+    # No startup picker: auto-load the last-used model (selmo-state.json).
+    # Switching models + editing flags now happen in the browser settings panel;
+    # the tray only manages the backend and shows the model in use.
+    last = _load_last_model()
+    sel  = next((m for m in models if m["name"] == last), None) or (models[0] if models else None)
+    srv, csize, mmproj = "", DEFAULT_CSIZE, None
+    if sel is None:
+        print("  No models found in models\\ -- add one, then load it from the browser.")
     else:
-        print("  Image    :  none selected (bridge uses its built-in default)")
+        info   = _match_ini(sel["name"], sections, default)
+        srv    = info["srv"]
+        csize  = info["chunking_size"]
+        mmproj = _find_mmproj(sel["dir"])
+        vis    = f"on  ({Path(mmproj).name})" if mmproj else "text only"
+        print(f"  Auto-loading last model:  {sel['name']}")
+        print(f"  Vision   :  {vis}")
+        print(f"  Chunking :  {csize} tokens / chunk")
+        (BASE / "selmo-config.json").write_text(
+            json.dumps({"chunking_size": csize, "think": info.get("think", "")}),
+            encoding="utf-8"
+        )
+        _current.update({"name": sel["name"], "srv": srv, "mmproj": mmproj, "loaded": False})
+        _save_last_model(sel["name"])
     print()
-
-    _sel_info = _match_ini(sel["name"], sections, default)
-    (BASE / "selmo-config.json").write_text(
-        json.dumps({"chunking_size": csize, "think": _sel_info.get("think", "")}),
-        encoding="utf-8"
-    )
-    _current.update({"name": sel["name"], "srv": srv, "mmproj": mmproj, "loaded": False})
 
     print("  Starting Python services...")
     _start_all_services()
@@ -1250,10 +1354,11 @@ def main():
             creationflags=NO_WINDOW,
         )
 
-    print()
-    print("  Starting llama-server...")
-    print(f"  Log: {LLAMA_LOG.name}")
-    _launch_llama(sel["path"], srv, mmproj)
+    if sel is not None:
+        print()
+        print("  Starting llama-server...")
+        print(f"  Log: {LLAMA_LOG.name}")
+        _launch_llama(sel["path"], srv, mmproj)
 
     # -- tray path: hand off to pystray (no console to detach) ------------
     if HAS_TRAY:
@@ -1263,7 +1368,7 @@ def main():
         icon = pystray.Icon(
             name  = "selmo",
             icon  = _make_icon_image(),
-            title = f"SelmoAI  --  {sel['name']}",
+            title = f"SelmoAI  --  {sel['name']}" if sel else "SelmoAI  --  no model (load one in the browser)",
             menu  = pystray.Menu(menu_fn),
         )
         _tray_icon = icon

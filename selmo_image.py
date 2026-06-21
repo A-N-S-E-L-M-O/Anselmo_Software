@@ -214,6 +214,10 @@ def generate_options():
 
 @app.route("/generate", methods=["POST"])
 def generate():
+    # Re-read the model config each call so a browser image-model switch
+    # (writes selmo-image-config.json) takes effect without restarting the bridge.
+    global MODEL
+    MODEL = _load_model()
     miss = _missing()
     if miss:
         return jsonify({"error": "Image generation not ready", "missing": miss}), 503
