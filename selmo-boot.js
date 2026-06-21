@@ -138,27 +138,36 @@ updCost();
 renderSessionList();
 
 
-// MODEL — retry until the server is ready
+// MODEL — poll until the server has REALLY loaded a model, with a loading
+// overlay; auto-recovers (no manual refresh) when the model comes up. A 200
+// from /v1/models with no model id is treated as "not ready yet" and retried,
+// so we never get stuck on the 'local' fallback while the model is still loading.
+let _modelReadyShown=false;
+// Only show the overlay if the model isn't up within 500ms (avoids a flash on a
+// plain refresh when the model is already loaded).
+setTimeout(function(){
+  if(!_modelReadyShown){var ml=document.getElementById('model-loading');if(ml)ml.classList.add('show');}
+},500);
 (function checkServer(){
-  fetch(`${API}/v1/models`)
-    .then(r=>r.json()).then(d=>{
-      const n=(d.data&&d.data[0]&&d.data[0].id)||'locale';
-      MODEL_FULL=n.split(/[\\/]/).pop()||n;
-      const short=n.length>22?n.slice(0,22)+'...':n;
+  fetch(`${API}/v1/models`,{cache:'no-store'})
+    .then(r=> r.ok ? r.json() : Promise.reject(r.status))
+    .then(d=>{
+      const id=d&&d.data&&d.data[0]&&d.data[0].id;
+      if(!id) return Promise.reject('no model yet');   // server up but model still loading
+      MODEL_FULL=id.split(/[\\/]/).pop()||id;
+      const short=MODEL_FULL.length>22?MODEL_FULL.slice(0,22)+'...':MODEL_FULL;
       document.getElementById('hdr-model').textContent=short;
       const fm=document.getElementById('foot-model');if(fm)fm.textContent=short;
       document.getElementById('conn').style.background='#55FF55';
-      // Magistral uses [THINK]...[/THINK] in the content (not reasoning_content).
-      // The template bypasses default_system_message when we receive SP_SELMO,
-      // so the thinking instructions must be added manually to the system message.
-
-
+      _modelReadyShown=true;
+      var ml=document.getElementById('model-loading');if(ml)ml.classList.remove('show');
       // Reads the real n_ctx and calibrates CHUNK_SIZE; retries until /props answers
       loadProps();
     }).catch(()=>{
       document.getElementById('conn').style.background='var(--red)';
-      document.getElementById('hdr-model').textContent='starting...';
-      setTimeout(checkServer,3000);
+      document.getElementById('hdr-model').textContent='loading...';
+      if(!_modelReadyShown){var ml=document.getElementById('model-loading');if(ml)ml.classList.add('show');}
+      setTimeout(checkServer,2000);
     });
 }());
 
