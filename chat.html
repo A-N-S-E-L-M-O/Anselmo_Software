@@ -105,7 +105,7 @@ header{
 }
 
 /* header action buttons — unified */
-#new-chat,#export-chat,#web-btn,#think-btn{
+#new-chat,#export-chat,#web-btn,#think-btn,#model-btn{
   font-family:var(--mono);font-size:12px;letter-spacing:.07em;
   padding:7px 14px;border-radius:var(--radius-xs);cursor:pointer;
   transition:all .18s var(--ease);white-space:nowrap;text-transform:uppercase;
@@ -115,10 +115,15 @@ header{
 #new-chat:hover{background:var(--yellow);border-color:var(--yellow);box-shadow:0 0 16px var(--glow-y);}
 #export-chat{color:var(--cyan);background:transparent;border:1px solid var(--cyan);}
 #export-chat:hover{background:var(--cyan);color:var(--ink);box-shadow:0 0 16px var(--glow-c);}
-#web-btn,#think-btn{background:rgba(255,255,255,.025);border:1px solid var(--steel);color:var(--dim);}
-#web-btn:hover,#think-btn:hover{border-color:var(--cyan);color:var(--cyan);}
+#web-btn,#think-btn,#model-btn{background:rgba(255,255,255,.025);border:1px solid var(--steel);color:var(--dim);}
+#web-btn:hover,#think-btn:hover,#model-btn:hover{border-color:var(--cyan);color:var(--cyan);}
 #web-btn.on,#think-btn.on{border-color:var(--cyan);color:var(--cyan);background:rgba(68,221,238,.12);box-shadow:0 0 13px var(--glow-c);}
 #web-btn:disabled,#think-btn:disabled{opacity:.4!important;color:var(--dim)!important;border-color:var(--steel)!important;background:rgba(255,255,255,.02)!important;box-shadow:none!important;cursor:not-allowed;pointer-events:none;}
+.h-left{display:flex;align-items:center;gap:9px;flex:1;min-width:0;}
+.h-center{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.h-right{display:flex;align-items:center;gap:10px;flex:1;min-width:0;justify-content:flex-end;}
+#model-btn{display:inline-flex;align-items:center;max-width:240px;overflow:hidden;text-transform:none;color:var(--dim);}
+#model-btn #hdr-model{color:var(--cyan);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 
 /* reasoning panel */
 #think-toggle{font-size:11px;letter-spacing:.07em;padding:4px 9px;border-radius:var(--radius-xs);background:transparent;border:1px solid var(--dim);color:var(--dim);cursor:pointer;}
@@ -386,6 +391,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
   body{grid-template-columns:1fr;grid-template-rows:var(--header-h) var(--topbar-h) minmax(0,1fr);height:100dvh;}
   header{padding:0 12px;gap:9px;}
   .hstat,#conn{display:none;}
+  #model-btn{max-width:160px;}
   #gpu-topbar{display:flex;}
 
   #mob-nav-btn,#mob-dash-btn{
@@ -427,6 +433,8 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
   #mob-nav-btn,#mob-dash-btn{width:34px;height:34px;font-size:16px;}
   #new-chat{padding:6px 9px;font-size:11px;}
   #web-btn,#think-btn{padding:6px 8px;font-size:11px;}
+  .model-pre{display:none;}
+  #model-btn{max-width:120px;padding:6px 8px;font-size:11px;}
   /* usage topbar shown via the tablet+phone breakpoint above */
 
   #messages{padding:14px 12px;gap:13px;}
@@ -449,6 +457,7 @@ main{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden
   #think-btn{padding:4px 6px;font-size:10px;}
   header{gap:5px;padding:0 7px;}
   #new-chat{padding:6px 8px;font-size:0;}  #new-chat::before{content:'CHAT';font-size:11px;}
+  #model-btn{max-width:92px;}
 }
 /* ── PROFILE PALETTES (s17): Mizan red + Custom neutral, scoped so Selmo (default) is untouched ── */
 /* Mizan — full red-shift: R<->B channel swap on structural tokens preserves luminance/contrast */
@@ -521,25 +530,43 @@ body.custom .think-toggle{color:#9a9aa3;}
 .pm-params input:disabled,.pm-params textarea:disabled{cursor:not-allowed;}.pm-params input:disabled{pointer-events:none;}
 .pm-params textarea{resize:vertical;line-height:1.5;}
 .pm-hint{font-size:11px;color:var(--dim);line-height:1.4;}
+#settings-modal{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);align-items:center;justify-content:center;}
+#settings-modal.show{display:flex;}
+.set-status{font-size:11px;color:var(--dim);margin-bottom:12px;letter-spacing:.04em;min-height:14px;}
+.set-section-label{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--yellow);margin:12px 0 7px;}
+.set-list{display:flex;flex-direction:column;gap:5px;max-height:40vh;overflow-y:auto;}
+.set-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid var(--steel-soft);border-radius:var(--radius-sm);background:rgba(255,255,255,.03);color:var(--white);font-family:var(--mono);font-size:12px;cursor:pointer;text-align:left;transition:all .14s var(--ease);}
+.set-item:hover{border-color:var(--cyan);color:var(--cyan);}
+.set-item.active{box-shadow:0 0 0 2px var(--cyan),0 0 12px var(--glow-c);background:rgba(68,221,238,.10);cursor:default;}
+.set-item small{color:var(--dim);font-size:10px;white-space:nowrap;}
+.set-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.set-btn{flex:1;min-width:120px;padding:9px 10px;border:1px solid var(--steel);border-radius:var(--radius-sm);background:rgba(255,255,255,.03);color:var(--white);font-family:var(--mono);font-size:11px;letter-spacing:.06em;cursor:pointer;transition:all .14s var(--ease);}
+.set-btn:hover{border-color:var(--cyan);color:var(--cyan);}
+.set-danger:hover{border-color:var(--red);color:var(--red);}
+.set-empty{color:var(--dim);font-size:11px;padding:8px;}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
 <div id="mob-overlay" onclick="closeOverlays()"></div>
 <header>
-  <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-  <div class="hbadge">v0.902</div>
-  <div class="hbadge">GDPR</div>
-  <div class="hspacer"></div>
-  <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
-  <button id="mob-dash-btn" onclick="mobToggle('dash')" title="Dashboard">&#9881;</button>
+  <div class="h-left">
+    <button id="mob-nav-btn" onclick="mobToggle('nav')" title="History">&#9776;</button>
     <button id="new-chat" onclick="newChat()">+ NEW CHAT</button>
-  <button id="export-chat" onclick="exportChat()">&#x2193; EXPORT</button>
-  <button id="web-btn" onclick="toggleWeb()" title="Web search ON/OFF">WEB</button>
-  <button id="think-btn" onclick="toggleThink()" title="Extended reasoning ON/OFF">THINK</button>
-  <div class="hstat">model: <span id="hdr-model">-</span></div>
-  <div class="hstat">session: <span id="hdr-session">00:00</span></div>
-  <div id="conn"></div>
+    <button id="export-chat" onclick="exportChat()">&#x2193; EXPORT</button>
+    <button id="web-btn" onclick="toggleWeb()" title="Web search ON/OFF">WEB</button>
+    <button id="think-btn" onclick="toggleThink()" title="Extended reasoning ON/OFF">THINK</button>
+    <button id="mob-dash-btn" onclick="mobToggle('dash')" title="Dashboard">&#9881;</button>
+  </div>
+  <div class="h-center">
+    <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
+    <div class="hbadge">v0.904</div>
+  </div>
+  <div class="h-right">
+    <button id="model-btn" onclick="openSettings()" title="Click to change model / runtime settings"><span class="model-pre">model:</span>&nbsp;<span id="hdr-model">-</span></button>
+    <div class="hstat" id="session-stat">session: <span id="hdr-session">00:00</span></div>
+    <div id="conn"></div>
+  </div>
 </header>
 <div id="gpu-topbar"><div class="tb-row"><div class="tb-seg"><div id="gpu-topbar-fill" class="tb-fill"></div><span id="gpu-topbar-lbl" class="tb-lbl">-- W</span></div></div><div class="tb-row"><div class="tb-seg"><div id="tb-cpu-fill" class="tb-fill"></div><span id="tb-cpu-lbl" class="tb-lbl">CPU --%</span></div><div class="tb-seg"><div id="tb-gpu-fill" class="tb-fill"></div><span id="tb-gpu-lbl" class="tb-lbl">GPU --%</span></div></div><div class="tb-row"><div class="tb-seg"><div id="tb-ram-fill" class="tb-fill"></div><span id="tb-ram-lbl" class="tb-lbl">RAM --%</span></div><div class="tb-seg"><div id="tb-vram-fill" class="tb-fill"></div><span id="tb-vram-lbl" class="tb-lbl">VRAM --%</span></div></div></div>
 
@@ -709,14 +736,33 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
   </div>
 </div>
 
-<script src="selmo-core.js?v=0.902"></script>
-<script src="selmo-bridges.js?v=0.902"></script>
-<script src="selmo-model.js?v=0.902"></script>
-<script src="selmo-docs.js?v=0.902"></script>
-<script src="selmo-chat.js?v=0.902"></script>
-<script src="selmo-send.js?v=0.902"></script>
-<script src="selmo-media.js?v=0.902"></script>
-<script src="selmo-sessions.js?v=0.902"></script>
-<script src="selmo-boot.js?v=0.902"></script>
+<div id="settings-modal" onclick="if(event.target===this)closeSettings()">
+  <div class="pm-card">
+    <div class="pm-head">
+      <span class="pm-title">Models &amp; runtime</span>
+      <button class="pm-x" onclick="closeSettings()">&#x2715;</button>
+    </div>
+    <div class="set-status" id="set-status">...</div>
+    <div class="set-section-label">LLM model</div>
+    <div class="set-list" id="set-model-list"><div class="set-empty">loading...</div></div>
+    <div class="set-section-label">Service</div>
+    <div class="set-actions">
+      <button class="set-btn" onclick="unloadLLM()">Unload (free VRAM)</button>
+      <button class="set-btn" onclick="reloadLLM()">Reload</button>
+      <button class="set-btn set-danger" onclick="exitSelmo()">Exit Selmo</button>
+    </div>
+  </div>
+</div>
+
+<script src="selmo-core.js?v=0.903"></script>
+<script src="selmo-bridges.js?v=0.903"></script>
+<script src="selmo-model.js?v=0.903"></script>
+<script src="selmo-docs.js?v=0.903"></script>
+<script src="selmo-chat.js?v=0.903"></script>
+<script src="selmo-send.js?v=0.903"></script>
+<script src="selmo-media.js?v=0.903"></script>
+<script src="selmo-sessions.js?v=0.903"></script>
+<script src="selmo-settings.js?v=0.903"></script>
+<script src="selmo-boot.js?v=0.903"></script>
 </body>
 </html>
