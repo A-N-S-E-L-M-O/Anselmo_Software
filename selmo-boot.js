@@ -157,6 +157,13 @@ function setModelState(s){
     if(ov)ov.classList.remove('show');
     const h=document.getElementById('hdr-model'); if(h)h.textContent='no model';
     const c=document.getElementById('conn'); if(c)c.style.background='var(--red)';
+  }else if(s==='imaging'){
+    // LLM intentionally swapped out for image generation: NOT a model load,
+    // so no twiddling-thumbs overlay; grey palette + a neutral "image mode".
+    _overlayDismissed=false; b.classList.add('unloaded');
+    if(ov)ov.classList.remove('show');
+    const h=document.getElementById('hdr-model'); if(h)h.textContent='image mode';
+    const c=document.getElementById('conn'); if(c)c.style.background='var(--yellow)';
   }else{ // ready
     _overlayDismissed=false; b.classList.remove('unloaded');
     if(ov)ov.classList.remove('show');
@@ -181,14 +188,25 @@ setTimeout(function(){ if(!_modelReadyShown && !_overlayDismissed && !document.b
       loadProps();   // reads the real n_ctx and calibrates CHUNK_SIZE
     }).catch(()=>{
       _checkTries++;
-      document.getElementById('conn').style.background='var(--red)';
-      if(_checkTries>=7){                       // ~14s with no model: it was off, not just starting
-        setModelState('unloaded');
-      }else if(!_modelReadyShown && !_overlayDismissed){
-        document.getElementById('hdr-model').textContent='loading...';
-        setModelState('loading');
-      }
-      setTimeout(checkServer,2000);
+      // /v1/models failed -> ask the tray WHY: if the LLM was swapped out for
+      // image generation it's not a real model load (no thumbs); otherwise it's
+      // still starting (thumbs) or genuinely off (grey "no model").
+      fetch(CTRL+'/status',{cache:'no-store'}).then(r=> r.ok?r.json():null).then(st=>{
+        if(st && st.swapped_for_image){
+          setModelState('imaging');
+        }else if(_checkTries>=7){
+          setModelState('unloaded');
+        }else if(!_modelReadyShown && !_overlayDismissed){
+          document.getElementById('hdr-model').textContent='loading...';
+          setModelState('loading');
+        }
+        setTimeout(checkServer,2000);
+      }).catch(()=>{   // control API unreachable: previous behaviour
+        document.getElementById('conn').style.background='var(--red)';
+        if(_checkTries>=7){ setModelState('unloaded'); }
+        else if(!_modelReadyShown && !_overlayDismissed){ document.getElementById('hdr-model').textContent='loading...'; setModelState('loading'); }
+        setTimeout(checkServer,2000);
+      });
     });
 }());
 

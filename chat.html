@@ -595,7 +595,7 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
   </div>
   <div class="h-center">
     <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-    <div class="hbadge">v0.913</div>
+    <div class="hbadge">v0.915</div>
   </div>
   <div class="h-right">
     <button id="model-btn" onclick="openSettings()" title="Click to change model / runtime settings"><span class="model-pre">model:</span>&nbsp;<span id="hdr-model">-</span></button>
@@ -742,7 +742,7 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
     <textarea id="input" rows="1" placeholder="Type a message..." onkeydown="handleKey(event)" oninput="autoResize(this)" onpaste="handlePaste(event)"></textarea>
 
     <button id="send" onclick="sendMsg()" title="Generate document">&#x1F4C4;</button>
-    <span id="img-wrap"><button id="gen-img-btn" onclick="toggleImgMenu(event)" title="Image generation (Z-Image-Turbo) - click to choose mode">&#x1F3A8;</button><div id="img-menu"><button onclick="pickImg(event)">Text-to-image</button><button onclick="pickImg(event,0.4)">Img2img: Subtle</button><button onclick="pickImg(event,0.55)">Img2img: Medium</button><button onclick="pickImg(event,0.7)">Img2img: Strong</button></div></span>
+    <span id="img-wrap"><button id="gen-img-btn" onclick="toggleImgMenu(event)" title="Generate an image from your prompt - click to choose the mode (text-to-image / img2img)">&#x1F3A8;</button><div id="img-menu"><button onclick="pickImg(event)">Text-to-image</button><button onclick="pickImg(event,0.4)">Img2img: Subtle</button><button onclick="pickImg(event,0.55)">Img2img: Medium</button><button onclick="pickImg(event,0.7)">Img2img: Strong</button></div></span>
     <button id="stop" onclick="stopMsg()">STOP</button>
     <button id="mic-btn" onclick="toggleMic()" title="Voice transcription (Whisper)">&#x1F3A4;</button>
     <button id="vad-btn" onclick="toggleVad()" title="Conversazione a mani libere (VAD) — rileva le pause e invia da solo">&#x1F5E3;</button>
@@ -833,7 +833,7 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
 <script src="selmo-send.js?v=0.903"></script>
 <script src="selmo-media.js?v=0.903"></script>
 <script src="selmo-sessions.js?v=0.903"></script>
-<script src="selmo-settings.js?v=0.913"></script>
-<script src="selmo-boot.js?v=0.913"></script>
+<script src="selmo-settings.js?v=0.914"></script>
+<script src="selmo-boot.js?v=0.915"></script>
 </body>
 </html>
