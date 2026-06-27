@@ -5,6 +5,7 @@ async function sendMsg(){
   const btn=document.getElementById('send');
   const stopBtn=document.getElementById('stop');
   const txt=inp.value.trim();if(!txt)return;
+  stopTts();   // starting a new turn cuts off any speech still playing
   inp.value='';inp.style.height='auto';
 
   // VRAM swap (v0.830): if image generation unloaded the LLM, bring it back

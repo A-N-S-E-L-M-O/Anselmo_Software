@@ -491,27 +491,37 @@ body.mizan .think-panel,body.mizan .think-toggle{background:rgba(40,8,0,.55);}
 body.mizan .think-panel{color:#e8b49f;}
 body.mizan .think-toggle{color:#d08f6f;}
 
-/* Custom — neutral grey system palette: no blue, no red */
+/* Custom — Claude-like light palette: cream bg, dark text, warm clay accent */
 body.custom{
-  --bg:#1c1c20; --panel:#18181c; --dark:#141417; --chat-bg:#161619; --ink:#101013;
-  --steel:#565660; --steel-soft:#3a3a42; --border:#8a8a93; --dim:#9a9aa3; --white:#e9e9ee;
-  --yellow:#d6d2c8; --cyan:#c0c4c8;
-  --glow-y:rgba(214,210,200,.22); --glow-c:rgba(192,196,200,.22);
-  background:radial-gradient(140% 90% at 50% -15%, #2a2a30 0%, var(--bg) 42%, #0c0c0e 100%);
+  --bg:#f3f1e9; --panel:#efece3; --dark:#e8e3d6; --chat-bg:#f7f6f0; --ink:#f7f6f1;
+  --steel:#c5beac; --steel-soft:#ded8c9; --border:#bcb6a2; --dim:#6a675e; --white:#2a2925;
+  --yellow:#9a7b34; --cyan:#c1603c;
+  --glow-y:rgba(154,123,52,.16); --glow-c:rgba(193,96,60,.18);
+  background:radial-gradient(140% 90% at 50% -15%, #faf9f4 0%, var(--bg) 45%, #ece8dc 100%);
 }
-body.custom header{background:linear-gradient(180deg,#202024,var(--dark));}
-body.custom nav,body.custom aside{background:linear-gradient(180deg,var(--panel),#141418);}
-body.custom #steam-svg,body.custom .mini-gauge{background:radial-gradient(circle at 50% 40%, #24242a 0%, var(--ink) 78%);}
-body.custom .sbadge,body.custom .sess-item{background:#202026;}
-body.custom .sess-item.active{background:#2c2c34;}
-body.custom .msg.user .av{background:#242428;}
-body.custom .msg.assistant .av{background:#242428;}
-body.custom .msg.user .bubble{background:linear-gradient(180deg,#262630,#1c1c22);color:#e9e9ee;}
-body.custom .msg.assistant .bubble{background:linear-gradient(180deg,#222228,#18181c);}
-body.custom .input-area{background:linear-gradient(180deg,var(--dark),#0e0e10);}
-body.custom .think-panel,body.custom .think-toggle{background:rgba(40,40,46,.55);}
-body.custom .think-panel{color:#c8c8d0;}
-body.custom .think-toggle{color:#9a9aa3;}
+body.custom header{background:linear-gradient(180deg,#efeae0,#e7e1d4);}
+body.custom nav,body.custom aside{background:linear-gradient(180deg,#efece3,#eae5d8);}
+body.custom #gpu-topbar,body.custom .speed-bg,body.custom .speed input,body.custom #watt-bar-track{background:#ece9df;}
+body.custom #steam-svg,body.custom .mini-gauge{background:radial-gradient(circle at 50% 40%, #efece1 0%, #ddd8c7 80%);}
+body.custom .sbadge,body.custom .sess-item{background:#eceadf;}
+body.custom .sess-item.active{background:#e4dece;}
+body.custom .msg.user .av{background:#ece7d7;}
+body.custom .msg.assistant .av{background:#efe9da;}
+body.custom .msg.user .bubble{background:#eee9da;color:#2a2925;}
+body.custom .msg.assistant .bubble{background:#f8f7f1;color:#2a2925;}
+body.custom .input-area{background:linear-gradient(180deg,#efeae0,#e9e3d6);}
+body.custom #input,body.custom #file-badge,body.custom #img-menu,
+body.custom input,body.custom textarea,
+body.custom .pm-params input,body.custom .pm-params textarea,
+body.custom .set-editor input,body.custom .set-editor textarea{background:#fffdf7;color:#2a2925;border-color:var(--border);}
+body.custom .set-editor{background:rgba(0,0,0,.04);}
+body.custom .bubble pre{background:#ece9df;border-color:var(--border);}
+body.custom .bubble pre code{color:#2a2925;}
+body.custom .bubble code{background:rgba(0,0,0,.06);color:#8a3f25;}
+body.custom .bubble th{background:rgba(193,96,60,.12);color:#a8482b;}
+body.custom .think-panel,body.custom .think-toggle{background:rgba(0,0,0,.05);}
+body.custom .think-panel{color:#4a473f;}
+body.custom .think-toggle{color:#6a675e;}
 
 /* ── PROFILE MODAL ── */
 #profile-modal{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);align-items:center;justify-content:center;}
@@ -595,7 +605,7 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
   </div>
   <div class="h-center">
     <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-    <div class="hbadge">v0.916</div>
+    <div class="hbadge">v0.918</div>
   </div>
   <div class="h-right">
     <button id="model-btn" onclick="openSettings()" title="Click to change model / runtime settings"><span class="model-pre">model:</span>&nbsp;<span id="hdr-model">-</span></button>
@@ -829,11 +839,11 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
 <script src="selmo-bridges.js?v=0.903"></script>
 <script src="selmo-model.js?v=0.903"></script>
 <script src="selmo-docs.js?v=0.903"></script>
-<script src="selmo-chat.js?v=0.916"></script>
-<script src="selmo-send.js?v=0.903"></script>
-<script src="selmo-media.js?v=0.916"></script>
+<script src="selmo-chat.js?v=0.918"></script>
+<script src="selmo-send.js?v=0.918"></script>
+<script src="selmo-media.js?v=0.918"></script>
 <script src="selmo-sessions.js?v=0.903"></script>
 <script src="selmo-settings.js?v=0.914"></script>
-<script src="selmo-boot.js?v=0.916"></script>
+<script src="selmo-boot.js?v=0.918"></script>
 </body>
 </html>

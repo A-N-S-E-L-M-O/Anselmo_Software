@@ -205,35 +205,65 @@ function cleanForTts(text){
              .replace(/#+\s/g,'').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1')
              .replace(/\s+/g,' ').trim();
 }
+// Show/hide the STOP button while Selmo is speaking, so playback can be cut
+// off. Mirrors the generation toggle (send hidden, stop shown) but only flips
+// back to "send" when no generation is in flight.
+function _ttsShowStop(on){
+  const sb=document.getElementById('stop'),send=document.getElementById('send');
+  if(!sb||!send)return;
+  if(on){send.style.display='none';sb.style.display='inline-block';}
+  else if(!gen){sb.style.display='none';send.style.display='inline-block';}
+}
+// Interrupt any speech in progress (manual STOP button only — NOT VAD/noise
+// driven). Aborts the pending Kokoro fetch, stops the audio source, cancels
+// Web Speech, then runs the same cleanup as a natural end so the UI returns
+// to a ready state for the next interaction.
+function stopTts(){
+  if(!_ttsPending&&!_ttsFire)return;
+  if(_ttsAbort){try{_ttsAbort.abort();}catch(e){}_ttsAbort=null;}
+  if(_ttsSrc){try{_ttsSrc.onended=null;_ttsSrc.stop(0);}catch(e){}_ttsSrc=null;}
+  if(_ttsCtx){try{_ttsCtx.close();}catch(e){}_ttsCtx=null;}
+  if('speechSynthesis' in window){try{window.speechSynthesis.cancel();}catch(e){}}
+  if(_ttsFire){_ttsFire();}
+}
 function speakText(text){
   const _forceTts=pttForceTts;pttForceTts=false;
   if(!ttsOk||(!ttsEnabled&&!_forceTts)||!text.trim()){vadAfterSpeak();return;}
   text=cleanForTts(text);
   if(!text){vadAfterSpeak();return;}
   _ttsPending=true;
-  let _done=false;const _fire=()=>{if(_done)return;_done=true;vadAfterSpeak();};
+  let _done=false;
+  const _fire=()=>{if(_done)return;_done=true;_ttsFire=null;_ttsSrc=null;_ttsCtx=null;_ttsAbort=null;_ttsShowStop(false);vadAfterSpeak();};
+  _ttsFire=_fire;
   if(kokoroOk){
+    _ttsAbort=new AbortController();
     fetch(`${TTS_URL}/speak`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text})
+      body:JSON.stringify({text}),
+      signal:_ttsAbort.signal
     }).then(r=>{
       if(!r.ok)throw new Error('TTS error '+r.status);
       return r.arrayBuffer();
     }).then(buf=>{
       const ctx=new(window.AudioContext||window.webkitAudioContext)();
+      _ttsCtx=ctx;
       return ctx.decodeAudioData(buf).then(decoded=>{
         const src=ctx.createBufferSource();
+        _ttsSrc=src;
         src.buffer=decoded;
         src.connect(ctx.destination);
         src.onended=()=>{try{ctx.close();}catch(e){}_fire();};
+        _ttsShowStop(true);
         src.start(0);
       });
     }).catch(e=>{
+      if(e&&e.name==='AbortError')return;   // stopped by the user; cleanup already ran
       console.warn('Kokoro TTS error, fallback Web Speech:',e);
       if('speechSynthesis' in window){
         const utt=new SpeechSynthesisUtterance(text);
         utt.lang='it-IT';utt.rate=1.05;utt.onend=_fire;utt.onerror=_fire;
+        _ttsShowStop(true);
         window.speechSynthesis.speak(utt);
       }else{_fire();}
     });
@@ -241,6 +271,7 @@ function speakText(text){
     window.speechSynthesis.cancel();
     const utt=new SpeechSynthesisUtterance(text);
     utt.lang='it-IT';utt.rate=1.05;utt.onend=_fire;utt.onerror=_fire;
+    _ttsShowStop(true);
     window.speechSynthesis.speak(utt);
   }
 }

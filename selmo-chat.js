@@ -125,7 +125,7 @@ function addDownloadBar(bub,inner,md){
   bar.appendChild(mk('↓ .tsv',()=>dlReplyTsv(md)));
   inner.appendChild(bar);
 }
-function stopMsg(){if(abort){abort.abort();abort=null;}}
+function stopMsg(){if(abort){abort.abort();abort=null;}stopTts();}
 // Robust SSE reader: buffers between reads (no tokens lost if
 // a 'data:' line is split in half) and reads both content and reasoning_content
 // (reasoning models like Gemma write the reasoning in reasoning_content).

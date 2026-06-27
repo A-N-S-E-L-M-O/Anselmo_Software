@@ -76,6 +76,8 @@ let gen=false,abort=null,tokSec=0,_genT0=0,_genTok=0,_tokScale=100,wh=0,whAll=0,
     customTopK=parseInt(localStorage.getItem('scustomtopk')||'40'),
     CUSTOM_SP=(localStorage.getItem('scustomsp')||"You are a helpful local AI assistant. Be clear and concise. Reply in the user's language.");
 let vadInstance=null,vadConvo=false,vadAwaitingReply=false,_ttsPending=false;
+// active TTS playback handles, so the STOP button can interrupt speech (v0.918)
+let _ttsCtx=null,_ttsSrc=null,_ttsAbort=null,_ttsFire=null;
 
 // SYSTEM POWER MONITOR
 const SYS_MAX=500,PSU_EFF_EST=0.88,OTHER_DC_EST=45;
