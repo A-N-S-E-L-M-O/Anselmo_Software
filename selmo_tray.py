@@ -899,7 +899,8 @@ class _CtrlHandler(BaseHTTPRequestHandler):
         for m in _scan_models(BASE):
             info = _match_ini(m["name"], sections, default)
             out.append({"name": m["name"], "srv": info["srv"],
-                        "chunking_size": info["chunking_size"]})
+                        "chunking_size": info["chunking_size"],
+                        "note": info["note"], "tip": info["tip"]})
         return {
             "models":            out,
             "current":           _current["name"],
@@ -940,7 +941,8 @@ class _CtrlHandler(BaseHTTPRequestHandler):
         out = []
         for m in _scan_image_models(BASE):
             info = _match_ini(m["name"], isec, idef)
-            out.append({"name": m["name"], "params": info["params"]})
+            out.append({"name": m["name"], "params": info["params"],
+                        "note": info["note"], "tip": info["tip"]})
         return {"models": out, "current": cur}
 
     def _image_select(self):
@@ -959,6 +961,30 @@ class _CtrlHandler(BaseHTTPRequestHandler):
         cfg = _image_config(model, isec, idef, params)
         (BASE / "selmo-image-config.json").write_text(json.dumps(cfg), encoding="utf-8")
         self._send(200, {"ok": True, "name": name})
+
+    def _reveal(self):
+        # Open the models directory itself in Windows Explorer (kind = llm ->
+        # models\, image -> image\). Opening the folder (not a selected file)
+        # means it works even on a fresh install with no models yet. kind is a
+        # fixed enum, so no arbitrary path reaches the unauthenticated 8087 port.
+        # os.startfile uses the shell "open" verb, which raises a NEW Explorer
+        # window to the foreground (focused, not minimized) so the user can't
+        # miss it and keep clicking.
+        body = self._read_json()
+        kind = (body.get("kind") or "llm").strip()
+        folder = (BASE / "image") if kind == "image" else (BASE / "models")
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            # Windows blocks a background process (the tray) from stealing the
+            # foreground, so the Explorer window may only flash in the taskbar
+            # rather than pop up. We don't fight that (a foreground-lock override
+            # mutates a system-wide setting for little gain); the client shows an
+            # in-app notice telling the user to check the taskbar instead.
+            os.startfile(str(folder))
+        except Exception as e:
+            self._send(500, {"ok": False, "error": str(e)})
+            return
+        self._send(200, {"ok": True, "folder": str(folder)})
 
     def _exit(self):
         # Reply first, then tear everything down off-thread so the response
@@ -993,6 +1019,8 @@ class _CtrlHandler(BaseHTTPRequestHandler):
             self._switch()
         elif p == "/image/select":
             self._image_select()
+        elif p == "/reveal":
+            self._reveal()
         elif p == "/control/exit":
             self._exit()
         else:

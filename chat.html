@@ -549,11 +549,24 @@ body.custom .think-toggle{color:#6a675e;}
 .pm-params input:disabled,.pm-params textarea:disabled{cursor:not-allowed;}.pm-params input:disabled{pointer-events:none;}
 .pm-params textarea{resize:vertical;line-height:1.5;}
 .pm-hint{font-size:11px;color:var(--dim);line-height:1.4;}
+#settings-modal .pm-card{width:min(680px,94vw);}
+.set-cols{display:flex;gap:16px;align-items:flex-start;}
+.set-col{flex:1;min-width:0;}
+.set-head-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:12px 0 7px;}
+.set-head-row .set-section-label{margin:0;}
+.set-folder{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border:1px solid var(--steel);border-radius:var(--radius-sm);background:rgba(255,255,255,.03);color:var(--white);font-family:var(--mono);font-size:10px;letter-spacing:.05em;cursor:pointer;white-space:nowrap;transition:all .14s var(--ease);}
+.set-folder:hover{border-color:var(--cyan);color:var(--cyan);}
+@media (max-width:1024px), (max-width:1366px) and (pointer:coarse){.desk-only{display:none!important;}.set-cols{flex-direction:column;gap:0;}#settings-modal .pm-card{width:min(440px,92vw);}}
+#reveal-note{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);align-items:center;justify-content:center;}
+#reveal-note.show{display:flex;}
+.rn-card{width:min(340px,88vw);background:linear-gradient(180deg,var(--panel),var(--dark));border:1px solid var(--steel);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;display:flex;flex-direction:column;gap:14px;text-align:center;}
+.rn-msg{font-family:var(--mono);font-size:13px;color:var(--white);line-height:1.5;}
+.rn-card .set-btn{flex:0 0 auto;align-self:center;min-width:120px;}
 #settings-modal{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);align-items:center;justify-content:center;}
 #settings-modal.show{display:flex;}
 .set-status{font-size:11px;color:var(--dim);margin-bottom:12px;letter-spacing:.04em;min-height:14px;}
 .set-section-label{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--yellow);margin:12px 0 7px;}
-.set-list{display:flex;flex-direction:column;gap:5px;max-height:40vh;overflow-y:auto;}
+.set-list{display:flex;flex-direction:column;gap:5px;max-height:40vh;overflow-y:auto;padding:4px 6px;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:var(--cyan) rgba(255,255,255,.08);}
 .set-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid var(--steel-soft);border-radius:var(--radius-sm);background:rgba(255,255,255,.03);color:var(--white);font-family:var(--mono);font-size:12px;cursor:pointer;text-align:left;transition:all .14s var(--ease);}
 .set-item:hover{border-color:var(--cyan);color:var(--cyan);}
 .set-item.active{box-shadow:0 0 0 2px var(--cyan),0 0 12px var(--glow-c);background:rgba(68,221,238,.10);cursor:default;}
@@ -605,7 +618,7 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
   </div>
   <div class="h-center">
     <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-    <div class="hbadge">v0.918</div>
+    <div class="hbadge">v0.919</div>
   </div>
   <div class="h-right">
     <button id="model-btn" onclick="openSettings()" title="Click to change model / runtime settings"><span class="model-pre">model:</span>&nbsp;<span id="hdr-model">-</span></button>
@@ -789,22 +802,33 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
     </div>
     <div class="set-status" id="set-status">...</div>
 
-    <div class="set-section-label">LLM model</div>
-    <div class="set-list" id="set-model-list"><div class="set-empty">loading...</div></div>
-    <div class="set-editor" id="set-llm-editor" style="display:none">
-      <label class="set-lbl">server flags (srv)</label>
-      <textarea id="set-srv" rows="4" spellcheck="false"></textarea>
-      <label class="set-lbl">chunking size (tokens)</label>
-      <input id="set-chunk" type="number" min="0" step="100">
-      <button class="set-btn set-go" id="set-load-btn" onclick="confirmSwitch()">Load <span id="set-load-name"></span></button>
-    </div>
-
-    <div class="set-section-label">Image model</div>
-    <div class="set-list" id="set-img-list"><div class="set-empty">loading...</div></div>
-    <div class="set-editor" id="set-img-editor" style="display:none">
-      <label class="set-lbl">image params</label>
-      <textarea id="set-img-params" rows="2" spellcheck="false"></textarea>
-      <button class="set-btn set-go" id="set-img-btn" onclick="confirmImage()">Apply <span id="set-img-name"></span></button>
+    <div class="set-cols">
+      <div class="set-col">
+        <div class="set-head-row">
+          <span class="set-section-label">LLM model</span>
+          <button class="set-folder desk-only" onclick="revealModel('llm')" title="Open the models\\ folder on the host">📁 Models</button>
+        </div>
+        <div class="set-list" id="set-model-list"><div class="set-empty">loading...</div></div>
+        <div class="set-editor" id="set-llm-editor" style="display:none">
+          <label class="set-lbl">server flags (srv)</label>
+          <textarea id="set-srv" rows="4" spellcheck="false"></textarea>
+          <label class="set-lbl">chunking size (tokens)</label>
+          <input id="set-chunk" type="number" min="0" step="100">
+          <button class="set-btn set-go" id="set-load-btn" onclick="confirmSwitch()">Load <span id="set-load-name"></span></button>
+        </div>
+      </div>
+      <div class="set-col">
+        <div class="set-head-row">
+          <span class="set-section-label">Image model</span>
+          <button class="set-folder desk-only" onclick="revealModel('image')" title="Open the image\\ folder on the host">📁 Models</button>
+        </div>
+        <div class="set-list" id="set-img-list"><div class="set-empty">loading...</div></div>
+        <div class="set-editor" id="set-img-editor" style="display:none">
+          <label class="set-lbl">image params</label>
+          <textarea id="set-img-params" rows="2" spellcheck="false"></textarea>
+          <button class="set-btn set-go" id="set-img-btn" onclick="confirmImage()">Apply <span id="set-img-name"></span></button>
+        </div>
+      </div>
     </div>
 
     <div class="set-section-label">Service</div>
@@ -813,6 +837,13 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
       <button class="set-btn" onclick="reloadLLM()">Reload</button>
       <button class="set-btn set-danger" onclick="exitSelmo()">Exit Selmo</button>
     </div>
+  </div>
+</div>
+
+<div id="reveal-note" onclick="if(event.target===this)closeRevealNote()">
+  <div class="rn-card">
+    <div class="rn-msg" id="reveal-note-msg">Model folder shown, check your taskbar.</div>
+    <button class="set-btn set-go" onclick="closeRevealNote()">OK</button>
   </div>
 </div>
 
@@ -839,11 +870,11 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
 <script src="selmo-bridges.js?v=0.903"></script>
 <script src="selmo-model.js?v=0.903"></script>
 <script src="selmo-docs.js?v=0.903"></script>
-<script src="selmo-chat.js?v=0.918"></script>
+<script src="selmo-chat.js?v=0.919"></script>
 <script src="selmo-send.js?v=0.918"></script>
 <script src="selmo-media.js?v=0.918"></script>
 <script src="selmo-sessions.js?v=0.903"></script>
-<script src="selmo-settings.js?v=0.914"></script>
-<script src="selmo-boot.js?v=0.918"></script>
+<script src="selmo-settings.js?v=0.919"></script>
+<script src="selmo-boot.js?v=0.919"></script>
 </body>
 </html>

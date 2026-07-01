@@ -165,15 +165,16 @@ function setModelState(s){
     // LLM swapped out for image generation: this is an ACTIVE mode, not a dead one,
     // so keep the normal palette (NO grey). The 'unloaded' grayscale is reserved for
     // "no model". Image mode is flagged by the "image mode" label + the yellow
-    // connection dot + the revive banner, never by greying the whole UI.
+    // connection dot only. No revive banner here (dropped): it invited a premature
+    // one-click reload back to the chat LLM while the user was still meaning to
+    // generate images, undoing the point of staying in image mode -- Enter and the
+    // palette button already keep working without it, so the banner did more harm
+    // than good.
     _overlayDismissed=false; b.classList.remove('unloaded');
     if(ov)ov.classList.remove('show');
     const h=document.getElementById('hdr-model'); if(h)h.textContent='image mode';
     const c=document.getElementById('conn'); if(c)c.style.background='var(--yellow)';
-    // during the actual generation the banner would be noise; show it only once
-    // the page is sitting idle in image mode (e.g. after a refresh).
-    if(gen){ _hideReviveBanner(); }
-    else{ _showReviveBanner('Model unloaded for an image - click to reload'); }
+    _hideReviveBanner();
   }else{ // ready
     _overlayDismissed=false; b.classList.remove('unloaded');
     if(ov)ov.classList.remove('show');

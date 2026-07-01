@@ -1,7 +1,21 @@
 'use strict';
 // CHAT
 function scrollBot(){const m=document.getElementById('messages');m.scrollTop=m.scrollHeight;}
-function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();}}
+// Enter follows whichever mode the header shows: 'image mode' (LLM swapped
+// out for image gen) -> Enter behaves exactly like clicking the palette
+// button (toggleImgMenu: text-to-image, or opens the picker if an image is
+// loaded); any other state -> normal chat send. Fixes the "distracted Enter"
+// trap: hitting Enter out of habit while in image mode used to fall through
+// to sendMsg(), which silently reloaded the chat LLM just because Enter was
+// pressed without thinking.
+function handleKey(e){
+  if(e.key==='Enter'&&!e.shiftKey){
+    e.preventDefault();
+    const h=document.getElementById('hdr-model');
+    if(h&&h.textContent==='image mode'){toggleImgMenu();}
+    else{sendMsg();}
+  }
+}
 function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,140)+'px';}
 function addMsg(role,text,streaming){
   const wrap=document.createElement('div');wrap.className='msg '+role;

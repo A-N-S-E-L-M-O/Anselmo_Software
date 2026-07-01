@@ -30,6 +30,7 @@ async function loadSettingsModels(){
       var act=(m.name===cur);
       var it=document.createElement('button');
       it.className='set-item'+(act?' active':'');
+      it.title=m.tip||m.note||'';
       it.innerHTML='<span>'+_esc(m.name)+'</span><small>'+(act?'current':'edit & load')+'</small>';
       it.onclick=function(){selectLLM(m.name);};
       list.appendChild(it);
@@ -88,6 +89,7 @@ async function loadImageModels(){
       var act=(m.name===cur);
       var it=document.createElement('button');
       it.className='set-item'+(act?' active':'');
+      it.title=m.tip||m.note||'';
       it.innerHTML='<span>'+_esc(m.name)+'</span><small>'+(act?'current':'edit & apply')+'</small>';
       it.onclick=function(){selectImg(m.name);};
       list.appendChild(it);
@@ -117,6 +119,24 @@ async function confirmImage(){
     _setStatus('image select failed: '+e.message);
   }
   document.getElementById('set-img-btn').disabled=false;
+}
+
+// ---------- open models folder on the host (desktop only) ----------
+function closeRevealNote(){var m=document.getElementById('reveal-note');if(m)m.classList.remove('show');}
+function showRevealNote(msg){
+  var m=document.getElementById('reveal-note');if(!m)return;
+  var t=document.getElementById('reveal-note-msg');if(t)t.textContent=msg;
+  m.classList.add('show');
+}
+async function revealModel(kind){
+  try{
+    var r=await fetch(CTRL+'/reveal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:kind})});
+    var d=await r.json().catch(function(){return{};});
+    if(!r.ok||d.ok===false)throw new Error(d.error||('HTTP '+r.status));
+    showRevealNote((kind==='image'?'Image':'Model')+' folder shown, check your taskbar.');
+  }catch(e){
+    _setStatus('open folder failed: '+e.message);
+  }
 }
 
 // ---------- service ----------

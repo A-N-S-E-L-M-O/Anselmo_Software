@@ -323,7 +323,11 @@ def main():
     #   and is forwarded verbatim. Full control lives in the ini.
     #   Note: keep --reasoning-format (THINK panel), --timeout 600 (phone
     #   uploads, BUG-IMG-02) and --metrics in srv, features depend on them.
-    llama = str(BASE / "bin" / "llama-server.exe")
+    # Backend dir is overridable so the home edition can pick CUDA vs Vulkan
+    # at runtime (SELMO_BIN_DIR=bin|bin-vulkan). Default "bin" keeps the
+    # production launcher (Selmo.bat) byte-for-byte unchanged.
+    _bindir = os.environ.get("SELMO_BIN_DIR", "bin")
+    llama = str(BASE / _bindir / "llama-server.exe")
     cmd = [
         llama,
         "--model",  args.model,
