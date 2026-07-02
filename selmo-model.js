@@ -166,7 +166,7 @@ function showStartupTrace(){
 function announceModel(startupOnly){
   const box=document.getElementById('messages');
   if(startupOnly&&box&&box.children.length>0)return; // chat not empty: skip the startup trace
-  const r=addMsg('assistant','New conversation.');
+  const r=addMsg('assistant',(typeof t==='function'?t('welcome.line1'):'New conversation.'));
   const info=document.createElement('div');
   info.style.cssText='margin-top:5px;font-size:11px;opacity:.6';
   info.textContent=modelInfoLine();

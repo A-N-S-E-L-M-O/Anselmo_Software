@@ -212,7 +212,7 @@ function _openPhonePopup(url){
     +'display:flex;align-items:center;justify-content:center;padding:16px';
   ov.onclick=function(e){if(e.target===ov)ov.remove();};   // click outside to close
   var card=document.createElement('div');
-  card.style.cssText='background:var(--panel,#12161c);color:var(--fg,#dfe8f0);'
+  card.style.cssText='background:var(--panel,#12161c);color:var(--white,#dfe8f0);'
     +'border:1px solid var(--steel,#2a3340);border-radius:10px;max-width:420px;width:100%;'
     +'padding:20px;font-family:inherit;box-shadow:0 8px 40px rgba(0,0,0,.5)';
   var title=document.createElement('div');
@@ -263,6 +263,12 @@ function _phoneField(){
         var btn=document.createElement('button');
         btn.id='phone-btn';
         btn.title='Use Selmo from your phone';
+        btn.style.cssText='font-family:var(--mono);font-size:13px;letter-spacing:.07em;'
+          +'padding:7px 12px;border-radius:var(--radius-xs);cursor:pointer;'
+          +'transition:all .18s var(--ease);white-space:nowrap;flex-shrink:0;'
+          +'background:rgba(255,255,255,.025);border:1px solid var(--steel);color:var(--dim);';
+        btn.onmouseover=function(){btn.style.borderColor='var(--cyan)';btn.style.color='var(--cyan)';};
+        btn.onmouseout=function(){btn.style.borderColor='var(--steel)';btn.style.color='var(--dim)';};
         btn.textContent='📱';
         btn.onclick=function(){_openPhonePopup(url);};
         box.appendChild(btn);

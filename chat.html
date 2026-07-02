@@ -618,7 +618,7 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
   </div>
   <div class="h-center">
     <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-    <div class="hbadge">v0.920</div>
+    <div class="hbadge">v0.921</div>
   </div>
   <div class="h-right">
     <button id="model-btn" onclick="openSettings()" title="Click to change model / runtime settings"><span class="model-pre">model:</span>&nbsp;<span id="hdr-model">-</span></button>
@@ -629,12 +629,12 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
 <div id="gpu-topbar"><div class="tb-row"><div class="tb-seg"><div id="gpu-topbar-fill" class="tb-fill"></div><span id="gpu-topbar-lbl" class="tb-lbl">-- W</span></div></div><div class="tb-row"><div class="tb-seg"><div id="tb-cpu-fill" class="tb-fill"></div><span id="tb-cpu-lbl" class="tb-lbl">CPU --%</span></div><div class="tb-seg"><div id="tb-gpu-fill" class="tb-fill"></div><span id="tb-gpu-lbl" class="tb-lbl">GPU --%</span></div></div><div class="tb-row"><div class="tb-seg"><div id="tb-ram-fill" class="tb-fill"></div><span id="tb-ram-lbl" class="tb-lbl">RAM --%</span></div><div class="tb-seg"><div id="tb-vram-fill" class="tb-fill"></div><span id="tb-vram-lbl" class="tb-lbl">VRAM --%</span></div></div></div>
 
 <nav>
-  <div class="panel-label">history</div>
+  <div class="panel-label" data-i18n="panel.history">history</div>
   <div id="session-list"></div>
 </nav>
 
 <aside>
-  <div class="panel-label">system power draw</div>
+  <div class="panel-label" data-i18n="panel.power">system power draw</div>
   <svg id="steam-svg" viewBox="0 0 220 190">
     <defs>
       <radialGradient id="dF" cx="50%" cy="40%">
@@ -689,7 +689,7 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
   <div id="hw-mode" style="text-align:center;font-family:var(--mono);font-size:13px;color:var(--white);letter-spacing:.04em;margin:2px 0 6px;">-</div>
 
   <div id="watt-bar-wrap">
-    <div class="panel-label" style="margin-bottom:4px;">system power draw</div>
+    <div class="panel-label" style="margin-bottom:4px;" data-i18n="panel.power">system power draw</div>
     <div id="watt-bar-track"><div id="watt-bar-fill"></div></div>
     <div id="watt-bar-label">-- W</div>
   </div>
@@ -704,7 +704,7 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
   <div class="divider"></div>
 
   <div id="odo-wrap">
-    <div class="panel-label">session watt-hours</div>
+    <div class="panel-label" data-i18n="panel.watthours">session watt-hours</div>
     <div id="odo-track"></div>
   </div>
 
@@ -712,31 +712,31 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
 
   <div class="stat-grid">
     <div>
-      <div class="stat-row"><span class="sk">tok/sec</span><span class="sv b" id="tok-sec">-</span></div>
+      <div class="stat-row"><span class="sk" data-i18n="stat.toksec">tok/sec</span><span class="sv b" id="tok-sec">-</span></div>
       <div class="speed-bg"><div class="speed-fill" id="speed-fill"></div></div>
     </div>
     <div class="stat-row">
-      <span class="sk">Wh session</span>
+      <span class="sk" data-i18n="stat.wh_session">Wh session</span>
       <span style="display:flex;align-items:center;gap:8px;">
         <span class="sv g" id="wh-s">0.000</span>
         <span style="font-size:12px;color:var(--dim);cursor:pointer;" onclick="resetWhSession()">[reset]</span>
       </span>
     </div>
     <div class="stat-row">
-      <span class="sk">Wh total</span>
+      <span class="sk" data-i18n="stat.wh_total">Wh total</span>
       <span style="display:flex;align-items:center;gap:8px;">
         <span class="sv a" id="wh-total">0.000</span>
         <span style="font-size:12px;color:var(--dim);cursor:pointer;" onclick="resetWh()">[reset]</span>
       </span>
     </div>
-    <div class="stat-row"><span class="sk">session cost</span><span class="sv" id="cost-s">0.0000</span></div>
-    <div class="stat-row"><span class="sk">total cost</span><span class="sv a" id="cost-t">0.0000</span></div>
+    <div class="stat-row"><span class="sk" data-i18n="stat.session_cost">session cost</span><span class="sv" id="cost-s">0.0000</span></div>
+    <div class="stat-row"><span class="sk" data-i18n="stat.total_cost">total cost</span><span class="sv a" id="cost-t">0.0000</span></div>
     <div class="price-row">
-      <span class="sk">euro/kWh</span>
+      <span class="sk" data-i18n="stat.eur_kwh">euro/kWh</span>
       <input class="price-input" id="pkwh" type="number" step="0.01" min="0.01" max="2" value="0.28" onchange="savePrice(this.value)">
     </div>
     <div class="stat-row">
-      <span class="sk">tokens generated</span>
+      <span class="sk" data-i18n="stat.tokens_gen">tokens generated</span>
       <span style="display:flex;align-items:center;gap:8px;">
         <span class="sv" id="tok-tot">0</span>
         <span style="font-size:12px;color:var(--dim);cursor:pointer;" onclick="resetToks()">[reset]</span>
@@ -749,7 +749,7 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
   <div id="messages">
     <div class="msg assistant">
       <div class="av">&#x26A1;</div>
-      <div><div class="bubble">New conversation.
+      <div><div class="bubble" data-i18n="welcome.full">New conversation.
 Running on your hardware. Only explicit web searches leave this machine.</div></div>
     </div>
   </div>
@@ -771,7 +771,6 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
     <button id="vad-btn" onclick="toggleVad()" title="Conversazione a mani libere (VAD) — rileva le pause e invia da solo">&#x1F5E3;</button>
     <button id="tts-btn" onclick="toggleTts()" title="Read responses aloud (Kokoro TTS)">&#x1F508;</button>
   </div>
-  <div class="meta">Only web searches transmitted &middot; <span id="foot-model">-</span> &middot; localhost:8080</div>
 </main>
 
 <div id="profile-modal" onclick="if(event.target===this)closeProfile();">
@@ -866,14 +865,15 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
   </div>
 </div>
 
+<script src="selmo-i18n.js?v=0.921"></script>
 <script src="selmo-core.js?v=0.903"></script>
 <script src="selmo-bridges.js?v=0.903"></script>
-<script src="selmo-model.js?v=0.903"></script>
+<script src="selmo-model.js?v=0.921"></script>
 <script src="selmo-docs.js?v=0.903"></script>
 <script src="selmo-chat.js?v=0.919"></script>
 <script src="selmo-send.js?v=0.918"></script>
 <script src="selmo-media.js?v=0.918"></script>
-<script src="selmo-sessions.js?v=0.920"></script>
+<script src="selmo-sessions.js?v=0.921"></script>
 <script src="selmo-settings.js?v=0.919"></script>
 <script src="selmo-boot.js?v=0.920"></script>
 </body>
