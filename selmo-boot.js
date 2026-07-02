@@ -410,3 +410,4 @@ if(window.visualViewport){
 
 
 _micHttpsBanner();
+_phoneField();   // desktop-only: show the "type this on your phone" address field

@@ -197,3 +197,75 @@ function _micHttpsBanner(){
     document.body.insertBefore(b,document.body.firstChild);
   }catch(e){}
 }
+
+// Desktop-only: a phone icon in the header toolbar. Clicking it opens a popup
+// with the LAN address to type in the phone's browser to reach Selmo. Reads the
+// LAN IP the front door baked into selmo-cert-ip.txt and shows the HTTPS 8443 URL
+// (so the phone mic works). The icon is added only on the PC (localhost view);
+// on a phone it never appears (you are already there).
+function _openPhonePopup(url){
+  var ov=document.getElementById('phone-popup');
+  if(ov){ov.remove();return;}                        // toggle: a second click closes it
+  ov=document.createElement('div');
+  ov.id='phone-popup';
+  ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.55);'
+    +'display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.onclick=function(e){if(e.target===ov)ov.remove();};   // click outside to close
+  var card=document.createElement('div');
+  card.style.cssText='background:var(--panel,#12161c);color:var(--fg,#dfe8f0);'
+    +'border:1px solid var(--steel,#2a3340);border-radius:10px;max-width:420px;width:100%;'
+    +'padding:20px;font-family:inherit;box-shadow:0 8px 40px rgba(0,0,0,.5)';
+  var title=document.createElement('div');
+  title.textContent='📱 Use Selmo from your phone';
+  title.style.cssText='font-size:16px;font-weight:bold;margin-bottom:12px';
+  var p1=document.createElement('div');
+  p1.textContent='Type this address in your phone browser bar:';
+  p1.style.cssText='font-size:13px;opacity:.9;margin-bottom:8px';
+  var link=document.createElement('code');
+  link.textContent=url;
+  link.style.cssText='display:block;color:var(--cyan,#7fdfff);background:rgba(127,223,255,.08);'
+    +'padding:8px 10px;border-radius:6px;user-select:all;word-break:break-all;font-size:14px;margin-bottom:12px';
+  var row=document.createElement('div');
+  row.style.cssText='display:flex;gap:8px;margin-bottom:14px';
+  var copy=document.createElement('button');
+  copy.textContent='⧉ copy address';
+  copy.style.cssText='background:none;border:1px solid var(--steel,#2a3340);color:inherit;'
+    +'border-radius:6px;padding:6px 12px;cursor:pointer;font-family:inherit;font-size:13px';
+  copy.onclick=function(){copyToClipboard(url,this);};
+  var close=document.createElement('button');
+  close.textContent='Close';
+  close.style.cssText='background:none;border:1px solid var(--steel,#2a3340);color:inherit;'
+    +'border-radius:6px;padding:6px 12px;cursor:pointer;font-family:inherit;font-size:13px;margin-left:auto';
+  close.onclick=function(){ov.remove();};
+  var help=document.createElement('div');
+  help.style.cssText='font-size:12px;opacity:.8;line-height:1.55';
+  help.textContent='The phone and the PC must be on the same Wi-Fi network. The first time, the phone '
+    +'shows a certificate warning: accept it to continue (it is needed for the microphone).';
+  row.appendChild(copy);row.appendChild(close);
+  card.appendChild(title);card.appendChild(p1);card.appendChild(link);card.appendChild(row);card.appendChild(help);
+  ov.appendChild(card);
+  document.body.appendChild(ov);
+}
+function _phoneField(){
+  try{
+    var h=location.hostname;
+    var local=(h==='localhost'||h==='127.0.0.1'||h==='::1'||h==='');
+    if(!local)return;                                 // only on the desktop/PC view
+    if(document.getElementById('phone-btn'))return;
+    var box=document.querySelector('header .h-left');
+    if(!box)return;
+    fetch('/selmo-cert-ip.txt',{cache:'no-store'})
+      .then(function(r){return r.ok?r.text():'';})
+      .then(function(ip){
+        ip=(ip||'').trim();
+        if(!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip))return;   // no valid LAN IP -> skip silently
+        var url='https://'+ip+':8443'+location.pathname;
+        var btn=document.createElement('button');
+        btn.id='phone-btn';
+        btn.title='Use Selmo from your phone';
+        btn.textContent='📱';
+        btn.onclick=function(){_openPhonePopup(url);};
+        box.appendChild(btn);
+      }).catch(function(){});
+  }catch(e){}
+}
