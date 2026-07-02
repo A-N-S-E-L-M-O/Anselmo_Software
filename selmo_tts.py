@@ -164,6 +164,7 @@ def cors(resp):
 
 
 if __name__ == "__main__":
-    log.info(f"Selmo TTS (Kokoro-ONNX) listening on http://0.0.0.0:{args.port}")
+    # Loopback only: reached via the front door /proxy/8084, not directly. (security review)
+    log.info(f"Selmo TTS (Kokoro-ONNX) listening on http://127.0.0.1:{args.port}")
     log.info(f"Voice: {args.voice} | Speed: {args.speed}")
-    app.run(host="0.0.0.0", port=args.port, debug=False, threaded=False)
+    app.run(host="127.0.0.1", port=args.port, debug=False, threaded=False)

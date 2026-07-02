@@ -1029,7 +1029,11 @@ class _CtrlHandler(BaseHTTPRequestHandler):
 
 def _start_control_server():
     try:
-        srv = ThreadingHTTPServer(("0.0.0.0", CTRL_PORT), _CtrlHandler)
+        # Loopback only. The control API load/unloads the LLM and can shut the
+        # whole app down (/control/exit); it must never be directly reachable
+        # from the LAN. The client reaches it through the front door
+        # (/proxy/8087), which connects over 127.0.0.1. (security review)
+        srv = ThreadingHTTPServer(("127.0.0.1", CTRL_PORT), _CtrlHandler)
     except Exception as e:
         print(f"  -> Control API   [port {CTRL_PORT}] FAILED to bind ({e})", flush=True)
         return

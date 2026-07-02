@@ -52,9 +52,12 @@ HTTPS_PORT = 8443
 # 8085 is the optional LibreHardwareMonitor web server; harmless to allow.
 ALLOWED_PORTS = {8081, 8082, 8083, 8084, 8085, 8086, 8087, 8089}
 
-# Never hand these out as static files (private key, source, configs, logs).
+# Never hand these out as static files (private key, source, configs, logs,
+# internal dev/bug notes). .md is blocked because selmo-dev.md / bug-report /
+# CLAUDE.md carry the LAN IP and internal architecture; the UI never needs any
+# .md served.
 BLOCK_SUFFIX = {".key", ".py", ".pyc", ".pyo", ".log", ".bat",
-                ".vbs", ".ps1", ".ini"}
+                ".vbs", ".ps1", ".ini", ".md"}
 
 
 def _local_ip() -> str:
@@ -158,6 +161,16 @@ class FrontDoor(BaseHTTPRequestHandler):
         rel = raw.lstrip("/")
         if rel == "":
             rel = "chat.html"
+        # Reject any dot-segment in the request path. This blocks the whole
+        # .git/ directory (.git/config, .git/HEAD, packed objects -> the entire
+        # repo history was downloadable over the LAN before this guard) as well
+        # as any other dotfile/dir, and ".." traversal attempts. Checked on the
+        # raw relative path BEFORE resolve(), so a leaf like .git/config (whose
+        # final component "config" does not start with ".") is still caught.
+        parts = [p for p in rel.replace("\\", "/").split("/") if p]
+        if any(p.startswith(".") for p in parts):
+            self._text(403, "forbidden")
+            return
         target = (BASE / rel).resolve()
         # Path-traversal guard: must stay inside BASE.
         if BASE not in target.parents and target != BASE:

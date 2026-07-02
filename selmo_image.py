@@ -351,10 +351,11 @@ def cors(resp):
 
 
 if __name__ == "__main__":
-    log.info(f"Selmo image (stable-diffusion.cpp) listening on http://0.0.0.0:{args.port}")
+    # Loopback only: reached via the front door /proxy/8086, not directly. (security review)
+    log.info(f"Selmo image (stable-diffusion.cpp) listening on http://127.0.0.1:{args.port}")
     log.info(f"Model: {MODEL['name']}  files=[{MODEL['files']}]  params=[{MODEL['params']}]")
     miss = _missing()
     if miss:
         log.warning("Not ready yet — missing: " + "; ".join(miss))
     # threaded=True so /status answers while a long generation holds the lock.
-    app.run(host="0.0.0.0", port=args.port, debug=False, threaded=True)
+    app.run(host="127.0.0.1", port=args.port, debug=False, threaded=True)

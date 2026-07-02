@@ -305,4 +305,5 @@ if __name__ == "__main__":
     threading.Thread(target=integrate_energy, daemon=True).start()
     print("Selmo system-power monitor on http://localhost:8082 "
           "(GPU via NVML; CPU+GPU via LibreHardwareMonitor :8085)")
-    HTTPServer(("0.0.0.0", 8082), Handler).serve_forever()
+    # Loopback only: reached via the front door /proxy/8082, not directly. (security review)
+    HTTPServer(("127.0.0.1", 8082), Handler).serve_forever()

@@ -53,7 +53,14 @@ def _strip_html(html_bytes):
     return text.strip()[:3000]
 
 def fetch_text(url):
+    # Only ever fetch http/https. urllib's default opener also handles file://
+    # (and ftp://), so without this guard /fetch?url=file:///C:/... would read
+    # arbitrary local files off the machine and hand them back over the LAN
+    # (SSRF -> local file disclosure). (security review)
     try:
+        scheme = urllib.parse.urlparse(url).scheme.lower()
+        if scheme not in ("http", "https"):
+            return ""
         req = urllib.request.Request(url, headers={"User-Agent": UA})
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             raw = r.read(200_000)
@@ -280,7 +287,11 @@ if __name__ == "__main__":
     print(f"  http://localhost:{PORT}/fetch?url=...")
     print(f"  trafilatura: {'OK' if HAS_TRAF else 'not installed (pip install trafilatura)'}")
     print()
-    server = HTTPServer(("0.0.0.0", PORT), Handler)
+    # Bind loopback only: the client reaches this bridge exclusively through the
+    # front door (selmo_https_proxy.py) via /proxy/8081, which connects over
+    # 127.0.0.1. Binding 0.0.0.0 would expose this unauthenticated bridge to the
+    # whole LAN for no functional gain. (security review, s+1)
+    server = HTTPServer(("127.0.0.1", PORT), Handler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

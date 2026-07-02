@@ -133,5 +133,6 @@ def transcribe_options():
 
 
 if __name__ == "__main__":
-    log.info(f"Selmo Whisper listening on http://0.0.0.0:{args.port}")
-    app.run(host="0.0.0.0", port=args.port, debug=False, threaded=True)
+    # Loopback only: reached via the front door /proxy/8083, not directly. (security review)
+    log.info(f"Selmo Whisper listening on http://127.0.0.1:{args.port}")
+    app.run(host="127.0.0.1", port=args.port, debug=False, threaded=True)
