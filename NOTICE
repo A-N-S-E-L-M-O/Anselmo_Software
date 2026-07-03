@@ -1,12 +1,14 @@
-Selmo
-Copyright 2026 Fabio (Selmo project)
+A.N.S.E.L.M.O ("Selmo")
+Copyright 2026 Fabio Garzetti
 
-This software is part of the Selmo project, inspired by the book
-"Dialoghi con la lavatrice".
+This software is part of the A.N.S.E.L.M.O project, inspired by the book
+"Dialoghi con la lavatrice" (English edition: "Dialogues with the Washing
+Machine"). A.N.S.E.L.M.O: Algorithm for Neural Synthesis with
+Emotional-Linguistic Memory Optimization. Selmo, to friends.
 
 ATTRIBUTION REQUIRED. Any redistribution, fork, or derivative work must credit,
 in its documentation and/or its visible credits:
-  - the Selmo project, and
+  - the A.N.S.E.L.M.O (Selmo) project, and
   - the book "Dialoghi con la lavatrice".
 
 LICENSE. This software is licensed under the Apache License, Version 2.0, with
@@ -18,4 +20,6 @@ software, each under its own license (MIT / Apache 2.0 / BSD / ISC / OFL). The
 full list is in selmo-dev.md > "Credits & licenses". Notably, SearXNG (AGPL-3.0)
 runs as a separate process in its own container and is neither bundled nor
 linked, so its copyleft does not extend to Selmo's source. Model weights are not
-distributed with this repository and remain under their respective licenses.
+distributed with this repository; the portable bundle may include third-party
+model weights, which remain under their respective licenses (see the license
+files alongside them).

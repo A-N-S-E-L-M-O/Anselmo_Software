@@ -47,8 +47,8 @@ var I18N = {
   'toolbar.dashboard' : { en: 'Dashboard',                          it: 'Cruscotto' },
   'toolbar.model'     : { en: 'Click to change model / runtime settings',
                           it: 'Clicca per cambiare modello / impostazioni' },
-  'toolbar.profile'   : { en: 'Switch profile (Selmo / Mizan / Custom)',
-                          it: 'Cambia profilo (Selmo / Mizan / Custom)' },
+  'toolbar.profile'   : { en: 'Switch mode (A.N.S.E.L.M.O / Mizan / Custom)',
+                          it: 'Cambia modalità (A.N.S.E.L.M.O / Mizan / Custom)' },
   // input row
   'input.file'        : { en: '+ FILE',                             it: '+ FILE' },
   'input.imgocr'      : { en: '+ IMG/OCR',                          it: '+ IMG/OCR' },
@@ -78,8 +78,6 @@ var I18N = {
   'stat.eur_kwh'      : { en: 'euro/kWh',                          it: 'euro/kWh' },
   'stat.tokens_gen'   : { en: 'tokens generated',                  it: 'token generati' },
   // conversation + footer
-  'welcome.full'      : { en: 'New conversation.\nRunning on your hardware. Only explicit web searches leave this machine.',
-                          it: 'Nuova conversazione.\nGira sul tuo hardware. Solo le ricerche web esplicite lasciano questo computer.' },
   'welcome.line1'     : { en: 'New conversation.',                 it: 'Nuova conversazione.' },
   'footer.privacy'    : { en: 'Only web searches transmitted',     it: 'Solo le ricerche web vengono trasmesse' }
 };

@@ -468,7 +468,7 @@ def _text_picker(models, sections, default) -> tuple[dict, str, int]:
 #  GUI model picker  (Tkinter -- no console needed)
 # ============================================================
 
-def _notify(message: str, title: str = "SelmoAI"):
+def _notify(message: str, title: str = "A.N.S.E.L.M.O"):
     """Small modal message box (used when there is no console)."""
     try:
         import tkinter as tk
@@ -499,13 +499,13 @@ def _gui_picker(models, sections, default,
     if not models:
         _notify("No .gguf model found in the models\\ folder.\n"
                 "Download a model and place it there, then relaunch.",
-                "SelmoAI -- no model")
+                "A.N.S.E.L.M.O -- no model")
         sys.exit(1)
 
     result: dict = {}
 
     root = tk.Tk()
-    root.title("SelmoAI -- choose your models")
+    root.title("A.N.S.E.L.M.O -- choose your models")
     try:
         root.iconbitmap(str(BASE / "selmo.ico"))
     except Exception:
@@ -770,7 +770,7 @@ def _tee(proc: subprocess.Popen, logpath: Path):
     # Server exited -- update state and tray tooltip
     _current["loaded"] = False
     if _tray_icon:
-        _tray_icon.title = f"SelmoAI  --  {_current['name']}  [unloaded]"
+        _tray_icon.title = f"A.N.S.E.L.M.O  --  {_current['name']}  [unloaded]"
 
 
 def _launch_llama(model_path: str, srv_str: str, mmproj: str | None):
@@ -787,7 +787,7 @@ def _launch_llama(model_path: str, srv_str: str, mmproj: str | None):
         _llama_proc = p
     _current["loaded"] = True
     if _tray_icon:
-        _tray_icon.title = f"SelmoAI  --  {_current['name']}"
+        _tray_icon.title = f"A.N.S.E.L.M.O  --  {_current['name']}"
     threading.Thread(target=_tee, args=(p, LLAMA_LOG), daemon=True).start()
     return p
 
@@ -871,7 +871,7 @@ class _CtrlHandler(BaseHTTPRequestHandler):
                 _stop_llama()
                 _current["swapped_for_image"] = True
                 if _tray_icon:
-                    _tray_icon.title = f"SelmoAI  --  {_current['name']}  [image mode]"
+                    _tray_icon.title = f"A.N.S.E.L.M.O  --  {_current['name']}  [image mode]"
         self._send(200, {"ok": True, "was_loaded": was,
                          "swapped_for_image": _current.get("swapped_for_image", False)})
 
@@ -879,7 +879,7 @@ class _CtrlHandler(BaseHTTPRequestHandler):
         with _ctrl_lock:
             relaunched = _reload_current_llm()
         if _tray_icon and _current["loaded"]:
-            _tray_icon.title = f"SelmoAI  --  {_current['name']}"
+            _tray_icon.title = f"A.N.S.E.L.M.O  --  {_current['name']}"
         self._send(200, {"ok": True, "relaunched": relaunched,
                          "loaded": _current["loaded"]})
 
@@ -1055,7 +1055,7 @@ def _action_unload(icon, item):
         _stop_llama()
         _current["swapped_for_image"] = False
     if icon:
-        icon.title = f"SelmoAI  --  {_current['name']}  [unloaded]"
+        icon.title = f"A.N.S.E.L.M.O  --  {_current['name']}  [unloaded]"
 
 
 def _action_reload(icon, item):
@@ -1092,7 +1092,7 @@ def _action_switch(model: dict, ini_data: dict, srv_override=None, csize_overrid
     _launch_llama(model["path"], srv, mmproj)
 
     if _tray_icon:
-        _tray_icon.title = f"SelmoAI  --  {model['name']}"
+        _tray_icon.title = f"A.N.S.E.L.M.O  --  {model['name']}"
 
 
 # ============================================================
@@ -1281,7 +1281,7 @@ def _build_menu(models: list[dict], ini_data: dict):
             # live status header
             pystray.MenuItem(
                 lambda item: (
-                    f"SelmoAI  --  {_current['name'][:32]}"
+                    f"A.N.S.E.L.M.O  --  {_current['name'][:32]}"
                     + ("  [unloaded]" if not _current["loaded"] else "")
                 ),
                 None,
@@ -1289,7 +1289,7 @@ def _build_menu(models: list[dict], ini_data: dict):
             ),
             pystray.Menu.SEPARATOR,
 
-            pystray.MenuItem("Open SelmoAI in browser", _open_browser),
+            pystray.MenuItem("Open A.N.S.E.L.M.O in browser", _open_browser),
             pystray.MenuItem("View log file",          _view_log),
             pystray.Menu.SEPARATOR,
 
@@ -1329,7 +1329,7 @@ def main():
 
     # -- single-instance guard --------------------------------------------
     if not _claim_instance():
-        _notify("SelmoAI is already running.\nCheck the system tray.")
+        _notify("A.N.S.E.L.M.O is already running.\nCheck the system tray.")
         sys.exit(0)
 
     ini_path          = BASE / "selmo-models.ini"
@@ -1344,7 +1344,7 @@ def main():
     boxline = lambda s: "  |" + s.center(44) + "|"
     print()
     print(border)
-    print(boxline("SelmoAI  --  local AI, GDPR by design"))
+    print(boxline("A.N.S.E.L.M.O  --  local AI, GDPR by design"))
     print(boxline("Your data stays on your computer."))
     print(border)
     print()
@@ -1400,12 +1400,12 @@ def main():
         icon = pystray.Icon(
             name  = "selmo",
             icon  = _make_icon_image(),
-            title = f"SelmoAI  --  {sel['name']}" if sel else "SelmoAI  --  no model (load one in the browser)",
+            title = f"A.N.S.E.L.M.O  --  {sel['name']}" if sel else "A.N.S.E.L.M.O  --  no model (load one in the browser)",
             menu  = pystray.Menu(menu_fn),
         )
         _tray_icon = icon
 
-        print("  Tray icon active -- SelmoAI is now running in the tray.")
+        print("  Tray icon active -- A.N.S.E.L.M.O is now running in the tray.")
         icon.run()          # blocks until _do_exit calls icon.stop()
 
     # -- fallback: no tray, stay in console -------------------------------

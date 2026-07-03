@@ -1,13 +1,17 @@
-# Selmo
+# A.N.S.E.L.M.O
 
 **A fully local AI assistant that runs on your own hardware.** Chat, vision and
 OCR, document analysis, optional web search, voice, and image generation, all
-served from a single machine. Nothing leaves your device except an explicit web
-search.
+served from a single machine. Nothing leaves your device except what you ask
+for: an explicit web search, and the standard fetch of the page's open-source
+libraries on first load.
 
-> Part of the Selmo project, inspired by the book *Dialoghi con la lavatrice*.
+> *A.N.S.E.L.M.O: Algorithm for Neural Synthesis with Emotional-Linguistic
+> Memory Optimization. Selmo, to friends.* From the book *Dialoghi con la
+> lavatrice* (English edition: *Dialogues with the Washing Machine*), which
+> inspired this project.
 
-Selmo is **privacy-first by design**: your prompts, files, and conversations
+A.N.S.E.L.M.O is **privacy-first by design**: your prompts, files, and conversations
 stay on your computer. It runs any open-source LLM with a permissive license on
 top of `llama.cpp`, behind a single HTML client.
 
@@ -79,13 +83,14 @@ downloaded separately. See `selmo-dev.md` > "Setup & dependencies".
 
 ## License
 
-Selmo is licensed under the **Apache License 2.0 with the Commons Clause**. This
+A.N.S.E.L.M.O is licensed under the **Apache License 2.0 with the Commons Clause**. This
 makes it **source-available**: you may use, study, modify, and redistribute it,
 but you may **not Sell** the Software (no resale, no paid hosting/consulting
 whose value derives substantially from Selmo). See [`LICENSE`](LICENSE).
 
 **Attribution is required.** Any redistribution or derivative work must credit
-the Selmo project and the book *Dialoghi con la lavatrice*. See [`NOTICE`](NOTICE).
+the A.N.S.E.L.M.O (Selmo) project and the book *Dialoghi con la lavatrice*. See
+[`NOTICE`](NOTICE).
 
 Third-party open-source components remain under their own licenses; the list is
 in `selmo-dev.md` > "Credits & licenses". Model weights are not distributed here

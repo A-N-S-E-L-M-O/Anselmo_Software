@@ -18,7 +18,7 @@ function setProfile(name){
   if(name!=='selmo')document.body.classList.add(name);
   syncSampling();
   const wm=document.getElementById('wm');
-  if(wm)wm.innerHTML=(name==='mizan')?'Mizan<em>AI</em>':(name==='custom')?'Custom<em>AI</em>':'Selmo<em>AI</em>';
+  if(wm)wm.innerHTML=((name==='mizan')?'Mizan':(name==='custom')?'Custom':'A.N.S.E.L.M.O')+'<span class="wm-mode">mode</span>';
   syncThinkPrompt();
   updateProfileUI();
 }

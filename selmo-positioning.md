@@ -67,3 +67,23 @@ Lead with **local + energy-honest + EU/GDPR + phone**, not with "private chat".
   access, so "private" holds on shared networks too.
 - Pick the launch audience deliberately: privacy-minded EU users and non-dev
   families, not the Ollama/LM Studio developer crowd.
+
+---
+
+## Addendum — July 2026 (post-rename, s31)
+
+- **Brand is now A.N.S.E.L.M.O** ("Selmo, to friends"): "Selmo"/"SelmoAI" were
+  blocked by live collisions (selmo.ai AI-visibility service, Selmo call-center
+  SaaS, Selmo Technology GmbH, selmo.io). Public discovery runs through the
+  book-title domain `dialogueswiththewashingmachine.eu`; A.N.S.E.L.M.O never
+  appears without it in public copy.
+- One-liner updated: *A.N.S.E.L.M.O — your AI, on your machine, in Europe:
+  private, energy-honest, reachable from your phone. No cloud, no account,
+  no telemetry.*
+- **Copy rule:** the license is **source-available** (Apache 2.0 + Commons
+  Clause), not "open source" — never say "open source" in public material, it
+  will be publicly contested. "Genuinely open licence" in the checklist above
+  should be read the same way.
+- Closed since this sheet was written: TERMS.md (Mozilla-style, no-backdoor
+  transparency list), educators note, Google Fonts removed (self-hosted OFL
+  font), README/QUICKSTART privacy claims made literally true.

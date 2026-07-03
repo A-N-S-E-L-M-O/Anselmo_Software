@@ -1,7 +1,9 @@
-# Selmo — Quick start (install on any Windows PC)
+# A.N.S.E.L.M.O — Quick start (install on any Windows PC)
 
-Selmo runs **entirely on the PC**: no account, no cloud, nothing leaves the
-machine. This guide uses the portable bundle, so there is **no installer to
+A.N.S.E.L.M.O — Selmo, to friends — runs **entirely on the PC**: no account,
+no cloud, and nothing you write ever leaves the machine (the only exceptions:
+the one-time engine download on first launch, and web searches if you turn
+them on). This guide uses the portable bundle, so there is **no installer to
 sign and no administrator rights**. Unzip, drop in a model, click. It works on
 any Windows PC, with or without an NVIDIA card.
 
@@ -70,6 +72,19 @@ there is no `.exe` to sign, just a script you start yourself.)
 No Python to install (it is already inside the folder), no installer, no
 administrator, no account. Voice and image generation are optional extras: the
 chat works without them.
+
+---
+
+## A note for educators and parents
+
+Image generation is an optional extra: it stays off unless an image model is
+placed in the `image\` folder. Be aware that text-to-image models — all of
+them, not just the ones Selmo supports — can easily be pushed toward
+inappropriate images, and a model running locally has **no cloud-side filter**.
+In a classroom, or on a PC used by minors, the safest setup is the default
+one: **leave the `image\` folder empty** and supervise the use of the chat.
+Locally-run chat models only carry the safety training of whoever released
+them — an adult nearby is the real filter.
 
 ---
 

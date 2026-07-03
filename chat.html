@@ -6,8 +6,8 @@
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Selmo</title>
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<title>A.N.S.E.L.M.O</title>
+<style>@font-face{font-family:'Share Tech Mono';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/share-tech-mono-latin-400-normal.woff2') format('woff2');}</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -89,6 +89,8 @@ header{
 }
 .wm{font-size:21px;font-weight:bold;color:var(--yellow);letter-spacing:.09em;text-shadow:0 0 12px var(--glow-y);flex-shrink:0;}
 .wm em{color:var(--cyan);font-style:normal;text-shadow:0 0 12px var(--glow-c);}
+.wm{line-height:1.05;text-align:center;}
+.wm-mode{display:block;font-size:9px;font-weight:normal;letter-spacing:.34em;color:var(--cyan);text-shadow:0 0 8px var(--glow-c);text-transform:uppercase;margin-top:2px;}
 .hbadge{
   font-size:11px;color:var(--dim);
   border:1px solid var(--steel);border-radius:999px;
@@ -617,8 +619,8 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
     <button id="mob-dash-btn" onclick="mobToggle('dash')" title="Dashboard">&#9881;</button>
   </div>
   <div class="h-center">
-    <div class="wm" id="wm" onclick="openProfile()" title="Switch profile (Selmo / Mizan / Custom)" style="cursor:pointer;">Selmo<em>AI</em></div>
-    <div class="hbadge">v0.921</div>
+    <div class="wm" id="wm" onclick="openProfile()" title="Switch mode (A.N.S.E.L.M.O / Mizan / Custom)" style="cursor:pointer;">A.N.S.E.L.M.O<span class="wm-mode">mode</span></div>
+    <div class="hbadge">v0.922</div>
   </div>
   <div class="h-right">
     <button id="model-btn" onclick="openSettings()" title="Click to change model / runtime settings"><span class="model-pre">model:</span>&nbsp;<span id="hdr-model">-</span></button>
@@ -749,8 +751,7 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
   <div id="messages">
     <div class="msg assistant">
       <div class="av">&#x26A1;</div>
-      <div><div class="bubble" data-i18n="welcome.full">New conversation.
-Running on your hardware. Only explicit web searches leave this machine.</div></div>
+      <div><div class="bubble" data-i18n="welcome.line1">New conversation.</div></div>
     </div>
   </div>
   <div class="input-area">
@@ -777,7 +778,7 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
   <div class="pm-card">
     <div class="pm-head"><span class="pm-title">PROFILE</span><button class="pm-x" onclick="closeProfile()" title="Close">&#x2715;</button></div>
     <div class="pm-badges">
-      <button id="pm-badge-selmo" class="pm-badge pm-selmo" onclick="setProfile('selmo')"><b>SELMO</b><small>blue &middot; assistant</small></button>
+      <button id="pm-badge-selmo" class="pm-badge pm-selmo" onclick="setProfile('selmo')"><b>A.N.S.E.L.M.O</b><small>blue &middot; assistant</small></button>
       <button id="pm-badge-mizan" class="pm-badge pm-mizan" onclick="setProfile('mizan')"><b>MIZAN</b><small>red &middot; analysis</small></button>
       <button id="pm-badge-custom" class="pm-badge pm-custom" onclick="setProfile('custom')"><b>CUSTOM</b><small>neutral &middot; your params</small></button>
     </div>
@@ -860,15 +861,15 @@ Running on your hardware. Only explicit web searches leave this machine.</div></
         <circle cx="60" cy="96" r="5.5" stroke="var(--yellow)" stroke-width="3"/>
       </g>
     </svg>
-    <div class="ml-title">Selmo<em>AI</em></div>
+    <div class="ml-title">A.N.S.E.L.M.O</div>
     <div class="ml-text" id="ml-text">loading the model<b>...</b> twiddling thumbs</div>
   </div>
 </div>
 
-<script src="selmo-i18n.js?v=0.921"></script>
+<script src="selmo-i18n.js?v=0.922"></script>
 <script src="selmo-core.js?v=0.903"></script>
 <script src="selmo-bridges.js?v=0.903"></script>
-<script src="selmo-model.js?v=0.921"></script>
+<script src="selmo-model.js?v=0.922"></script>
 <script src="selmo-docs.js?v=0.903"></script>
 <script src="selmo-chat.js?v=0.919"></script>
 <script src="selmo-send.js?v=0.918"></script>
