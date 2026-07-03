@@ -723,8 +723,54 @@ def _gui_picker(models, sections, default,
 
 STRUCTURAL = {"--model", "-m", "--host", "--port", "--path"}
 
+_HAS_NVIDIA = None  # cached hardware probe (None = not yet checked)
+
+
+def _has_nvidia_gpu() -> bool:
+    """True if an NVIDIA GPU is present (nvidia-smi). Cached for the run --
+    hardware does not change during a session."""
+    global _HAS_NVIDIA
+    if _HAS_NVIDIA is None:
+        try:
+            out = subprocess.run(["nvidia-smi", "-L"], capture_output=True,
+                                 text=True, timeout=8, creationflags=NO_WINDOW)
+            _HAS_NVIDIA = (out.returncode == 0 and "GPU" in out.stdout)
+        except Exception:
+            _HAS_NVIDIA = False
+    return _HAS_NVIDIA
+
+
+def _adapt_srv_for_cpu(srv_str: str) -> str:
+    """No NVIDIA GPU -> rewrite GPU-tuned flags so a model still loads well on a
+    CPU-only PC: -ngl 0 (keep every layer on CPU), drop --no-mmap (let the
+    weights be memory-mapped / evictable under low RAM), drop --n-cpu-moe (a GPU
+    offload knob, meaningless on CPU). Purely a textual switch on the srv string;
+    on a GPU box it is returned unchanged. The launcher still shows/edits the
+    original srv, so this only changes what is actually handed to llama-server."""
+    if _has_nvidia_gpu():
+        return srv_str
+    toks = shlex.split(srv_str) if srv_str else []
+    out, i = [], 0
+    while i < len(toks):
+        t = toks[i]
+        if t in ("-ngl", "--n-gpu-layers", "--gpu-layers"):
+            out += [t, "0"]; i += 2; continue
+        if t == "--no-mmap":
+            i += 1; continue
+        if t == "--n-cpu-moe":
+            i += 2; continue
+        out.append(t); i += 1
+    adapted = " ".join(out)
+    if adapted != srv_str:
+        try:
+            print(f"  [cpu] no NVIDIA GPU -> CPU-safe flags: {adapted}")
+        except Exception:
+            pass
+    return adapted
+
 
 def _build_cmd(model_path: str, srv_str: str, mmproj: str | None) -> list[str]:
+    srv_str = _adapt_srv_for_cpu(srv_str)   # GPU-less PC -> CPU-safe launch flags
     cmd = [
         str(LLAMA_EXE),
         "--model", model_path,

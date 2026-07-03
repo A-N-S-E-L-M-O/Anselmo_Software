@@ -15,10 +15,11 @@ any Windows PC, with or without an NVIDIA card.
 The Desktop or `C:\Selmo` are both fine. Avoid cloud-synced folders (OneDrive,
 Dropbox): they are slow and not needed.
 
-**2. Put a model in the `models\` subfolder**
-A small model is **already included**, so you can skip this the first time. To
-add more: download a `.gguf` file and copy it into `models\`. The recommended
-models are listed in `installer\MODELS.md`.
+**2. Get a model**
+On the first launch Selmo offers to download a default (Mistral-7B-Instruct v0.3,
+Apache 2.0 and European, fits an 8 GB PC) - say yes and you are ready to chat.
+Prefer your own? Say no and drop a `.gguf` into `models\`; the recommended ones
+are listed in `installer\MODELS.md`.
 
 **3. Double-click `Selmo.cmd`**
 That is the only file to launch. Keep it handy (or make a Desktop shortcut:
@@ -37,8 +38,29 @@ once**. Then the browser opens by itself.
 
 From the second launch on it starts straight away, even offline.
 
-Down by the clock, bottom-right, the **Selmo icon** appears: that is where you
-pick the model and shut everything down (right-click → Exit).
+Down by the clock, bottom-right, the **Selmo icon** appears: it is the engine
+running in the background. You pick the model and chat in the browser; the icon
+is just where you shut everything down (right-click → Exit).
+
+---
+
+## The energy monitor — an on-screen estimate
+
+On the right of the screen A.N.S.E.L.M.O shows an **estimate** of the power your
+PC draws while it works: watts (CPU + GPU together), the watt-hours spent this
+session and in total, the speed in tokens per second, and the running cost in
+your own currency. Set your electricity price once in the `euro/kWh` field and
+the cost estimate follows it.
+
+This is a figure no other local AI puts on screen, and it is enough to compare a
+light model against a heavy one on the same PC. But it is an **estimate, not a
+certified measurement**: the GPU draw is read from the card, while the CPU and
+the rest of the system are approximated from load (the CPU figure carries a `~`
+when it is estimated rather than measured). If you want the exact number, a
+plug-in wall power meter or a smart plug with energy metering measures what the
+whole PC really pulls from the socket — and you can tune Selmo's estimate against
+that reading. To have the CPU power measured rather than estimated, see the
+optional LibreHardwareMonitor step near the end of this guide.
 
 ---
 
@@ -88,13 +110,41 @@ them — an adult nearby is the real filter.
 
 ---
 
+## Optional — measure the CPU power instead of estimating it
+
+The energy monitor needs no install: it runs the moment Selmo starts. On an
+NVIDIA machine the GPU watts are read from the card; the CPU figure is an
+**estimate** from load, marked with a `~`.
+
+To have the CPU power **measured** instead, install LibreHardwareMonitor once.
+Open the `Selmo` project folder, right-click an empty spot inside it, choose
+**Open in Terminal**, then paste the command below and press Enter:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File setup-lhm.ps1
+```
+
+It asks for administrator rights once (reading CPU package power needs them),
+downloads LibreHardwareMonitor into `bin\`, sets it to start quietly at logon,
+and Selmo then shows the real CPU watts — the `~` disappears. To check, open
+`http://127.0.0.1:8085/data.json`: you should see CPU and GPU watts.
+
+Some locked-down PCs block the sensor driver (Windows Defender flags this class
+of driver). If that happens nothing breaks — Selmo keeps using the estimate. And
+whatever the software reports, only a plug-in wall power meter or a smart plug
+with energy metering measures exactly what the PC pulls from the socket.
+
+---
+
 ## Optional — 100% local web search with SearXNG
 
 Selmo can search the web. By default it uses public engines (the query leaves the
 PC). If you want **searches to stay local too**, you can run SearXNG in a
 container on the PC. This is **optional**: without it, search still works.
 
-You need **Podman Desktop** (free, https://podman.io). Then, once:
+You need **Podman Desktop** (free, https://podman.io). Then, once: open the
+`Selmo` project folder, right-click an empty spot inside it, choose **Open in
+Terminal**, then paste the command below and press Enter:
 
 ```powershell
 podman run -d --name searxng -p 8888:8080 `

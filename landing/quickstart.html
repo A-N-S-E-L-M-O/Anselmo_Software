@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A.N.S.E.L.M.O — Quick start</title>
+<meta name="description" content="Quick start: install A.N.S.E.L.M.O on any Windows PC. Unzip, drop in a model, click.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="watermark" aria-hidden="true"></div>
+<div class="wrap">
+
+  <div class="top">
+    <div class="brandmini"><a href="index.html">A.N.S.E.L.M.O · <b>local AI</b></a></div>
+    <div class="top-r">
+      <a class="back" href="software.html" data-i18n="nav.back">← Back</a>
+      <button class="langbtn" id="langbtn" title="Language">EN ▾</button>
+    </div>
+  </div>
+
+  <header class="hero">
+    <h1>Quick start</h1>
+    <div class="tag">Install A.N.S.E.L.M.O on any Windows PC. Unzip, drop in a model, click.</div>
+  </header>
+
+  <article class="doc">
+    <p class="lead">A.N.S.E.L.M.O — Selmo, to friends — runs <strong>entirely on the PC</strong>: no account, no cloud, and nothing you write ever leaves the machine (the only exceptions: the one-time engine download on first launch, and web searches if you turn them on). This guide uses the portable bundle, so there is <strong>no installer to sign and no administrator rights</strong>. Unzip, drop in a model, click. It works on any Windows PC, with or without an NVIDIA card.</p>
+
+    <hr>
+
+    <h2>In 3 steps</h2>
+    <p><strong>1. Unzip the <code>Selmo</code> folder wherever you like</strong><br>
+    The Desktop or <code>C:\Selmo</code> are both fine. Avoid cloud-synced folders (OneDrive, Dropbox): they are slow and not needed.</p>
+    <p><strong>2. Get a model</strong><br>
+    On the first launch Selmo offers to download a default (Mistral-7B-Instruct v0.3, Apache 2.0 and European, fits an 8 GB PC) — say yes and you are ready to chat. Prefer your own? Say no and drop a <code>.gguf</code> into <code>models\</code>; the recommended ones are listed in <code>installer\MODELS.md</code>.</p>
+    <p><strong>3. Double-click <code>Selmo.cmd</code></strong><br>
+    That is the only file to launch. Keep it handy (or make a Desktop shortcut: right-click <code>Selmo.cmd</code> → Send to → Desktop).</p>
+    <p>Done. The browser opens with Selmo.</p>
+
+    <hr>
+
+    <h2>What happens on the first launch</h2>
+    <p>The <strong>first</strong> time, a black window opens and downloads the right engine for that PC (the NVIDIA build if there is an NVIDIA card, otherwise the build that also runs on CPU alone). It takes a minute or two and needs the internet <strong>only this once</strong>. Then the browser opens by itself.</p>
+    <p>From the second launch on it starts straight away, even offline.</p>
+    <p>Down by the clock, bottom-right, the <strong>Selmo icon</strong> appears: it is the engine running in the background. You pick the model and chat in the browser; the icon is just where you shut everything down (right-click → Exit).</p>
+
+    <hr>
+
+    <h2>The energy monitor — an on-screen estimate</h2>
+    <p>On the right of the screen A.N.S.E.L.M.O shows an <strong>estimate</strong> of the power your PC draws while it works: watts (CPU + GPU together), the watt-hours spent this session and in total, the speed in tokens per second, and the running cost in your own currency. Set your electricity price once in the <code>euro/kWh</code> field and the cost estimate follows it.</p>
+    <p>This is a figure no other local AI puts on screen, and it is enough to compare a light model against a heavy one on the same PC. But it is an <strong>estimate, not a certified measurement</strong>: the GPU draw is read from the card, while the CPU and the rest of the system are approximated from load (the CPU figure carries a <code>~</code> when it is estimated rather than measured). If you want the exact number, a plug-in wall power meter or a smart plug with energy metering measures what the whole PC really pulls from the socket — and you can tune Selmo's estimate against that reading. To have the CPU power measured rather than estimated, see the optional LibreHardwareMonitor step near the end of this guide.</p>
+
+    <hr>
+
+    <h2>If Windows blocks the launch</h2>
+    <p>Windows may show <strong>"Windows protected your PC"</strong> (SmartScreen), because the file is not signed. That is normal for a home-made program:</p>
+    <blockquote>click <strong>More info</strong> → <strong>Run anyway</strong>.</blockquote>
+    <p>You only do this <strong>once</strong>. (This is exactly the signing hassle the bundle avoids: there is no <code>.exe</code> to sign, just a script you start yourself.)</p>
+
+    <hr>
+
+    <h2>If something does not start</h2>
+    <ul>
+      <li><strong>"no .gguf file found in models\"</strong> → the <code>models\</code> folder is empty: copy a <code>.gguf</code> file into it.</li>
+      <li><strong>The black window closes immediately</strong> → likely an antivirus block on the <code>python\</code> folder: add the <code>Selmo</code> folder to the antivirus exclusions.</li>
+      <li><strong>The browser does not open</strong> → open <code>http://127.0.0.1:8080/chat.html</code> manually.</li>
+      <li><strong>From a phone</strong> (same Wi-Fi) → open <code>https://PC-IP:8443/chat.html</code> and accept the certificate warning (once). The PC's IP is shown in the tray icon.</li>
+    </ul>
+
+    <hr>
+
+    <h2>What you do NOT need</h2>
+    <p>No Python to install (it is already inside the folder), no installer, no administrator, no account. Voice and image generation are optional extras: the chat works without them.</p>
+
+    <hr>
+
+    <h2>A note for educators and parents</h2>
+    <p>Image generation is an optional extra: it stays off unless an image model is placed in the <code>image\</code> folder. Be aware that text-to-image models — all of them, not just the ones Selmo supports — can easily be pushed toward inappropriate images, and a model running locally has <strong>no cloud-side filter</strong>. In a classroom, or on a PC used by minors, the safest setup is the default one: <strong>leave the <code>image\</code> folder empty</strong> and supervise the use of the chat. Locally-run chat models only carry the safety training of whoever released them — an adult nearby is the real filter.</p>
+
+    <hr>
+
+    <h2>Optional — measure the CPU power instead of estimating it</h2>
+    <p>The energy monitor needs no install: it runs the moment Selmo starts. On an NVIDIA machine the GPU watts are read from the card; the CPU figure is an <strong>estimate</strong> from load, marked with a <code>~</code>.</p>
+    <p>To have the CPU power <strong>measured</strong> instead, install LibreHardwareMonitor once. Open the <code>Selmo</code> project folder, right-click an empty spot inside it, choose <strong>Open in Terminal</strong>, then paste the command below and press Enter:</p>
+    <pre><code>powershell -ExecutionPolicy Bypass -File setup-lhm.ps1</code></pre>
+    <p>It asks for administrator rights once (reading CPU package power needs them), downloads LibreHardwareMonitor into <code>bin\</code>, sets it to start quietly at logon, and Selmo then shows the real CPU watts — the <code>~</code> disappears. To check, open <code>http://127.0.0.1:8085/data.json</code>: you should see CPU and GPU watts.</p>
+    <p>Some locked-down PCs block the sensor driver (Windows Defender flags this class of driver). If that happens nothing breaks — Selmo keeps using the estimate. And whatever the software reports, only a plug-in wall power meter or a smart plug with energy metering measures exactly what the PC pulls from the socket.</p>
+
+    <hr>
+
+    <h2>Optional — 100% local web search with SearXNG</h2>
+    <p>Selmo can search the web. By default it uses public engines (the query leaves the PC). If you want <strong>searches to stay local too</strong>, you can run SearXNG in a container on the PC. This is <strong>optional</strong>: without it, search still works.</p>
+    <p>You need <strong>Podman Desktop</strong> (free, <a href="https://podman.io" target="_blank" rel="noopener">podman.io</a>). Then, once: open the <code>Selmo</code> project folder, right-click an empty spot inside it, choose <strong>Open in Terminal</strong>, then paste the command below and press Enter:</p>
+    <pre><code>podman run -d --name searxng -p 8888:8080 `
+  -e "BASE_URL=http://localhost:8888/" `
+  searxng/searxng</code></pre>
+    <p>Selmo detects SearXNG on <code>localhost:8888</code> by itself and routes searches to it: from then on the sources bar shows "SearXNG local" and the query no longer leaves the PC. To stop it: <code>podman stop searxng</code>. To restart it: <code>podman start searxng</code>.</p>
+    <p class="lead"><em>(This is the only piece that uses a container, and it is entirely optional — that is why it sits at the bottom.)</em></p>
+
+    <div class="ctas" style="margin-top:26px">
+      <a class="cta primary" data-link="github" target="_blank" rel="noopener">
+        <span data-i18n="cta.github">Get it on GitHub</span>
+        <span class="s" data-i18n="cta.github.s">Download · source available</span>
+      </a>
+      <a class="cta ghost" href="software.html">
+        <span data-i18n="nav.back">← Back</span>
+      </a>
+    </div>
+  </article>
+
+  <footer>
+    <nav>
+      <a href="quickstart.html" data-i18n="foot.quick">Quick guide</a>
+      <a data-link="terms" target="_blank" rel="noopener" data-i18n="foot.terms">Terms of Use</a>
+      <a data-link="notice" target="_blank" rel="noopener" data-i18n="foot.notice">Notice &amp; license</a>
+      <a data-link="github" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+    <div class="cw" data-i18n="foot.cw">© 2026 Fabio Garzetti — A.N.S.E.L.M.O is source-available (Apache 2.0 + Commons Clause).</div>
+  </footer>
+</div>
+<script src="site.js"></script>
+</body>
+</html>
