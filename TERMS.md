@@ -16,8 +16,8 @@ the Court of Milan as the agreed venue.
 Memory Optimization; "Selmo" for short in these Terms and in the software* —
 is developed and distributed by **Fabio Garzetti** (the "Author"), Italy —
 contact: https://github.com/A-N-S-E-L-M-O. A.N.S.E.L.M.O is a personal project connected
-to the book *Dialoghi con la lavatrice* (English edition: *Dialogues with
-the Washing Machine*); it is not a company and the Author operates no online
+to the book *Dialoghi con la lavatrice* (English edition: *The Washing
+Machine Dialogues*); it is not a company and the Author operates no online
 service.
 
 ## 2. Acceptance

@@ -75,7 +75,8 @@ Lead with **local + energy-honest + EU/GDPR + phone**, not with "private chat".
 - **Brand is now A.N.S.E.L.M.O** ("Selmo, to friends"): "Selmo"/"SelmoAI" were
   blocked by live collisions (selmo.ai AI-visibility service, Selmo call-center
   SaaS, Selmo Technology GmbH, selmo.io). Public discovery runs through the
-  book-title domain `dialogueswiththewashingmachine.eu`; A.N.S.E.L.M.O never
+  book-title domain `thewashingmachinedialogues.eu` (English edition retitled
+  *The Washing Machine Dialogues*, matching the domain); A.N.S.E.L.M.O never
   appears without it in public copy.
 - One-liner updated: *A.N.S.E.L.M.O — your AI, on your machine, in Europe:
   private, energy-honest, reachable from your phone. No cloud, no account,

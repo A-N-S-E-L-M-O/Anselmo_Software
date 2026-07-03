@@ -8,7 +8,7 @@ libraries on first load.
 
 > *A.N.S.E.L.M.O: Algorithm for Neural Synthesis with Emotional-Linguistic
 > Memory Optimization. Selmo, to friends.* From the book *Dialoghi con la
-> lavatrice* (English edition: *Dialogues with the Washing Machine*), which
+> lavatrice* (English edition: *The Washing Machine Dialogues*), which
 > inspired this project.
 
 A.N.S.E.L.M.O is **privacy-first by design**: your prompts, files, and conversations
