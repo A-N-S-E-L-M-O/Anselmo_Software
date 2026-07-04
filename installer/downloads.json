@@ -7,10 +7,10 @@
     "vulkan_zip": "bin-win-vulkan-x64\\.zip$"
   },
   "model": {
-    "_comment": "Optional starter model, OFFERED on first run (only downloaded if the user says yes). Mistral-7B-Instruct v0.3: Apache 2.0, European (Mistral AI, FR), NON-reasoning, solid all-rounder with mature llama.cpp support. Aligns with the manifesto (European-first, Apache-preferred). Q4_K_M ~4.37 GB - fits an 8GB PC (slower on CPU-only; the [Mistral-7B] ini section carries its launch flags).",
-    "name": "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
-    "url": "https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
-    "size_h": "~4.4 GB",
-    "min_bytes": 4200000000
+    "_comment": "Optional starter model, OFFERED on first run (only downloaded if the user says yes). Mistral-7B-Instruct v0.3: Apache 2.0, European (Mistral AI, FR), NON-reasoning, solid all-rounder with mature llama.cpp support. Aligns with the manifesto (European-first, Apache-preferred). Q3_K_M ~3.5 GB - the lighter quant, chosen for entry-level 8GB PCs (less RAM, a bit faster; small quality drop vs Q4_K_M). The [Mistral-7B] ini section carries its launch flags.",
+    "name": "Mistral-7B-Instruct-v0.3-Q3_K_M.gguf",
+    "url": "https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q3_K_M.gguf",
+    "size_h": "~3.5 GB",
+    "min_bytes": 3300000000
   }
 }

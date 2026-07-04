@@ -23,6 +23,7 @@ async function checkWebBridge(){
     webOk=false;
     paint('--dim','web off');
   }
+  refreshCaps();
 }
 async function checkWhisperBridge(){
   try{
@@ -45,6 +46,56 @@ async function checkWhisperBridge(){
     dot.style.boxShadow='';
     txt.style.color='var(--dim)';
     txt.textContent='whisper off';
+  }
+  refreshCaps();
+}
+
+// ── Image-generation bridge (health) ──────────────────────────────────────────
+async function checkImageBridge(){
+  try{
+    const r=await fetch(`${IMG_URL}/status`,{signal:AbortSignal.timeout(2000)});
+    imgOk=r.ok;
+  }catch(e){ imgOk=false; }
+  refreshCaps();
+}
+
+// ── Capability gating for the bottom-band buttons ─────────────────────────────
+// Grey out (disabled, NOT hidden) any action whose capability or backing service
+// is missing, so an entry-level / demo box never shows a button that does nothing.
+// A service counts as available even in FALLBACK (e.g. TTS via Web Speech).
+// NB: we use aria-disabled (not the `disabled` property) so the native title
+// tooltip still shows on hover -- a `disabled` button receives no mouse events,
+// so its tooltip never appears. Clicks are blocked by _capClickGuard below.
+function _setCap(id, ok, offTitle){
+  const b=document.getElementById(id);
+  if(!b)return;
+  if(ok){
+    b.removeAttribute('aria-disabled');
+    b.style.opacity=''; b.style.cursor='';
+  }else{
+    b.setAttribute('aria-disabled','true');
+    b.style.opacity='.35'; b.style.cursor='not-allowed';
+    if(offTitle) b.title=offTitle;
+  }
+}
+// Swallow clicks on anything marked aria-disabled, in the CAPTURE phase so it
+// runs before the element's inline onclick. Installed once from boot.
+function _capClickGuard(e){
+  const el=(e.target instanceof Element)&&e.target.closest('[aria-disabled="true"]');
+  if(el){ e.preventDefault(); e.stopImmediatePropagation(); }
+}
+function refreshCaps(){
+  _setCap('web-btn',        webOk,     'Web search bridge not running (start selmo_web.py)');
+  _setCap('mic-btn',        whisperOk, 'Voice transcription not available in this edition');
+  _setCap('vad-btn',        whisperOk, 'Hands-free voice needs the voice edition');
+  _setCap('tts-btn',        ttsOk,     'Text-to-speech not available');
+  _setCap('gen-img-btn',    imgOk,     'Image generation not available in this edition');
+  _setCap('upload-img-btn', visionOk,  'This model has no vision - load a model with an mmproj');
+  // a toggle that goes unavailable while ON must not stay stuck on
+  if(!webOk&&typeof IS_WEB_ON!=='undefined'&&IS_WEB_ON){
+    IS_WEB_ON=false;
+    const b=document.getElementById('web-btn');
+    if(b)b.classList.remove('on');
   }
 }
 // ── Mic / Whisper recording ───────────────────────────────────────────────────

@@ -175,7 +175,7 @@ async function checkKokoroBridge(){
       dot.style.boxShadow='0 0 4px var(--green)';
       txt.style.color='var(--green)';
       txt.textContent='tts kokoro';
-      return;
+      refreshCaps();return;
     }
   }catch(e){}
   // fallback Web Speech
@@ -188,6 +188,7 @@ async function checkKokoroBridge(){
   }else{
     txt.textContent='tts n/d';
   }
+  refreshCaps();
 }
 function toggleTts(){
   if(!ttsOk)return;
@@ -226,6 +227,45 @@ function stopTts(){
   if('speechSynthesis' in window){try{window.speechSynthesis.cancel();}catch(e){}}
   if(_ttsFire){_ttsFire();}
 }
+// --- TTS language: follow the TEXT, not the UI (models answer in whatever
+// language they like). Kokoro is handled by the bridge (langdetect -> voice +
+// speed); for the Web Speech fallback we do a light client-side detect here.
+// Italian also gets a ~10% speed bump. (Fixes English being read with it-IT.)
+function _detectLang(text){
+  var t=' '+String(text||'').toLowerCase().replace(/[^a-zàèéìòù\s]/g,' ')+' ';
+  var IT=[' il ',' la ',' che ',' di ',' un ',' per ',' non ',' sono ',' con ',' questo ',' anche ',' più ',' come ',' ma ',' una '];
+  var EN=[' the ',' and ',' of ',' to ',' is ',' you ',' that ',' it ',' for ',' with ',' this ',' are ',' not ',' what ',' can ',' but '];
+  function sc(a){var n=0,i,idx;for(i=0;i<a.length;i++){idx=0;while((idx=t.indexOf(a[i],idx))!==-1){n++;idx++;}}return n;}
+  var it=sc(IT),en=sc(EN);
+  if(it===0&&en===0)return (typeof SELMO_LANG!=='undefined'&&SELMO_LANG)?SELMO_LANG:'en';
+  return it>en?'it':'en';
+}
+function _ttsProfile(l){
+  l=l||'en';
+  var web={it:'it-IT',en:'en-US',fr:'fr-FR',de:'de-DE',es:'es-ES',pt:'pt-BR'}[l]||'en-US';
+  var rate=(l==='it')?1.10:1.0;                      // +10% for Italian
+  return {web:web,rate:rate};
+}
+function _pickWebVoice(lang){
+  try{
+    var vs=window.speechSynthesis.getVoices()||[];
+    var pre=lang.slice(0,2).toLowerCase();
+    return vs.find(function(v){return v.lang&&v.lang.toLowerCase()===lang.toLowerCase();})
+        || vs.find(function(v){return v.lang&&v.lang.toLowerCase().slice(0,2)===pre;})
+        || null;
+  }catch(e){return null;}
+}
+function _speakWeb(text,_fire){
+  if(!('speechSynthesis' in window)){_fire();return;}
+  var prof=_ttsProfile(_detectLang(text));
+  window.speechSynthesis.cancel();
+  var utt=new SpeechSynthesisUtterance(text);
+  utt.lang=prof.web; utt.rate=prof.rate;
+  var v=_pickWebVoice(prof.web); if(v)utt.voice=v;
+  utt.onend=_fire; utt.onerror=_fire;
+  _ttsShowStop(true);
+  window.speechSynthesis.speak(utt);
+}
 function speakText(text){
   const _forceTts=pttForceTts;pttForceTts=false;
   if(!ttsOk||(!ttsEnabled&&!_forceTts)||!text.trim()){vadAfterSpeak();return;}
@@ -240,7 +280,7 @@ function speakText(text){
     fetch(`${TTS_URL}/speak`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text}),
+      body:JSON.stringify({text}),   // the bridge picks voice/speed/lang from the text
       signal:_ttsAbort.signal
     }).then(r=>{
       if(!r.ok)throw new Error('TTS error '+r.status);
@@ -260,18 +300,9 @@ function speakText(text){
     }).catch(e=>{
       if(e&&e.name==='AbortError')return;   // stopped by the user; cleanup already ran
       console.warn('Kokoro TTS error, fallback Web Speech:',e);
-      if('speechSynthesis' in window){
-        const utt=new SpeechSynthesisUtterance(text);
-        utt.lang='it-IT';utt.rate=1.05;utt.onend=_fire;utt.onerror=_fire;
-        _ttsShowStop(true);
-        window.speechSynthesis.speak(utt);
-      }else{_fire();}
+      _speakWeb(text,_fire);
     });
   }else{
-    window.speechSynthesis.cancel();
-    const utt=new SpeechSynthesisUtterance(text);
-    utt.lang='it-IT';utt.rate=1.05;utt.onend=_fire;utt.onerror=_fire;
-    _ttsShowStop(true);
-    window.speechSynthesis.speak(utt);
+    _speakWeb(text,_fire);
   }
 }

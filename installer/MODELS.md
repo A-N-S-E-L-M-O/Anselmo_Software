@@ -2,8 +2,8 @@
 
 Selmo ships **engine-only and model-agnostic**. The installer sets up llama.cpp
 and the app; no model is bundled. On the **first launch** it offers to download
-one default (Mistral-7B-Instruct v0.3, ~4.4 GB - Apache 2.0, European, no
-reasoning: a solid all-rounder that fits an 8 GB PC, a bit slower on CPU-only):
+one default (Mistral-7B-Instruct v0.3 Q3_K_M, ~3.5 GB - Apache 2.0, European, no
+reasoning: a solid all-rounder, light enough for an entry-level 8 GB PC):
 say yes to get chatting immediately, or say no and add your own model as below.
 The file is pulled from Hugging Face (`bartowski/Mistral-7B-Instruct-v0.3-GGUF`).
 You are never locked to the default.

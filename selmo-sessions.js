@@ -241,8 +241,22 @@ function _openPhonePopup(url){
   help.style.cssText='font-size:12px;opacity:.8;line-height:1.55';
   help.textContent='The phone and the PC must be on the same Wi-Fi network. The first time, the phone '
     +'shows a certificate warning: accept it to continue (it is needed for the microphone).';
+  // Phone-access toggle: flips the front door's LAN gate (loopback-only API,
+  // so only this PC can change it). Default is OFF on a public network.
+  var acc=document.createElement('label');
+  acc.style.cssText='display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px;cursor:pointer';
+  var cb=document.createElement('input');cb.type='checkbox';
+  var accTxt=document.createElement('span');accTxt.textContent='Allow phone access on this network';
+  acc.appendChild(cb);acc.appendChild(accTxt);
+  var warn=document.createElement('div');
+  warn.style.cssText='font-size:12px;color:var(--yellow,#e6c463);margin-bottom:12px;display:none';
+  warn.textContent='Public network detected — off by default so others on the same Wi-Fi cannot reach Selmo.';
+  fetch('/phone/status',{cache:'no-store'}).then(function(r){return r.json();}).then(function(s){
+    cb.checked=!!s.enabled; warn.style.display=s.public?'block':'none';
+  }).catch(function(){});
+  cb.onchange=function(){ fetch('/phone/'+(cb.checked?'on':'off'),{method:'POST'}).catch(function(){}); };
   row.appendChild(copy);row.appendChild(close);
-  card.appendChild(title);card.appendChild(p1);card.appendChild(link);card.appendChild(row);card.appendChild(help);
+  card.appendChild(title);card.appendChild(p1);card.appendChild(link);card.appendChild(acc);card.appendChild(warn);card.appendChild(row);card.appendChild(help);
   ov.appendChild(card);
   document.body.appendChild(ov);
 }

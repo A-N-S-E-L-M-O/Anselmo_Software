@@ -36,6 +36,8 @@ import ssl
 import socket
 import threading
 import mimetypes
+import json
+import subprocess
 import urllib.request
 import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -51,6 +53,28 @@ HTTPS_PORT = 8443
 # Backend ports we are willing to proxy. 8080 is us; never proxy to self.
 # 8085 is the optional LibreHardwareMonitor web server; harmless to allow.
 ALLOWED_PORTS = {8081, 8082, 8083, 8084, 8085, 8086, 8087, 8089}
+
+# --- Phone access (LAN exposure) gate --------------------------------------
+# The front door binds 0.0.0.0 so a phone on the same Wi-Fi reaches 8443. On a
+# PUBLIC network that also exposes Selmo to strangers, so the LAN gate defaults
+# CLOSED there (decided once at startup) and the user can open it from the phone
+# panel. Loopback (the PC itself) is always allowed.
+PHONE_ENABLED  = True     # set from the network category in run()
+NETWORK_PUBLIC = False
+
+def _is_public_network():
+    """True if any active Windows network profile is 'Public'. Unknown / error
+    is treated as private, keeping the convenient default."""
+    try:
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             "(Get-NetConnectionProfile).NetworkCategory"],
+            capture_output=True, text=True, timeout=10,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        cats = [c.strip().lower() for c in out.stdout.splitlines() if c.strip()]
+        return any(c == "public" for c in cats)
+    except Exception:
+        return False
 
 # Never hand these out as static files (private key, source, configs, logs,
 # internal dev/bug notes). .md is blocked because selmo-dev.md / bug-report /
@@ -246,8 +270,51 @@ class FrontDoor(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(body)
 
+    def _json(self, obj):
+        body = json.dumps(obj).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+
+    # -- phone-access gate -----------------------------------------------------
+    def _is_local(self):
+        ip = self.client_address[0]
+        return ip.startswith("127.") or ip in ("::1", "localhost")
+
+    def _phone_control(self, raw):
+        global PHONE_ENABLED
+        if raw == "/phone/status":
+            self._json({"enabled": PHONE_ENABLED, "public": NETWORK_PUBLIC})
+        elif raw == "/phone/on":
+            PHONE_ENABLED = True
+            print("  [NET]   phone access -> ON (user)", flush=True)
+            self._text(200, "on")
+        elif raw == "/phone/off":
+            PHONE_ENABLED = False
+            print("  [NET]   phone access -> OFF (user)", flush=True)
+            self._text(200, "off")
+        else:
+            self._text(404, "not found")
+
     # -- verbs -----------------------------------------------------------------
     def _dispatch(self):
+        raw = self.path.split("?", 1)[0]
+        # phone-access control API -- loopback only (only the PC can flip it)
+        if raw.startswith("/phone/"):
+            if not self._is_local():
+                self._text(403, "forbidden")
+                return
+            self._phone_control(raw)
+            return
+        # LAN gate: when phone access is off, only the PC itself may connect
+        if not self._is_local() and not PHONE_ENABLED:
+            self._text(403, "Phone access is disabled on this network. "
+                            "Enable it from the phone panel on the PC.")
+            return
         url = self._backend_url()
         if url is not None:
             self._proxy(url)
@@ -289,7 +356,13 @@ def _serve_https(ip: str):
 
 
 def run():
+    global NETWORK_PUBLIC, PHONE_ENABLED
     ip = _local_ip()
+    NETWORK_PUBLIC = _is_public_network()
+    PHONE_ENABLED  = not NETWORK_PUBLIC     # public network -> LAN gate closed
+    print("  [NET]   " + ("network is PUBLIC -> phone access OFF by default"
+                          if NETWORK_PUBLIC else
+                          "network is private -> phone access ON"), flush=True)
     # HTTPS in a background thread; HTTP holds the main thread. Either can run
     # without the other (HTTP always works; HTTPS needs the cryptography pkg).
     threading.Thread(target=_serve_https, args=(ip,), daemon=True).start()

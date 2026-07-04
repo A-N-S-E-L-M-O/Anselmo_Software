@@ -270,7 +270,7 @@ def main():
 
     # Write selmo-config.json so chat.html can read per-model chunking params at startup.
     # llama-server serves static files from --path BASE, so /selmo-config.json is reachable.
-    config = {"chunking_size": args.chunking_size, "think": args.think}
+    config = {"chunking_size": args.chunking_size, "think": args.think, "vision": bool(args.mmproj)}
     (BASE / "selmo-config.json").write_text(json.dumps(config), encoding="utf-8")
 
     model_name = Path(args.model).name

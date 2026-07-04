@@ -37,11 +37,15 @@ $getpip = Join-Path $env:TEMP "get-pip.py"
 Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile $getpip
 & "$PyDir\python.exe" $getpip --no-warn-script-location
 
-# ---- 2. minimal deps (chat + web search + power gauge) --------------------
+# ---- 2. minimal deps (chat + web search + power gauge + HTTPS) ------------
 #   NOT bundled on purpose: flask/faster-whisper/kokoro (voice) and torch --
 #   too heavy for a "try it" build. Voice/image stay in the full edition.
+#   cryptography IS required: selmo_https_proxy.py uses it to mint the
+#   self-signed cert on first run (the cert/key are excluded from the bundle).
+#   Without it there is no cert -> port 8443 stays down and the phone button
+#   (which reads the LAN IP the cert step writes to selmo-cert-ip.txt) vanishes.
 & "$PyDir\python.exe" -m pip install --no-warn-script-location `
-    trafilatura requests psutil pynvml pystray Pillow
+    trafilatura requests psutil pynvml pystray Pillow cryptography
 
 # ---- 3. app files ---------------------------------------------------------
 #   NEVER bundle secrets or per-machine runtime state: selmo.key/selmo.crt
@@ -82,7 +86,8 @@ New-Item -ItemType Directory -Path (Join-Path $Dist "installer") | Out-Null
 # launcher + support scripts under installer\ (the shortcut runs
 # python\pythonw.exe with installer\boot.py -- no loose .vbs/.cmd to be
 # quarantined by antivirus)
-foreach ($f in @("boot.py","first_run.py","downloads.json","MODELS.md")) {
+foreach ($f in @("boot.py","first_run.py","downloads.json","MODELS.md",
+                 "_dl.py","addon_voice.py","addon_image.py","addon_uninstall.py")) {
   Copy-Item (Join-Path $PSScriptRoot $f) (Join-Path $Dist "installer\$f") -Force
 }
 
@@ -93,6 +98,37 @@ New-Item -ItemType Directory -Path (Join-Path $Dist "models") | Out-Null
 # (hidden) without installing.
 $cmd = "@echo off`r`nstart `"`" `"%~dp0python\pythonw.exe`" `"%~dp0installer\boot.py`"`r`n"
 Set-Content -Path (Join-Path $Dist "Selmo.cmd") -Value $cmd -NoNewline -Encoding ASCII
+
+# ---- optional add-on installers (independent, opt-in) ----------------------
+#   The base is untouched. Each of these adds ONE capability on top of it and
+#   is safe to run (or skip) on its own. They run the bundled python with a
+#   VISIBLE console (progress bars), so python.exe -- not pythonw.exe.
+#     Install-Voice.cmd            -> Whisper STT + Kokoro TTS
+#     Install-Image.cmd            -> stable-diffusion.cpp image gen (needs a GPU)
+#     Install-Hardware-Monitor.cmd -> LibreHardwareMonitor (real CPU watts)
+Copy-Item (Join-Path $Root "setup-lhm.ps1") (Join-Path $Dist "setup-lhm.ps1") -Force
+New-Item -ItemType Directory -Path (Join-Path $Dist "tts")   -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $Dist "image") -Force | Out-Null
+
+$voice = "@echo off`r`ntitle Selmo - Install Voice`r`n`"%~dp0python\python.exe`" `"%~dp0installer\addon_voice.py`"`r`n"
+Set-Content -Path (Join-Path $Dist "Install-Voice.cmd") -Value $voice -NoNewline -Encoding ASCII
+
+$image = "@echo off`r`ntitle Selmo - Install Image Generation`r`n`"%~dp0python\python.exe`" `"%~dp0installer\addon_image.py`"`r`n"
+Set-Content -Path (Join-Path $Dist "Install-Image.cmd") -Value $image -NoNewline -Encoding ASCII
+
+$hw = "@echo off`r`ntitle Selmo - Install Hardware Monitor`r`npowershell -ExecutionPolicy Bypass -File `"%~dp0setup-lhm.ps1`"`r`npause`r`n"
+Set-Content -Path (Join-Path $Dist "Install-Hardware-Monitor.cmd") -Value $hw -NoNewline -Encoding ASCII
+
+# uninstallers -- each add-on is reversible. Voice/Image remove only their own
+# files + exclusive pip packages; the hardware monitor also drops its task.
+$uv = "@echo off`r`ntitle Selmo - Uninstall Voice`r`n`"%~dp0python\python.exe`" `"%~dp0installer\addon_uninstall.py`" voice`r`n"
+Set-Content -Path (Join-Path $Dist "Uninstall-Voice.cmd") -Value $uv -NoNewline -Encoding ASCII
+
+$ui = "@echo off`r`ntitle Selmo - Uninstall Image Generation`r`n`"%~dp0python\python.exe`" `"%~dp0installer\addon_uninstall.py`" image`r`n"
+Set-Content -Path (Join-Path $Dist "Uninstall-Image.cmd") -Value $ui -NoNewline -Encoding ASCII
+
+$uh = "@echo off`r`ntitle Selmo - Uninstall Hardware Monitor`r`npowershell -ExecutionPolicy Bypass -File `"%~dp0setup-lhm.ps1`" -Uninstall`r`npause`r`n"
+Set-Content -Path (Join-Path $Dist "Uninstall-Hardware-Monitor.cmd") -Value $uh -NoNewline -Encoding ASCII
 
 # ---- 4. llama.cpp backend -- NOT bundled, downloaded on first run ----------
 #   first_run.py fetches the matching backend (CUDA for NVIDIA, Vulkan

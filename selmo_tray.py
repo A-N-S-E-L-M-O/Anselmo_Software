@@ -1129,7 +1129,7 @@ def _action_switch(model: dict, ini_data: dict, srv_override=None, csize_overrid
     mmproj   = _find_mmproj(model["dir"])
 
     (BASE / "selmo-config.json").write_text(
-        json.dumps({"chunking_size": csize, "think": info.get("think", "")}),
+        json.dumps({"chunking_size": csize, "think": info.get("think", ""), "vision": bool(mmproj)}),
         encoding="utf-8"
     )
     _current.update({"name": model["name"], "srv": srv, "mmproj": mmproj})
@@ -1413,7 +1413,7 @@ def main():
         print(f"  Vision   :  {vis}")
         print(f"  Chunking :  {csize} tokens / chunk")
         (BASE / "selmo-config.json").write_text(
-            json.dumps({"chunking_size": csize, "think": info.get("think", "")}),
+            json.dumps({"chunking_size": csize, "think": info.get("think", ""), "vision": bool(mmproj)}),
             encoding="utf-8"
         )
         _current.update({"name": sel["name"], "srv": srv, "mmproj": mmproj, "loaded": False})

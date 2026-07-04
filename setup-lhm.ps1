@@ -24,7 +24,8 @@ param(
   [string]$Version = "v0.9.4",
   [int]$Port = 8085,
   [switch]$NoTask,
-  [switch]$NoDownload
+  [switch]$NoDownload,
+  [switch]$Uninstall
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,7 +47,22 @@ if (-not (Test-Admin)) {
   $a = "-NoProfile -ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`" -Version $Version -Port $Port"
   if ($NoTask)     { $a += " -NoTask" }
   if ($NoDownload) { $a += " -NoDownload" }
+  if ($Uninstall)  { $a += " -Uninstall" }
   Start-Process powershell -Verb RunAs -ArgumentList $a
+  return
+}
+
+# Uninstall: stop LHM, remove the scheduled task, delete the folder.
+if ($Uninstall) {
+  $taskName = "SelmoLibreHardwareMonitor"
+  Write-Host "Removing scheduled task '$taskName'..."
+  Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+  Get-Process LibreHardwareMonitor -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+  if (Test-Path $Dest) {
+    Write-Host "Deleting $Dest ..."
+    Remove-Item $Dest -Recurse -Force -ErrorAction SilentlyContinue
+  }
+  Write-Host "LibreHardwareMonitor removed. The energy monitor falls back to the on-screen estimate."
   return
 }
 

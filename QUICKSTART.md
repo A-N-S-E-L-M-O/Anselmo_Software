@@ -44,6 +44,33 @@ is just where you shut everything down (right-click → Exit).
 
 ---
 
+## Optional add-ons — voice, images, hardware monitor
+
+The base edition is deliberately light: **chat, web search and documents**. Three
+optional add-ons live in the Selmo folder as separate files you can run — or
+ignore — independently. Each is a single double-click; run it, then restart Selmo.
+
+- **`Install-Voice.cmd`** — speak to Selmo (Whisper transcription) and have it read
+  replies aloud (Kokoro). Downloads ~330 MB; the transcription model is fetched the
+  first time you use the microphone.
+- **`Install-Image.cmd`** — local image generation (Z-Image-Turbo via
+  stable-diffusion.cpp). It **needs a graphics card** (NVIDIA, AMD or Intel) and
+  stops by itself on a PC without one. Downloads ~9 GB.
+- **`Install-Hardware-Monitor.cmd`** — installs LibreHardwareMonitor so the energy
+  monitor shows the **real CPU watts** instead of an estimate (asks for admin once,
+  to read the CPU sensors).
+
+Until an add-on is installed, its buttons in the bottom bar stay greyed out —
+nothing in the interface pretends to work when the service behind it is missing.
+
+**Removing an add-on** is just as easy: run its `Uninstall-…` twin in the same
+folder. Voice and Image only delete their own files (freeing the disk space);
+the hardware monitor's uninstaller also removes its background task. To remove
+Selmo completely, run `Uninstall-Hardware-Monitor.cmd` first (if you ever
+installed it), then delete the whole folder.
+
+---
+
 ## The energy monitor — an on-screen estimate
 
 On the right of the screen A.N.S.E.L.M.O shows an **estimate** of the power your

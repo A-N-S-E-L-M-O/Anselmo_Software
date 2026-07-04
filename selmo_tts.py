@@ -98,6 +98,26 @@ def detect_lang(text):
     except Exception:
         return 'it'
 
+# Default Kokoro voice per detected language + gender. Used ONLY when the text
+# is in a different language than the user's chosen --voice, so their pick (and
+# its gender) is respected for its own language.
+VOICE_BY_LANG = {
+    "it":    {"f": "if_sara",  "m": "im_nicola"},
+    "en-us": {"f": "af_sarah", "m": "am_michael"},
+}
+
+# Kokoro voice names encode language (1st char) + gender (2nd char): e.g.
+# im_nicola = Italian male, af_sarah = American-English female.
+_VOICE_LANG = {"i": "it", "a": "en-us", "b": "en-us", "f": "fr-fr",
+               "e": "es", "p": "pt-br", "j": "ja", "z": "zh", "h": "hi"}
+
+def _voice_lang(v):
+    return _VOICE_LANG.get((v or "")[:1].lower(), "")
+
+def _voice_gender(v):
+    g = (v or "  ")[1:2].lower()
+    return g if g in ("f", "m") else "f"
+
 # ── App Flask ─────────────────────────────────────────────────────
 app = Flask(__name__)
 
@@ -127,8 +147,6 @@ def status():
 def speak():
     data = request.get_json(silent=True) or {}
     text = data.get("text", "").strip()
-    voice = data.get("voice", args.voice)
-    speed = float(data.get("speed", args.speed))
 
     if not text:
         return jsonify({"error": "Field 'text' missing or empty"}), 400
@@ -137,9 +155,24 @@ def speak():
     if not text:
         return jsonify({"error": "Text empty after cleanup"}), 400
 
-    log.info(f"Synthesis ({voice}, speed={speed}): {text[:80]}...")
+    # Language follows the TEXT (models often answer in another language than the
+    # UI). Detect it, then pick a matching voice + a small Italian speed bump --
+    # unless the client passed an explicit override.
+    lang  = data.get("lang") or detect_lang(text)
+    # Respect the user's chosen voice for ITS language; only switch (keeping the
+    # same gender) when the text is in a different language.
+    if data.get("voice"):
+        voice = data["voice"]
+    elif _voice_lang(args.voice) == lang:
+        voice = args.voice
+    else:
+        vmap  = VOICE_BY_LANG.get(lang)
+        voice = (vmap.get(_voice_gender(args.voice)) if vmap else None) or args.voice
+    _spd  = data.get("speed")
+    speed = float(_spd) if _spd is not None else args.speed * (1.10 if lang == "it" else 1.0)
+
+    log.info(f"Synthesis ({voice}, speed={speed:.2f}, lang={lang}): {text[:80]}...")
     try:
-        lang = data.get("lang") or detect_lang(text)
         samples, sample_rate = kokoro.create(text, voice=voice, speed=speed, lang=lang)
         buf = io.BytesIO()
         sf.write(buf, samples, sample_rate, format='WAV', subtype='PCM_16')

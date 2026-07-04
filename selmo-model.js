@@ -83,9 +83,15 @@ function maxTok(){
 function setThinkEnabled(on){
   const btn=document.getElementById('think-btn');
   if(!btn)return;
-  if(!THINK_CAPABLE){btn.style.display='none';return;}   // non-thinking model: stays hidden
+  if(!THINK_CAPABLE){   // non-reasoning model: greyed and disabled, not hidden
+    btn.setAttribute('aria-disabled','true'); btn.style.opacity='.35'; btn.style.cursor='not-allowed';
+    btn.title='This model has no reasoning mode';
+    return;
+  }
+  btn.removeAttribute('aria-disabled');
   btn.disabled=!on;
   btn.style.opacity=on?'':'.35';
+  btn.style.cursor='';
   btn.title='Extended reasoning ON/OFF';
 }
 // Inject the [THINK] instruction only for models that need it (Magistral);
@@ -127,16 +133,22 @@ function configureThink(_ct){
 function applyThinkMode(){
   const btn=document.getElementById('think-btn');
   if(!btn)return;
-  if(!THINK_CAPABLE){btn.style.display='none';IS_THINK_ON=false;syncThinkPrompt();return;}
+  if(!THINK_CAPABLE){            // non-reasoning model: keep it visible but greyed/disabled
+    btn.style.display='';
+    btn.setAttribute('aria-disabled','true'); btn.style.opacity='.35'; btn.style.cursor='not-allowed';
+    btn.classList.remove('on'); btn.textContent='THINK';
+    btn.title='This model has no reasoning mode';
+    IS_THINK_ON=false; syncThinkPrompt(); return;
+  }
   btn.style.display='';
   if(THINK_NATIVE){
     IS_THINK_ON=true;
-    btn.disabled=true;btn.style.opacity='.6';btn.style.cursor='default';
+    btn.setAttribute('aria-disabled','true');btn.style.opacity='.6';btn.style.cursor='default';
     btn.classList.add('on');btn.textContent='THINK ●';
     btn.title='This model always reasons';
   }else{
     IS_THINK_ON=localStorage.getItem('sthink')!=='0'; // default ON, remembered
-    btn.disabled=false;btn.style.opacity='';btn.style.cursor='';
+    btn.removeAttribute('aria-disabled');btn.disabled=false;btn.style.opacity='';btn.style.cursor='';
     btn.classList.toggle('on',IS_THINK_ON);btn.textContent=IS_THINK_ON?'THINK ●':'THINK';
     btn.title='Extended reasoning ON/OFF';
   }

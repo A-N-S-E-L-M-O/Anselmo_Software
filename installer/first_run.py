@@ -7,7 +7,7 @@ Python). It downloads ONLY the llama.cpp backend matched to the machine:
   otherwise   -> Vulkan build (also runs on CPU)
 
 Selmo is model-agnostic, so no model is forced on you. After the engine is
-ready, first run OFFERS a default model (Mistral-7B-Instruct v0.3, ~4.4 GB -
+ready, first run OFFERS a default model (Mistral-7B-Instruct v0.3, ~3.5 GB -
 Apache 2.0, European, no reasoning): say yes and it is fetched once, say no and
 you drop your own .gguf into models\ and pick it in the browser. See MODELS.md.
 
@@ -132,9 +132,9 @@ def offer_model():
     print("-" * 56)
     print("  You need one model to chat. I can fetch a small default now:")
     print(f"    {m['name']}")
-    print(f"    Mistral-7B-Instruct v0.3 - {m.get('size_h','~4.4 GB')}, Apache 2.0,")
-    print("    European, no reasoning. A solid all-rounder; fits an 8GB PC")
-    print("    (a bit slower on CPU-only). Good for trying the features.")
+    print(f"    Mistral-7B-Instruct v0.3 - {m.get('size_h','~3.5 GB')}, Apache 2.0,")
+    print("    European, no reasoning. A solid all-rounder; light enough for an")
+    print("    entry-level 8GB PC. Good for trying the features.")
     print("  Say no and Selmo stays empty - drop your own .gguf into  models\\")
     print("  instead (see MODELS.md). You can always add or swap models later.")
     print("-" * 56)

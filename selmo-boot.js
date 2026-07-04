@@ -16,6 +16,7 @@ const GMON=_ORIGIN+'/proxy/8082';
 const WEB=_ORIGIN+'/proxy/8081';
 const CTRL=_ORIGIN+'/proxy/8087';
 let webOk=false;
+let imgOk=false, visionOk=false;
 // Session constants must be declared early — renderSessionList() is called at init
 // before the session block at the bottom of the file. TDZ would silently kill getSessions().
 const SESS_KEY='selmo_sessions';
@@ -106,8 +107,10 @@ fetch('/selmo-config.json').then(function(r){return r.ok?r.json():null;}).then(f
   if(!cfg)return;
   if(cfg.chunking_size) CHUNK_SIZE_TOK=cfg.chunking_size;
   if(typeof cfg.think==='string') THINK_MODE=cfg.think.trim().toLowerCase();
+  visionOk=!!cfg.vision;   // model has an mmproj -> image/vision button usable
   CHUNK_SIZE=Math.floor(CHUNK_SIZE_TOK*3.8); // chars for display
   configureThink(); // re-derive once the declared mode is known (idempotent)
+  refreshCaps();
 }).catch(function(){});
 
 checkWebBridge();
@@ -373,6 +376,12 @@ let kokoroOk=false;
 // (one-shot check used to get stuck on the Web-Speech fallback). Whisper polls too.
 let _kokoroPoll=setInterval(function(){if(kokoroOk){clearInterval(_kokoroPoll);_kokoroPoll=null;return;}checkKokoroBridge();},4000);
 checkKokoroBridge();
+
+// ── Image-generation bridge (health) + initial capability sweep ──────────────
+checkImageBridge();
+setInterval(checkImageBridge,30000);
+refreshCaps();   // grey every action up-front; each bridge check re-enables its own
+document.addEventListener('click', _capClickGuard, true);  // block clicks on aria-disabled buttons
 
 
 

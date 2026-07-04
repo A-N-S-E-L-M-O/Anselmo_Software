@@ -81,8 +81,11 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 def _find_binary():
     env = os.environ.get("SELMO_SD")
     cands = ([Path(env)] if env else []) + [
-        BIN_DIR / "sd-cli.exe", BIN_DIR / "sd.exe",
-        BIN_DIR / "sd-cli",     BIN_DIR / "sd",
+        # the Install-Image add-on keeps sd.cpp isolated in bin\sd\ (its bundled
+        # ggml-*.dll would otherwise clash with llama.cpp's in bin\); prefer it.
+        BIN_DIR / "sd" / "sd-cli.exe", BIN_DIR / "sd" / "sd.exe",
+        BIN_DIR / "sd-cli.exe",        BIN_DIR / "sd.exe",
+        BIN_DIR / "sd-cli",            BIN_DIR / "sd",
     ]
     for c in cands:
         if c and c.exists():
