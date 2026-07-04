@@ -15,7 +15,8 @@ the Court of Milan as the agreed venue.
 **A.N.S.E.L.M.O** — *Algorithm for Neural Synthesis with Emotional-Linguistic
 Memory Optimization; "Selmo" for short in these Terms and in the software* —
 is developed and distributed by **Fabio Garzetti** (the "Author"), Italy —
-contact: https://github.com/A-N-S-E-L-M-O. A.N.S.E.L.M.O is a personal project connected
+contact via GitHub: https://github.com/A-N-S-E-L-M-O (open an issue on the
+project repository). A.N.S.E.L.M.O is a personal project connected
 to the book *Dialoghi con la lavatrice* (English edition: *The Washing
 Machine Dialogues*); it is not a company and the Author operates no online
 service.
