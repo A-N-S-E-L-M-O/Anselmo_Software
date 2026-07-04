@@ -37,7 +37,7 @@ One `llama.cpp` server, a set of single-purpose Python bridges, and one HTML cli
 | **8087** | Tray Control API | LLM load/unload/switch coordination. |
 | **8089** | llama-server (LLM) | Loopback only (`127.0.0.1`). |
 
-See `selmo-dev.md` for the full engineering reference, port map details, and module split rules.
+See `docs/selmo-dev.md` for the full engineering reference, port map details, and module split rules.
 
 ## Requirements
 
@@ -63,7 +63,7 @@ pip install flask faster-whisper pynvml trafilatura requests --break-system-pack
 pip install kokoro-onnx soundfile langdetect psutil --break-system-packages --prefer-binary
 ```
 
-Large binaries and weights (`models/`, `bin/`, `tts/`, image weights, `*.gguf`, `*.onnx`, `*.safetensors`) are **not** included in this repository and must be downloaded separately. See `selmo-dev.md` > "Setup & dependencies".
+Large binaries and weights (`models/`, `bin/`, `tts/`, image weights, `*.gguf`, `*.onnx`, `*.safetensors`) are **not** included in this repository and must be downloaded separately. See `docs/selmo-dev.md` > "Setup & dependencies".
 
 ## Quick start
 
@@ -80,4 +80,4 @@ A.N.S.E.L.M.O is licensed under the **Apache License 2.0 with the Commons Clause
 
 **Attribution is required.** Any redistribution or derivative work must credit the A.N.S.E.L.M.O (Selmo) project and the book *Dialoghi con la lavatrice*. See [`NOTICE`](NOTICE).
 
-Third-party open-source components remain under their own licenses; the list is in `selmo-dev.md` > "Credits & licenses". Model weights are not distributed here and keep their respective licenses.
+Third-party open-source components remain under their own licenses; the list is in `docs/selmo-dev.md` > "Credits & licenses". Model weights are not distributed here and keep their respective licenses.
