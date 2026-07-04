@@ -1,10 +1,10 @@
-# Selmo — Manifesto
-*June 2026 · v0.5 · updated session 16*
+# A.N.S.E.L.M.O — Manifesto
+*July 2026 · updated session 33*
 
 ---
 
 > **Project language (strict / mandatory): ENGLISH.**
-> All documentation, code comments, commit messages, and in-file content are written in English — no exceptions. This applies to every file in the project (`selmo-dev.md`, `selmo-bug-report.md`, this manifesto, code comments, etc.). Conversation with Fabio can be in any language; the project artifacts are always English.
+> All documentation, code comments, commit messages, and in-file content are written in English — no exceptions. This applies to every file in the project (`docs/selmo-dev.md`, `docs/selmo-bug-report.md`, this manifesto, code comments, etc.). Conversation with Fabio can be in any language; the project artifacts are always English.
 
 ---
 
@@ -24,13 +24,11 @@ It runs on your own hardware. Your data never leaves your device. It supports an
 
 **Model-agnostic** — the user chooses the model. Selmo is not tied to any provider.
 
-**P2P is tomorrow, not the foundation.** The mesh with a watt economy is the long-term vision. But Selmo v1 works fully on a single device. The network grows with its users, not before them.
-
 ---
 
 ## Narrative universe
 
-The book "Dialoghi con la lavatrice". Selmo is a character before it is a product. Mizan is its antagonist — and that antagonism is built into the app as a switchable profile (cold, deterministic, analysis-only) against Selmo's warm assistant. The app and the book promote each other. The English version is coming.
+The book *The Washing Machine Dialogues* (Italian: *Dialoghi con la lavatrice*). Selmo is a character before it is a product. Mizan is its antagonist — and that antagonism is built into the app as a switchable profile (cold, deterministic, analysis-only) against Selmo's warm assistant. The app and the book promote each other. The English edition is in progress.
 
 ---
 
@@ -67,11 +65,11 @@ Document extraction (.docx, .odt), auto-chunking, Selmo/Mizan profile toggle, GP
 ### Phase 1.5 — Web search ✓
 Web mode via a header toggle (off by default), local SearXNG in Podman, DDG fallback, trafilatura, source ledger.
 
-### Phase 1.6 — Native app (Tauri)
-PyInstaller on the Python bridges, Inno Setup installer, Windows .exe distribution.
+### Phase 1.6 — Distribution ✓
+A self-contained portable bundle: an embeddable Python, the app, and a first-run download of the matched llama.cpp engine — no installer to sign, no admin rights. Voice, image generation and the hardware monitor ship as optional, independent add-ons.
 
 ### Phase 2 — Public identity
-Domain `selmo-ai.eu`, static landing page (IT + EN), public GitHub repository, WattMesh trademark (EUIPO), Mastodon profile `@selmo@fosstodon.org`.
+Brand settled on **A.N.S.E.L.M.O** (Selmo, to friends) after a trademark / name clearance; discovery domain `thewashingmachinedialogues.eu`; static landing page (IT + EN); public GitHub repository; Mastodon `@selmo@fosstodon.org`.
 
 ### Phase 3 — P2P mesh (threshold: ~100k users)
 Local Wh credits already accumulated from v1. When the mesh switches on, they retroactively become currency. mDNS discovery, gossip protocol, fixed NixOS/Raspberry Pi nodes.
@@ -89,11 +87,11 @@ Flower (Oxford) + OpenFedLLM. Only weight deltas — the data never leaves. Requ
 
 **Voice (Whisper) ✓** — *Implemented s9.* `selmo_whisper.py` on port 8083, uses `faster-whisper` (pip). 🎤 button in chat.html: MediaRecorder → POST `/transcribe` → text injected into the input. Auto-started by Selmo.bat. Prerequisite: `pip install faster-whisper flask --break-system-packages` + the `small` model downloaded on first launch (~500MB).
 
-**Outgoing voice (TTS) ✓** — *Implemented s9.* `selmo_tts.py` on port 8084, uses Piper TTS (pip). 🔊 button in chat.html: autoplay toggle on every response. Prerequisite: `pip install piper-tts --break-system-packages` + a .onnx voice in `voices/`. Italian voices: [it_IT-paola-medium (F) / it_IT-riccardo-x_low (M)](https://huggingface.co/rhasspy/piper-voices/tree/main/it/it_IT). The text is cleaned of markdown before synthesis. Full loop: microphone → Whisper → Selmo → Piper → speaker.
+**Outgoing voice (TTS) ✓** — `selmo_tts.py` on port 8084, uses **Kokoro** (`kokoro-onnx`). 🔊 button in chat.html: autoplay toggle on every response. Voices `if_sara` (F) / `im_nicola` (M) for Italian; the voice and language follow the text automatically (langdetect), with a small Italian speed bump, and fall back to the browser's Web Speech voice when Kokoro isn't installed. The text is cleaned of markdown before synthesis. Full loop: microphone → Whisper → Selmo → Kokoro → speaker.
 
-**Three profiles (personality + palette)** — promote the Selmo/Mizan toggle into a three-way selector with its own palette each: **Selmo** (blue, warm assistant), **Mizan** (red, cold analysis system), and **Custom** (neutral system palette, with the sampling parameters and system prompt left free for the user to set). One identity, three faces.
+**Three profiles (personality + palette) ✓** — a three-way selector, each with its own palette: **Selmo** (blue, warm assistant), **Mizan** (red, cold analysis system), and **Custom** (neutral palette, sampling parameters and system prompt left free for the user). One identity, three faces.
 
-**Image generation** — Requires a diffusion architecture, not an LLM. Candidate: `stable-diffusion.cpp` (same approach as llama.cpp, runs well on a 4070 Ti). It would sit alongside as a separate `selmo_imggen.py`. It does not interfere with the current stack.
+**Image generation ✓** — `selmo_image.py` on port 8086 shells out to `stable-diffusion.cpp` running **Z-Image-Turbo** (Apache 2.0): text-to-image and image-to-image, with an automatic VRAM swap so the diffusion model and the LLM share a 12 GB GPU. Installed on demand via the optional `Install-Image` add-on (a GPU is required).
 
 **IMAP email** — `selmo_mail.py`. Reads mail locally, passes it to the model. Zero cloud.
 
@@ -101,7 +99,7 @@ Flower (Oxford) + OpenFedLLM. Only weight deltas — the data never leaves. Requ
 
 **In-app TTS voice selector** — a settings panel to choose the Kokoro voice (im_nicola, if_sara, bm_george, am_michael…) and the preferred language for voice interaction. Persistent in localStorage. Removes the need to edit Selmo.bat to change voice.
 
-**In-app model switcher** — model selector in chat.html without a manual restart. `/switch-model` endpoint in `selmo_web.py`, UI with a "server restarting…" indicator.
+**In-app model switcher ✓** — model (and image-model) picker in the browser settings panel, no manual restart: the tray control API (port 8087) loads the pick, with a loading overlay in chat.html.
 
 **Selmo as orchestrator** — `selmo_master.py` for multi-step pipelines on long documents (synopsis, analysis, chapter reassembly).
 
@@ -109,4 +107,4 @@ Flower (Oxford) + OpenFedLLM. Only weight deltas — the data never leaves. Requ
 
 ## The line that doesn't change
 
-*"While you sleep, your charging phone contributes to a network that belongs to no one and belongs to everyone. The earth turns, the wave follows the night wind, Selmo thinks."*
+_it works at night too without digging up half of Congo._

@@ -1,6 +1,7 @@
 ===== FILE: README.md =====
 
 # A.N.S.E.L.M.O
+![A.N.S.E.L.M.O](landing/assets/anselmo-ui.png)
 
 **A fully local AI assistant that runs on your own hardware.** Chat, vision and OCR, document analysis, optional web search, voice, and image generation, all served from a single machine. Nothing leaves your device except what you ask for: an explicit web search, and the standard fetch of the page's open-source libraries on first load.
 
