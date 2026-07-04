@@ -4,7 +4,7 @@
 
 /* ---- Links: fill these in ---- */
 var LINKS = {
-  github: "https://github.com/A-N-S-E-L-M-O/Anselmo_Software",
+  github: "https://github.com/A-N-S-E-L-M-O/Anselmo_Software/releases/latest",
   amazon: "https://www.amazon.com/",        // TODO: Amazon book URL (once the book is up)
   kobo:   "https://www.kobo.com/",          // TODO: Kobo book URL (once the book is up)
   quick:  "quickstart.html",                 // in-site quick start page
