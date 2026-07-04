@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A.N.S.E.L.M.O — the software</title>
+<meta name="description" content="A.N.S.E.L.M.O — a fully local AI on your own PC. Chat, vision, documents, voice, images. Private by design, energy-honest, source-available.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="watermark" aria-hidden="true"></div>
+<div class="wrap">
+
+  <div class="top">
+    <div class="brandmini"><a href="index.html">A.N.S.E.L.M.O · <b>local AI</b></a></div>
+    <div class="top-r">
+      <a class="back" href="index.html" data-i18n="nav.back">← Back</a>
+      <button class="langbtn" id="langbtn" title="Language">EN ▾</button>
+    </div>
+  </div>
+
+  <header class="hero">
+    <h1 data-i18n="sw.title">A.N.S.E.L.M.O</h1>
+    <div class="tag" data-i18n="sw.sub">The easy way into local AI models, stigma not included.</div>
+  </header>
+
+  <!-- floating window: the app interface -->
+  <div class="floatwin" id="floatwin">
+    <div class="fw-bar" id="fwbar">
+      <span class="fw-led"></span>
+      <span class="fw-title" data-i18n="fw.title">A.N.S.E.L.M.O — live interface</span>
+      <span class="fw-hint" data-i18n="fw.hint">drag me</span>
+    </div>
+    <div class="fw-body">
+      <img id="fwimg" src="assets/anselmo-ui.png" alt="A.N.S.E.L.M.O interface"
+           onerror="this.style.display='none';document.getElementById('fwph').style.display='flex';">
+      <div class="fw-ph" id="fwph" style="display:none" data-i18n="fw.ph">Drop the interface screenshot at assets/anselmo-ui.png</div>
+    </div>
+  </div>
+
+  <!-- capability matrix -->
+  <section class="sec">
+    <div class="sec-h">Main capabilities</div>
+    <div class="caps">
+      <div class="cap">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 4h16v11H9l-4 4v-4H4z"/></svg></div>
+        <div class="ct">Chat</div>
+        <div class="cd">Standard LLM chat</div>
+      </div>
+      <div class="cap">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/><path d="M10 12h6M10 15.5h6M10 19h4"/></svg></div>
+        <div class="ct">Documents &amp; OCR</div>
+        <div class="cd">Whole-file handling, with chunking</div>
+      </div>
+      <div class="cap">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg></div>
+        <div class="ct">Image to text</div>
+        <div class="cd">Vision &amp; OCR on images</div>
+      </div>
+      <div class="cap">
+        <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="14" height="12" rx="1.5"/><path d="M6 15l3-3 2.5 2.5L14 11l3 4"/><path d="M19 3l.9 2.1L22 6l-2.1.9L19 9l-.9-2.1L16 6l2.1-.9z"/></svg></div>
+        <div class="ct">Text to image</div>
+        <div class="cd">Local image generation</div>
+      </div>
+      <div class="cap">
+        <div class="ic"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0013 0"/><path d="M12 17.5V21"/></svg></div>
+        <div class="ct">Voice recognition</div>
+        <div class="cd">Speech to text</div>
+      </div>
+      <div class="cap">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 11v2M8 8v8M12 5v14M16 8v8M20 11v2"/></svg></div>
+        <div class="ct">Conversational</div>
+        <div class="cd">Hands-free voice, spoken replies (TTS)</div>
+      </div>
+      <div class="cap">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 8h13M4 8l3-3M4 8l3 3"/><path d="M20 16H7M20 16l-3-3M20 16l-3 3"/></svg></div>
+        <div class="ct">Live model switching</div>
+        <div class="cd">Swap models on the fly</div>
+      </div>
+      <div class="cap">
+        <div class="ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="10" r="2.4"/><circle cx="12" cy="8.5" r="2.6"/><circle cx="18" cy="10" r="2.4"/><path d="M2.5 19a3.5 3.5 0 017 0"/><path d="M8.5 19a3.5 3.5 0 017 0"/><path d="M14.5 19a3.5 3.5 0 017 0"/></svg></div>
+        <div class="ct">Personality presets</div>
+        <div class="cd">Selmo · Mizan · Custom</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="faq">
+    <div class="sec-h" data-i18n="faq.h">About the software</div>
+    <div class="grid" id="qgrid-top"></div>
+    <a class="qstart" data-link="quick" target="_blank" rel="noopener" data-i18n="cta.quickstart">Quick start — up and running in 3 steps →</a>
+    <div class="grid" id="qgrid"></div>
+
+    <div class="ctas">
+      <a class="cta primary" data-link="github" target="_blank" rel="noopener">
+        <span data-i18n="cta.github">Get it on GitHub</span>
+        <span class="s" data-i18n="cta.github.s">Download · source available</span>
+      </a>
+      <a class="cta ghost" href="book.html">
+        <span data-i18n="cta.readbook">Read the book</span>
+        <span class="s" data-i18n="cta.readbook.s">The Washing Machine Dialogues</span>
+      </a>
+    </div>
+    <div class="note" data-i18n="cta.note">Windows for now. Unzip and click — no install, no account.</div>
+  </section>
+
+  <footer>
+    <nav>
+      <a data-link="quick" target="_blank" rel="noopener" data-i18n="foot.quick">Quick guide</a>
+      <a data-link="terms" target="_blank" rel="noopener" data-i18n="foot.terms">Terms of Use</a>
+      <a data-link="notice" target="_blank" rel="noopener" data-i18n="foot.notice">Notice &amp; license</a>
+      <a data-link="github" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+    <div class="cw" data-i18n="foot.cw">© 2026 Fabio Garzetti — A.N.S.E.L.M.O is source-available (Apache 2.0 + Commons Clause).</div>
+  </footer>
+</div>
+
+<!-- popup -->
+<div class="ovl" id="ovl">
+  <div class="modal" role="dialog" aria-modal="true">
+    <button class="x" id="modal-x" aria-label="Close">×</button>
+    <div class="kicker">A.N.S.E.L.M.O</div>
+    <h2 id="modal-title"></h2>
+    <div class="body" id="modal-body"></div>
+    <div class="links" id="modal-links"></div>
+  </div>
+</div>
+
+<script src="site.js"></script>
+<script>
+/* build FAQ grid + modal */
+var ovl = document.getElementById('ovl');
+function openModal(item){
+  document.getElementById('modal-title').textContent = item.q;
+  document.getElementById('modal-body').innerHTML = item.body;
+  document.getElementById('modal-links').innerHTML =
+    '<a href="'+LINKS.quick+'" target="_blank" rel="noopener">Quick guide →</a>' +
+    '<a href="'+LINKS.terms+'" target="_blank" rel="noopener">Terms of Use →</a>' +
+    '<a href="'+LINKS.github+'" target="_blank" rel="noopener">GitHub →</a>';
+  ovl.classList.add('on');
+}
+function closeModal(){ ovl.classList.remove('on'); }
+function makeQ(item){
+  var b = document.createElement('button');
+  b.className = 'qbtn';
+  b.innerHTML = '<span>'+item.q+'</span><span class="arw">→</span>';
+  b.addEventListener('click', function(){ openModal(item); });
+  return b;
+}
+function buildGrid(){
+  var top = document.getElementById('qgrid-top'); top.innerHTML = '';
+  var g = document.getElementById('qgrid'); g.innerHTML = '';
+  getFAQ().forEach(function(item, idx){
+    (idx < 2 ? top : g).appendChild(makeQ(item));
+  });
+}
+document.getElementById('modal-x').addEventListener('click', closeModal);
+ovl.addEventListener('click', function(e){ if(e.target === ovl) closeModal(); });
+document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeModal(); });
+
+/* draggable floating window (mouse) */
+(function(){
+  var w = document.getElementById('floatwin'), bar = document.getElementById('fwbar');
+  var drag=false, ox=0, oy=0;
+  bar.addEventListener('mousedown', function(e){
+    var r = w.getBoundingClientRect();
+    w.style.position='fixed'; w.style.margin='0'; w.style.zIndex='40';
+    w.style.left=r.left+'px'; w.style.top=r.top+'px'; w.style.width=r.width+'px';
+    drag=true; ox=e.clientX-r.left; oy=e.clientY-r.top; e.preventDefault();
+  });
+  window.addEventListener('mousemove', function(e){
+    if(!drag) return;
+    w.style.left=(e.clientX-ox)+'px'; w.style.top=(e.clientY-oy)+'px';
+  });
+  window.addEventListener('mouseup', function(){ drag=false; });
+})();
+
+window.onPageReady = buildGrid;      // build after i18n so LANG is set
+window.onLangChange = buildGrid;     // rebuild on language switch
+</script>
+</body>
+</html>

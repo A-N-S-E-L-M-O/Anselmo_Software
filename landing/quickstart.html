@@ -47,6 +47,18 @@
 
     <hr>
 
+    <h2>Optional add-ons — voice, images, hardware monitor</h2>
+    <p>The base edition is deliberately light: <strong>chat, web search and documents</strong>. Three optional add-ons live in the Selmo folder as separate files you can run — or ignore — independently. Each is a single double-click; run it, then restart Selmo.</p>
+    <ul>
+      <li><strong><code>Install-Voice.cmd</code></strong> — speak to Selmo (Whisper transcription) and have it read replies aloud (Kokoro). Downloads ~330 MB; the transcription model is fetched the first time you use the microphone.</li>
+      <li><strong><code>Install-Image.cmd</code></strong> — local image generation (Z-Image-Turbo via stable-diffusion.cpp). It <strong>needs a graphics card</strong> (NVIDIA, AMD or Intel) and stops by itself on a PC without one. Downloads ~9 GB.</li>
+      <li><strong><code>Install-Hardware-Monitor.cmd</code></strong> — installs LibreHardwareMonitor so the energy monitor shows the <strong>real CPU watts</strong> instead of an estimate (asks for admin once, to read the CPU sensors).</li>
+    </ul>
+    <p>Until an add-on is installed, its buttons in the bottom bar stay greyed out — nothing in the interface pretends to work when the service behind it is missing.</p>
+    <p><strong>Removing an add-on</strong> is just as easy: run its <code>Uninstall-…</code> twin in the same folder. Voice and Image only delete their own files (freeing the disk space); the hardware monitor's uninstaller also removes its background task. To remove Selmo completely, run <code>Uninstall-Hardware-Monitor.cmd</code> first (if you ever installed it), then delete the whole folder.</p>
+
+    <hr>
+
     <h2>The energy monitor — an on-screen estimate</h2>
     <p>On the right of the screen A.N.S.E.L.M.O shows an <strong>estimate</strong> of the power your PC draws while it works: watts (CPU + GPU together), the watt-hours spent this session and in total, the speed in tokens per second, and the running cost in your own currency. Set your electricity price once in the <code>euro/kWh</code> field and the cost estimate follows it.</p>
     <p>This is a figure no other local AI puts on screen, and it is enough to compare a light model against a heavy one on the same PC. But it is an <strong>estimate, not a certified measurement</strong>: the GPU draw is read from the card, while the CPU and the rest of the system are approximated from load (the CPU figure carries a <code>~</code> when it is estimated rather than measured). If you want the exact number, a plug-in wall power meter or a smart plug with energy metering measures what the whole PC really pulls from the socket — and you can tune Selmo's estimate against that reading. To have the CPU power measured rather than estimated, see the optional LibreHardwareMonitor step near the end of this guide.</p>

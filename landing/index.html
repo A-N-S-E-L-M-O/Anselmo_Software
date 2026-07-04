@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A.N.S.E.L.M.O</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #0B1A35;
+            color: #FFFFFF;
+            font-family: 'Courier New', monospace;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            text-align: center;
+            padding: 2rem;
+        }
+
+        h1 {
+            color: #FFC857;
+            font-size: 3rem;
+            letter-spacing: 0.5em;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+        }
+
+        .subtitle {
+            color: #4ECDC4;
+            font-size: 1.2rem;
+            letter-spacing: 0.3em;
+            margin-bottom: 3rem;
+        }
+
+        .images-wrapper {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+        }
+
+        .cover-image, .ui-image {
+            height: auto;
+            max-height: 400px;
+            width: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(78, 205, 196, 0.3);
+        }
+
+        .status {
+            margin-top: 2rem;
+            color: #8892B0;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>A.N.S.E.L.M.O</h1>
+        <p class="subtitle">is coming soon</p>
+        
+        <div class="images-wrapper">
+            <img src="assets/cover.png" alt="A.N.S.E.L.M.O Cover" class="cover-image">
+            <img src="assets/anselmo-ui.png" alt="A.N.S.E.L.M.O UI" class="ui-image">
+        </div>
+        
+        <p class="status">v0.922 • initializing...</p>
+    </div>
+</body>
+</html>
