@@ -42,3 +42,7 @@ selmo-cert-ip.txt
 # Runtime image-model pick (per-machine: holds an absolute diffusion path,
 # written by selmo_tray.py at startup; selmo-image-models.ini IS tracked)
 selmo-image-config.json
+
+# per-machine / shortcut (do not commit)
+SelmoAI.lnk
+selmo-state.json
