@@ -4,12 +4,12 @@
 
 /* ---- Links: fill these in ---- */
 var LINKS = {
-  github: "https://github.com/",           // TODO: repo / release URL
-  amazon: "https://www.amazon.com/",        // TODO: Amazon book URL
-  kobo:   "https://www.kobo.com/",          // TODO: Kobo book URL
+  github: "https://github.com/A-N-S-E-L-M-O/Anselmo_Software",
+  amazon: "https://www.amazon.com/",        // TODO: Amazon book URL (once the book is up)
+  kobo:   "https://www.kobo.com/",          // TODO: Kobo book URL (once the book is up)
   quick:  "quickstart.html",                 // in-site quick start page
-  terms:  "TERMS.md",                        // TODO: hosted terms
-  notice: "NOTICE"                           // TODO: hosted notice
+  terms:  "https://github.com/A-N-S-E-L-M-O/Anselmo_Software/blob/main/TERMS.md",
+  notice: "https://github.com/A-N-S-E-L-M-O/Anselmo_Software/blob/main/NOTICE"
 };
 
 /* ---- language ---- */
