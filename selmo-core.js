@@ -6,16 +6,16 @@ function makeGauge(mount,labelText){
   const NS='http://www.w3.org/2000/svg';
   mount.innerHTML='<svg class="mini-gauge" viewBox="0 0 220 190">'
     +'<circle cx="110" cy="100" r="88" fill="url(#bz)"/>'
-    +'<circle cx="110" cy="100" r="81" fill="#000033" stroke="#555" stroke-width="1"/>'
+    +'<circle cx="110" cy="100" r="81" style="fill:var(--g-ring)" stroke="#555" stroke-width="1"/>'
     +'<circle cx="110" cy="100" r="76" fill="url(#dF)"/>'
     +'<path class="zz1" fill="none" stroke="#004400" stroke-width="7" stroke-linecap="round"/>'
     +'<path class="zz2" fill="none" stroke="#444400" stroke-width="7" stroke-linecap="round"/>'
     +'<path class="zz3" fill="none" stroke="#440000" stroke-width="7" stroke-linecap="round"/>'
-    +'<path class="garc" fill="none" stroke="#55FF55" stroke-width="5" stroke-linecap="round" style="transition:stroke .4s;"/>'
+    +'<path class="garc" fill="none" stroke="#2f9e44" stroke-width="5" stroke-linecap="round" style="transition:stroke .4s;"/>'
     +'<g class="gticks"></g>'
-    +'<text class="glab" x="110" y="138" text-anchor="middle" fill="#CCD8F0" font-size="14" font-weight="bold" font-family="Share Tech Mono,Lucida Console,Courier New,monospace" letter-spacing=".06em">'+labelText+'</text>'
-    +'<text class="gv" x="110" y="160" text-anchor="middle" fill="#55FF55" font-size="22" font-family="Share Tech Mono,Lucida Console,Courier New,monospace" font-weight="bold" style="transition:fill .3s;">0%</text>'
-    +'<text class="gsb" x="110" y="178" text-anchor="middle" fill="#AAAAAA" font-size="12" font-family="Share Tech Mono,Lucida Console,Courier New,monospace"></text>'
+    +'<text class="glab" x="110" y="138" text-anchor="middle" style="fill:var(--g-lab)" font-size="14" font-weight="bold" font-family="Share Tech Mono,Lucida Console,Courier New,monospace" letter-spacing=".06em">'+labelText+'</text>'
+    +'<text class="gv" x="110" y="160" text-anchor="middle" fill="#2f9e44" font-size="22" font-family="Share Tech Mono,Lucida Console,Courier New,monospace" font-weight="bold" style="transition:fill .3s;">0%</text>'
+    +'<text class="gsb" x="110" y="178" text-anchor="middle" style="fill:var(--g-ink)" font-size="12" font-family="Share Tech Mono,Lucida Console,Courier New,monospace"></text>'
     +'<polygon class="gn" fill="url(#ng)" style="transform-origin:110px 100px;transition:transform .4s cubic-bezier(.4,0,.2,1);filter:drop-shadow(0 0 3px rgba(255,0,0,.5));"/>'
     +'<polygon class="gnw" fill="#770000" style="transform-origin:110px 100px;transition:transform .4s cubic-bezier(.4,0,.2,1);"/>'
     +'<circle cx="110" cy="100" r="8" fill="#222" stroke="#888" stroke-width="1.5"/>'
@@ -32,13 +32,13 @@ function makeGauge(mount,labelText){
     const p1=pt(a,R*(maj?.82:.89)),p2=pt(a,R*.95);
     const ln=document.createElementNS(NS,'line');
     ln.setAttribute('x1',p1[0]);ln.setAttribute('y1',p1[1]);ln.setAttribute('x2',p2[0]);ln.setAttribute('y2',p2[1]);
-    ln.setAttribute('stroke',maj?'#FFFF00':'#555577');ln.setAttribute('stroke-width',maj?2:1);
+    ln.style.stroke=maj?'var(--g-tickmaj)':'var(--g-tickmin)';ln.setAttribute('stroke-width',maj?2:1);
     tg.appendChild(ln);
   }
   const arc=q('.garc'),gv=q('.gv'),gsb=q('.gsb'),needle=q('.gn'),needlew=q('.gnw');
   return function(pct,sub){
     pct=Math.max(0,Math.min(pct,100));
-    const a=-135+(pct/100)*270,col=pct<30?'#55FF55':pct<70?'#FFFF00':'#FF5555';
+    const a=-135+(pct/100)*270,col=pct<30?'#2f9e44':pct<70?'#c9a227':'#FF5555';
     const aRad=a*Math.PI/180;
     if(pct>0.5){arc.setAttribute('d',ap(-135,a,R-2));arc.style.stroke=col;arc.style.filter='drop-shadow(0 0 3px '+col+')';}
     else arc.setAttribute('d','');
@@ -54,7 +54,7 @@ function makeGauge(mount,labelText){
 }
 function setGauge(pct,watts,real){
   pct=Math.max(0,Math.min(pct,100));
-  const a=-135+(pct/100)*270,col=pct<30?'#55FF55':pct<70?'#FFFF00':'#FF5555';
+  const a=-135+(pct/100)*270,col=pct<30?'#2f9e44':pct<70?'#c9a227':'#FF5555';
   const aRad=a*Math.PI/180;
   const arc=document.getElementById('arc');
   if(pct>0.5){arc.setAttribute('d',ap(-135,a,R-2));arc.style.stroke=col;arc.style.filter=`drop-shadow(0 0 3px ${col})`;}
@@ -118,7 +118,7 @@ function updCost(){
   document.getElementById('cost-t').textContent='E'+(whAll/1000*price).toFixed(4);
 }
 function resetWh(){if(!confirm('Reset total Wh?'))return;fetch(GMON+'/reset_total').catch(()=>{});whAll=0;document.getElementById('wh-total').textContent='0.000';updCost();}
-function resetWhSession(){if(!confirm('Reset session Wh?'))return;fetch(GMON+'/reset_session').catch(()=>{});wh=0;document.getElementById('wh-s').textContent='0.000';updCost();}
+function resetWhSession(){if(!confirm('Reset session Wh?'))return;fetch(GMON+'/reset_session').catch(()=>{});wh=0;setOdo(0);updCost();}
 function resetToks(){if(!confirm('Reset total token counter?'))return;toks=0;localStorage.setItem('stoks','0');document.getElementById('tok-tot').textContent='0';}
 // POLL
 async function poll(){
@@ -139,7 +139,6 @@ async function poll(){
   // source of truth, so any number of open UIs can never double-count. wh and
   // whAll are filled from its JSON in the monitor-fetch handler above.
   setOdo(wh);
-  document.getElementById('wh-s').textContent=wh.toFixed(3);
   const _tbLbl=document.getElementById('gpu-topbar-lbl');
   if(_tbLbl)_tbLbl.textContent='SYS '+(real?'':'~')+Math.round(watts)+'W';
   document.getElementById('wh-total').textContent=whAll.toFixed(3);

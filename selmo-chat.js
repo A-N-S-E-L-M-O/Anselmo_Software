@@ -61,7 +61,7 @@ function exportChat(){
   const stamp=now.toISOString().slice(0,16).replace('T',' ');
   const fname=`selmo-chat-${now.toISOString().slice(0,16).replace(/[T:]/g,'-')}.md`;
   let md=`# ${mode} — Chat log\n`;
-  md+=`*${stamp} · model: ${model} · Wh: ${document.getElementById('wh-s').textContent}*\n\n---\n\n`;
+  md+=`*${stamp} · model: ${model} · Wh: ${wh.toFixed(3)}*\n\n---\n\n`;
   for(const m of msgs){
     const who=m.role==='user'?'**Tu**':`**${mode}**`;
     let c=m._orig;

@@ -31,6 +31,7 @@ function updateProfileUI(){
   else if(custom){t.value=customTemp;pp.value=customTopP;pk.value=customTopK;sp.value=CUSTOM_SP;}
   else {t.value=0.75;pp.value=0.9;pk.value=40;sp.value=SP_SELMO;}
   [t,pp,pk,sp].forEach(el=>{el.disabled=!custom;el.style.opacity=custom?'':'0.55';});
+  const pr=document.getElementById('pm-preset-row');if(pr)pr.style.display=custom?'flex':'none';
   if(hint)hint.textContent=custom?'Editable — these values are sent with every request.':'Preset (read-only). Switch to Custom to edit.';
 }
 function onCustomParam(){
@@ -203,4 +204,69 @@ function toggleThink(){
   syncThinkPrompt();
   const btn=document.getElementById('think-btn');
   if(btn){btn.classList.toggle('on',IS_THINK_ON);btn.textContent=IS_THINK_ON?'THINK ●':'THINK';}
+}
+// ── PRESET SAVE / LOAD ──
+// savePreset: download the current system prompt + sampling params as a .md file.
+// The params (temp / top-p / top-k) are written as a YAML front-matter header so a
+// preset carries its full config, not just the prompt text; onPresetFile parses it
+// back on load. Works in any profile (saves whatever is currently shown in the panel).
+function savePreset(){
+  var sp=document.getElementById('pm-sys');
+  if(!sp)return;
+  var t=document.getElementById('pm-temp'),pp=document.getElementById('pm-topp'),pk=document.getElementById('pm-topk');
+  var raw=prompt('Preset name (without extension):',
+    'preset-'+(new Date()).toISOString().slice(0,10));
+  if(raw===null)return;
+  var safe=raw.trim()||('preset-'+(new Date()).toISOString().slice(0,16).replace(/[T:]/g,'-'));
+  var fname=safe+'.md';
+  var head='---\n'
+    +'temp: '+(t?t.value:currentTemp)+'\n'
+    +'top_p: '+(pp?pp.value:currentTopP)+'\n'
+    +'top_k: '+(pk?pk.value:currentTopK)+'\n'
+    +'---\n';
+  var blob=new Blob([head+sp.value],{type:'text/markdown'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=fname;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
+// loadPreset: open the hidden file picker.
+function loadPreset(){
+  var inp=document.getElementById('pm-preset-input');
+  if(inp)inp.click();
+}
+// onPresetFile: called when the user picks a .md file.
+// Switches to Custom profile (so the fields become editable), parses the optional
+// YAML front-matter header (temp / top_p / top_k) back into the param fields, and
+// loads the remaining body as the system prompt. A header-less .md still loads as a
+// plain prompt. onCustomParam() then persists everything and syncs the live values.
+function onPresetFile(inp){
+  if(!inp||!inp.files||!inp.files[0])return;
+  var fr=new FileReader();
+  fr.onload=function(e){
+    if(currentProfile!=='custom')setProfile('custom');
+    var sp=document.getElementById('pm-sys');
+    if(!sp)return;
+    var txt=e.target.result||'';
+    var body=txt,params={};
+    var m=txt.match(/^﻿?---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?/);
+    if(m){
+      m[1].split(/\r?\n/).forEach(function(line){
+        var kv=line.match(/^\s*([a-z_]+)\s*:\s*(.+?)\s*$/i);
+        if(kv)params[kv[1].toLowerCase()]=kv[2];
+      });
+      body=txt.slice(m[0].length);
+    }
+    sp.value=body;
+    var t=document.getElementById('pm-temp'),pp=document.getElementById('pm-topp'),pk=document.getElementById('pm-topk');
+    if(t&&params.temp!==undefined&&!isNaN(parseFloat(params.temp)))t.value=parseFloat(params.temp);
+    if(pp&&params.top_p!==undefined&&!isNaN(parseFloat(params.top_p)))pp.value=parseFloat(params.top_p);
+    if(pk&&params.top_k!==undefined&&!isNaN(parseInt(params.top_k,10)))pk.value=parseInt(params.top_k,10);
+    onCustomParam();
+  };
+  fr.readAsText(inp.files[0]);
+  inp.value='';
 }

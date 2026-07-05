@@ -42,6 +42,10 @@
   --ease:cubic-bezier(.4,0,.2,1);
   --header-h:58px;
   --topbar-h:66px;
+  /* instrument gauge face + needle (overridden per profile) */
+  --g-face0:#000066; --g-face1:#000044; --g-face2:#000022;
+  --g-ring:#000033; --g-nd0:#FF5555; --g-nd1:#AA0000;
+  --g-ink:#AAAAAA; --g-lab:#CCD8F0; --g-tickmaj:#FFFF00; --g-tickmin:#555577;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;overflow-x:hidden;}
@@ -478,6 +482,7 @@ body.mizan{
   --yellow:#ff9a33; --cyan:#ff4d63;
   --glow-y:rgba(255,154,51,.30); --glow-c:rgba(255,77,99,.34);
   background:radial-gradient(140% 90% at 50% -15%, #7f230b 0%, var(--bg) 42%, #2e0700 100%);
+  --g-face0:#3a0f04; --g-face1:#280a02; --g-face2:#160400; --g-ring:#300a02; --g-nd0:#ff9a33; --g-nd1:#cc6a00;
 }
 body.mizan header{background:linear-gradient(180deg,#3a0900,var(--dark));}
 body.mizan nav,body.mizan aside{background:linear-gradient(180deg,var(--panel),#380900);}
@@ -500,6 +505,8 @@ body.custom{
   --yellow:#9a7b34; --cyan:#c1603c;
   --glow-y:rgba(154,123,52,.16); --glow-c:rgba(193,96,60,.18);
   background:radial-gradient(140% 90% at 50% -15%, #faf9f4 0%, var(--bg) 45%, #ece8dc 100%);
+  --g-face0:#f2eee3; --g-face1:#e7e1d2; --g-face2:#dbd4c1; --g-ring:#e0dac9; --g-nd0:#c1603c; --g-nd1:#8a3f22;
+  --g-ink:#1a1712; --g-lab:#1a1712; --g-tickmaj:#1a1712; --g-tickmin:#5a564a;
 }
 body.custom header{background:linear-gradient(180deg,#efeae0,#e7e1d4);}
 body.custom nav,body.custom aside{background:linear-gradient(180deg,#efece3,#eae5d8);}
@@ -524,6 +531,11 @@ body.custom .bubble th{background:rgba(193,96,60,.12);color:#a8482b;}
 body.custom .think-panel,body.custom .think-toggle{background:rgba(0,0,0,.05);}
 body.custom .think-panel{color:#4a473f;}
 body.custom .think-toggle{color:#6a675e;}
+body.custom #odo-track{background:linear-gradient(180deg,#ece7d9,#ddd7c6);box-shadow:0 0 10px rgba(154,123,52,.16),inset 0 2px 6px rgba(0,0,0,.10);}
+body.custom .odo-digit{background:#efeadd;border-color:#cfc8b4;box-shadow:inset 0 0 5px rgba(0,0,0,.08);}
+body.custom .odo-d{color:#cdc6b3;}
+body.custom .odo-d.lit{color:#2a2620;text-shadow:none;}
+body.custom .odo-sep,body.custom .odo-unit{color:#2a2620;}
 
 /* ── PROFILE MODAL ── */
 #profile-modal{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);align-items:center;justify-content:center;}
@@ -551,6 +563,9 @@ body.custom .think-toggle{color:#6a675e;}
 .pm-params input:disabled,.pm-params textarea:disabled{cursor:not-allowed;}.pm-params input:disabled{pointer-events:none;}
 .pm-params textarea{resize:vertical;line-height:1.5;}
 .pm-hint{font-size:11px;color:var(--dim);line-height:1.4;}
+.pm-preset-row{display:flex;gap:8px;margin-top:4px;}
+.pm-preset-btn{flex:1;padding:6px 8px;border:1px solid var(--steel);border-radius:var(--radius-xs);background:rgba(255,255,255,.03);color:var(--dim);font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;cursor:pointer;transition:border-color .16s,color .16s;}
+.pm-preset-btn:hover{border-color:var(--cyan);color:var(--cyan);}
 #settings-modal .pm-card{width:min(680px,94vw);}
 .set-cols{display:flex;gap:16px;align-items:flex-start;}
 .set-col{flex:1;min-width:0;}
@@ -620,7 +635,7 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
   </div>
   <div class="h-center">
     <div class="wm" id="wm" onclick="openProfile()" title="Switch mode (A.N.S.E.L.M.O / Mizan / Custom)" style="cursor:pointer;">A.N.S.E.L.M.O<span class="wm-mode">mode</span></div>
-    <div class="hbadge">v0.925</div>
+    <div class="hbadge">v0.926</div>
   </div>
   <div class="h-right">
     <button id="model-btn" onclick="openSettings()" title="Click to change model / runtime settings"><span class="model-pre">model:</span>&nbsp;<span id="hdr-model">-</span></button>
@@ -640,9 +655,9 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
   <svg id="steam-svg" viewBox="0 0 220 190">
     <defs>
       <radialGradient id="dF" cx="50%" cy="40%">
-        <stop offset="0%" stop-color="#000066"/>
-        <stop offset="65%" stop-color="#000044"/>
-        <stop offset="100%" stop-color="#000022"/>
+        <stop offset="0%" style="stop-color:var(--g-face0)"/>
+        <stop offset="65%" style="stop-color:var(--g-face1)"/>
+        <stop offset="100%" style="stop-color:var(--g-face2)"/>
       </radialGradient>
       <linearGradient id="bz" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stop-color="#888888"/>
@@ -652,8 +667,8 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
         <stop offset="100%" stop-color="#444444"/>
       </linearGradient>
       <linearGradient id="ng" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stop-color="#FF5555"/>
-        <stop offset="100%" stop-color="#AA0000"/>
+        <stop offset="0%" style="stop-color:var(--g-nd0)"/>
+        <stop offset="100%" style="stop-color:var(--g-nd1)"/>
       </linearGradient>
     </defs>
     <circle cx="110" cy="100" r="88" fill="url(#bz)"/>
@@ -661,24 +676,24 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
     <circle cx="184" cy="32" r="4" fill="#222" stroke="#888" stroke-width=".8"/>
     <circle cx="36" cy="168" r="4" fill="#222" stroke="#888" stroke-width=".8"/>
     <circle cx="184" cy="168" r="4" fill="#222" stroke="#888" stroke-width=".8"/>
-    <circle cx="110" cy="100" r="81" fill="#000033" stroke="#555" stroke-width="1"/>
+    <circle cx="110" cy="100" r="81" style="fill:var(--g-ring)" stroke="#555" stroke-width="1"/>
     <circle cx="110" cy="100" r="76" fill="url(#dF)"/>
     <path id="z1" fill="none" stroke="#004400" stroke-width="7" stroke-linecap="round"/>
     <path id="z2" fill="none" stroke="#444400" stroke-width="7" stroke-linecap="round"/>
     <path id="z3" fill="none" stroke="#440000" stroke-width="7" stroke-linecap="round"/>
-    <path id="arc" fill="none" stroke="#55FF55" stroke-width="5" stroke-linecap="round" style="transition:stroke .4s;"/>
+    <path id="arc" fill="none" stroke="#2f9e44" stroke-width="5" stroke-linecap="round" style="transition:stroke .4s;"/>
     <g id="ticks"></g>
-    <text x="110" y="140" text-anchor="middle" fill="#AAAAAA" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace" letter-spacing=".2em" id="glabel">GPU %</text>
-    <text id="gval" x="110" y="160" text-anchor="middle" fill="#55FF55" font-size="22" font-family="Share Tech Mono,Lucida Console,Courier New,monospace" font-weight="bold" style="transition:fill .3s;">0</text>
-    <text id="gsub" x="110" y="178" text-anchor="middle" fill="#AAAAAA" font-size="12" font-family="Share Tech Mono,Lucida Console,Courier New,monospace"></text>
+    <text x="110" y="140" text-anchor="middle" style="fill:var(--g-ink)" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace" letter-spacing=".2em" id="glabel">GPU %</text>
+    <text id="gval" x="110" y="160" text-anchor="middle" fill="#2f9e44" font-size="22" font-family="Share Tech Mono,Lucida Console,Courier New,monospace" font-weight="bold" style="transition:fill .3s;">0</text>
+    <text id="gsub" x="110" y="178" text-anchor="middle" style="fill:var(--g-ink)" font-size="12" font-family="Share Tech Mono,Lucida Console,Courier New,monospace"></text>
     <polygon id="needle" fill="url(#ng)" style="transform-origin:110px 100px;transition:transform .4s cubic-bezier(.4,0,.2,1);filter:drop-shadow(0 0 3px rgba(255,0,0,.5));"/>
     <polygon id="needlew" fill="#770000" style="transform-origin:110px 100px;transition:transform .4s cubic-bezier(.4,0,.2,1);"/>
     <circle cx="110" cy="100" r="8" fill="#222" stroke="#888" stroke-width="1.5"/>
     <circle cx="110" cy="100" r="5" fill="#111"/>
     <circle cx="110" cy="100" r="2.5" fill="#AAAAAA"/>
-    <text x="28" y="122" text-anchor="middle" fill="#AAAAAA" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace">0</text>
-    <text x="192" y="122" text-anchor="middle" fill="#AAAAAA" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace">500</text>
-    <text x="110" y="22" text-anchor="middle" fill="#AAAAAA" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace">250</text>
+    <text x="28" y="122" text-anchor="middle" style="fill:var(--g-ink)" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace">0</text>
+    <text x="192" y="122" text-anchor="middle" style="fill:var(--g-ink)" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace">500</text>
+    <text x="110" y="22" text-anchor="middle" style="fill:var(--g-ink)" font-size="10" font-family="Share Tech Mono,Lucida Console,Courier New,monospace">250</text>
   </svg>
 
   <div id="pw-split" style="text-align:center;font-family:var(--mono);font-size:14px;color:var(--white);letter-spacing:.04em;margin:-2px 0 6px;">-</div>
@@ -716,13 +731,6 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
     <div>
       <div class="stat-row"><span class="sk" data-i18n="stat.toksec">tok/sec</span><span class="sv b" id="tok-sec">-</span></div>
       <div class="speed-bg"><div class="speed-fill" id="speed-fill"></div></div>
-    </div>
-    <div class="stat-row">
-      <span class="sk" data-i18n="stat.wh_session">Wh session</span>
-      <span style="display:flex;align-items:center;gap:8px;">
-        <span class="sv g" id="wh-s">0.000</span>
-        <span style="font-size:12px;color:var(--dim);cursor:pointer;" onclick="resetWhSession()">[reset]</span>
-      </span>
     </div>
     <div class="stat-row">
       <span class="sk" data-i18n="stat.wh_total">Wh total</span>
@@ -789,6 +797,11 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
         <label title="Top-k — limits the choice to the K most likely tokens at each step. Lower = more focused; 40 is a good default; 0 = disabled (no limit).">Top-k<input id="pm-topk" type="number" step="1" min="0" max="500" oninput="onCustomParam()" title="Top-k — limits the choice to the K most likely tokens at each step. Lower = more focused; 40 is a good default; 0 = disabled (no limit)."></label>
       </div>
       <label class="pm-sys-label" title="System prompt — the base instructions that define the model's identity and style. Editable only in the Custom profile.">System prompt<textarea id="pm-sys" rows="5" oninput="onCustomParam()"></textarea></label>
+      <div class="pm-preset-row" id="pm-preset-row" style="display:none">
+        <button class="pm-preset-btn" onclick="savePreset()" title="Download the current system prompt as a .md file">&#x2913; Save preset</button>
+        <button class="pm-preset-btn" onclick="loadPreset()" title="Load a .md file into the system prompt (switches to Custom)">&#x2912; Load preset</button>
+        <input type="file" id="pm-preset-input" accept=".md,.txt" style="display:none" onchange="onPresetFile(this)">
+      </div>
       <div class="pm-hint" id="pm-hint"></div>
     </div>
   </div>
@@ -867,15 +880,15 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
 </div>
 
 <script src="selmo-i18n.js?v=0.922"></script>
-<script src="selmo-core.js?v=0.903"></script>
+<script src="selmo-core.js?v=0.926"></script>
 <script src="selmo-bridges.js?v=0.925"></script>
-<script src="selmo-model.js?v=0.925"></script>
+<script src="selmo-model.js?v=0.926"></script>
 <script src="selmo-docs.js?v=0.903"></script>
-<script src="selmo-chat.js?v=0.919"></script>
+<script src="selmo-chat.js?v=0.926"></script>
 <script src="selmo-send.js?v=0.918"></script>
 <script src="selmo-media.js?v=0.925"></script>
 <script src="selmo-sessions.js?v=0.925"></script>
 <script src="selmo-settings.js?v=0.919"></script>
-<script src="selmo-boot.js?v=0.925"></script>
+<script src="selmo-boot.js?v=0.926"></script>
 </body>
 </html>
