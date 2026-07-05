@@ -323,7 +323,48 @@ function initLang(){
   document.addEventListener('click', function(){ menu.classList.remove('on'); });
 }
 
+/* ---- capability matrix ---- */
+var CAPS = [
+  { icon:'<path d="M13 2L3 14h9l-1 8 10-12h-9z"/>',
+    ct:'Energy monitoring',
+    cd:'Real-time watts + Wh per session' },
+  { icon:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h10M7 12h7M7 16h4"/><path d="M17 14l2 2-2 2"/>',
+    ct:'Reasoning / THINK',
+    cd:'Dedicated panel for reasoning models' },
+  { icon:'<rect x="7" y="2" width="10" height="20" rx="2"/><circle cx="12" cy="18" r="1"/>',
+    ct:'Mobile access',
+    cd:'Phone access via HTTPS on local network' },
+  { icon:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/>',
+    ct:'Documents & chunking',
+    cd:'Full-file analysis, auto-chunking, vision & OCR' },
+  { icon:'<rect x="9" y="2" width="6" height="9" rx="3"/><path d="M5.5 10a6.5 6.5 0 0013 0"/><path d="M12 16V20M9.5 20h5"/>',
+    ct:'Voice loop',
+    cd:'Whisper STT + Kokoro TTS, hands-free' },
+  { icon:'<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/>',
+    ct:'Web search',
+    cd:'Optional, off by default, privacy-first' },
+  { icon:'<rect x="3" y="6" width="11" height="9" rx="1.5"/><rect x="10" y="9" width="11" height="9" rx="1.5"/><path d="M14 3l4 4-4 4"/>',
+    ct:'Image-to-image',
+    cd:'Generate from text or existing image' },
+  { icon:'<path d="M4 4h16v11H9l-4 4v-4H4z"/>',
+    ct:'Chat',
+    cd:'Local conversation, zero cloud' }
+];
+
+function buildCaps(){
+  var el = document.querySelector('.caps');
+  if(!el) return;
+  el.innerHTML = CAPS.map(function(c){
+    return '<div class="cap">'+
+      '<div class="ic"><svg viewBox="0 0 24 24">'+c.icon+'</svg></div>'+
+      '<div class="ct">'+c.ct+'</div>'+
+      '<div class="cd">'+c.cd+'</div>'+
+      '</div>';
+  }).join('');
+}
+
 document.addEventListener('DOMContentLoaded', function(){
   wireLinks(); initLang(); setLang(LANG);
+  buildCaps();
   if(window.onPageReady) window.onPageReady();
 });
