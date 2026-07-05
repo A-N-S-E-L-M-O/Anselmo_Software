@@ -19,7 +19,7 @@ Dropbox): they are slow and not needed.
 On the first launch Selmo offers to download a default (Mistral-7B-Instruct v0.3,
 Apache 2.0 and European, fits an 8 GB PC) - say yes and you are ready to chat.
 Prefer your own? Say no and drop a `.gguf` into `models\`; the recommended ones
-are listed in `installer\MODELS.md`.
+are listed in `MODELS.md` (in the Selmo folder).
 
 **3. Double-click `Selmo.cmd`**
 That is the only file to launch. Keep it handy (or make a Desktop shortcut:

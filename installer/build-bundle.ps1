@@ -86,10 +86,13 @@ New-Item -ItemType Directory -Path (Join-Path $Dist "installer") | Out-Null
 # launcher + support scripts under installer\ (the shortcut runs
 # python\pythonw.exe with installer\boot.py -- no loose .vbs/.cmd to be
 # quarantined by antivirus)
-foreach ($f in @("boot.py","first_run.py","downloads.json","MODELS.md",
+foreach ($f in @("boot.py","first_run.py","downloads.json",
                  "_dl.py","addon_voice.py","addon_image.py","addon_uninstall.py")) {
   Copy-Item (Join-Path $PSScriptRoot $f) (Join-Path $Dist "installer\$f") -Force
 }
+# user-facing "adding a model" guide: source of truth is docs\MODELS.md, shipped
+# at the bundle root next to QUICKSTART.md (referenced from step 2 there).
+Copy-Item (Join-Path $Root "docs\MODELS.md") (Join-Path $Dist "MODELS.md") -Force
 
 # models\ exists but stays empty (filled on first run)
 New-Item -ItemType Directory -Path (Join-Path $Dist "models") | Out-Null
