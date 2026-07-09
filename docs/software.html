@@ -24,18 +24,33 @@
     <div class="tag" data-i18n="sw.sub">The easy way into local AI models, stigma not included.</div>
   </header>
 
-  <!-- floating window: the app interface -->
-  <div class="floatwin" id="floatwin">
-    <div class="fw-bar" id="fwbar">
-      <span class="fw-led"></span>
-      <span class="fw-title" data-i18n="fw.title">A.N.S.E.L.M.O — live interface</span>
-      <span class="fw-hint" data-i18n="fw.hint">drag me</span>
+  <!-- device stage: desktop window + phone overlay -->
+  <div class="devstage">
+
+    <!-- floating window: the app interface -->
+    <div class="floatwin" id="floatwin">
+      <div class="fw-bar" id="fwbar">
+        <span class="fw-led"></span>
+        <span class="fw-title" data-i18n="fw.title">A.N.S.E.L.M.O — live interface</span>
+        <span class="fw-hint" data-i18n="fw.hint">drag me</span>
+      </div>
+      <div class="fw-body">
+        <img id="fwimg" src="assets/anselmo-ui.png" alt="A.N.S.E.L.M.O interface"
+             onerror="this.style.display='none';document.getElementById('fwph').style.display='flex';">
+        <div class="fw-ph" id="fwph" style="display:none" data-i18n="fw.ph">Drop the interface screenshot at assets/anselmo-ui.png</div>
+      </div>
     </div>
-    <div class="fw-body">
-      <img id="fwimg" src="assets/anselmo-ui.png" alt="A.N.S.E.L.M.O interface"
-           onerror="this.style.display='none';document.getElementById('fwph').style.display='flex';">
-      <div class="fw-ph" id="fwph" style="display:none" data-i18n="fw.ph">Drop the interface screenshot at assets/anselmo-ui.png</div>
+
+    <!-- phone overlay: the app on a handset -->
+    <div class="phone" aria-label="A.N.S.E.L.M.O on a phone">
+      <div class="phone-screen">
+        <span class="phone-notch"></span>
+        <img src="assets/anselmo-phone.jpg" alt="A.N.S.E.L.M.O on a phone"
+             onerror="this.style.display='none';this.parentNode.querySelector('.phone-ph').style.display='flex';">
+        <div class="phone-ph" data-i18n="phone.ph">Drop the phone screenshot at assets/anselmo-phone.jpg</div>
+      </div>
     </div>
+
   </div>
 
   <!-- capability matrix -->

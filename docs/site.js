@@ -5,8 +5,8 @@
 /* ---- Links: fill these in ---- */
 var LINKS = {
   github: "https://github.com/A-N-S-E-L-M-O/Anselmo_Software/releases/latest",
-  amazon: "https://www.amazon.com/",        // TODO: Amazon book URL (once the book is up)
-  kobo:   "https://www.kobo.com/",          // TODO: Kobo book URL (once the book is up)
+  amazon: "https://www.amazon.it/dp/B0H7K87M2Y",   // The Washing Machine Dialogues (EN ebook)
+  kobo:   "https://www.kobo.com/ww/en/ebook/the-washing-machine-dialogues",  // EN ebook
   quick:  "quickstart.html",                 // in-site quick start page
   terms:  "https://github.com/A-N-S-E-L-M-O/Anselmo_Software/blob/main/TERMS.md",
   notice: "https://github.com/A-N-S-E-L-M-O/Anselmo_Software/blob/main/NOTICE"
@@ -24,7 +24,7 @@ var I18N = {
     /* home */
     'hero.tag': "The easy way into local AI models, stigma not included.",
     'hero.sub': 'Algorithm for Neural Synthesis with Emotional-Linguistic Memory Optimization. Selmo, to friends.',
-    'entry.app.k': 'The software', 'entry.app.t': 'Want to talk to A.N.S.E.L.M.O from your PC?',
+    'entry.app.k': 'The software', 'entry.app.t': 'Want to talk to A.N.S.E.L.M.O from your&nbsp;PC?',
     'entry.app.d': 'For the washing machine, we are not quite there yet.',
     'entry.app.go': 'Enter →',
     'entry.book.k': 'The book', 'entry.book.t': 'The Washing Machine Dialogues',
@@ -35,6 +35,7 @@ var I18N = {
     'sw.title': 'A.N.S.E.L.M.O', 'sw.sub': 'The easy way into local AI models, stigma not included.',
     'fw.title': 'A.N.S.E.L.M.O — live interface', 'fw.hint': 'drag me',
     'fw.ph': 'Drop the interface screenshot at assets/anselmo-ui.png',
+    'phone.ph': 'Drop the phone screenshot at assets/anselmo-phone.jpg',
     'faq.h': 'About the software',
     'cta.github': 'Get it on GitHub', 'cta.github.s': 'Download · source available',
     'cta.quickstart': 'Quick start — up and running in 3 steps →',
@@ -47,7 +48,6 @@ var I18N = {
     'book.avail': 'The book is available here:',
     'cta.amazon': 'Amazon', 'cta.amazon.s': 'Paperback · eBook',
     'cta.kobo': 'Kobo', 'cta.kobo.s': 'eBook',
-    'book.it.note': 'The Italian edition (Dialoghi con la lavatrice) is already out; the English edition ships with the app.',
 
     /* footer */
     'foot.quick': 'Quick guide', 'foot.terms': 'Terms of Use', 'foot.notice': 'Notice & license',
@@ -67,6 +67,7 @@ var I18N = {
     'sw.title': 'A.N.S.E.L.M.O', 'sw.sub': 'La forma fácil de entrar en los modelos de IA locales, sin estigma incluido.',
     'fw.title': 'A.N.S.E.L.M.O — interfaz en vivo', 'fw.hint': 'arrástrame',
     'fw.ph': 'Coloca la captura de la interfaz en assets/anselmo-ui.png',
+    'phone.ph': 'Coloca la captura del teléfono en assets/anselmo-phone.jpg',
     'faq.h': 'Sobre el software',
     'cta.github': 'Descárgalo en GitHub', 'cta.github.s': 'Descarga · código disponible',
     'cta.quickstart': 'Guía rápida — en marcha en 3 pasos →',
@@ -77,7 +78,6 @@ var I18N = {
     'book.avail': 'El libro está disponible aquí:',
     'cta.amazon': 'Amazon', 'cta.amazon.s': 'Tapa blanda · eBook',
     'cta.kobo': 'Kobo', 'cta.kobo.s': 'eBook',
-    'book.it.note': 'La edición italiana (Dialoghi con la lavatrice) ya está a la venta; la edición inglesa viene con la app.',
     'foot.quick': 'Guía rápida', 'foot.terms': 'Términos de uso', 'foot.notice': 'Aviso y licencia',
     'foot.cw': '© 2026 Fabio Garzetti — A.N.S.E.L.M.O es de código disponible (Apache 2.0 + Commons Clause).'
   },
@@ -95,6 +95,7 @@ var I18N = {
     'sw.title': 'A.N.S.E.L.M.O', 'sw.sub': '轻松上手本地 AI 模型，不带偏见。',
     'fw.title': 'A.N.S.E.L.M.O — 实时界面', 'fw.hint': '拖动我',
     'fw.ph': '把界面截图放到 assets/anselmo-ui.png',
+    'phone.ph': '把手机截图放到 assets/anselmo-phone.jpg',
     'faq.h': '关于软件',
     'cta.github': '在 GitHub 获取', 'cta.github.s': '下载 · 源码可用',
     'cta.quickstart': '快速开始 — 三步即可运行 →',
@@ -105,7 +106,6 @@ var I18N = {
     'book.avail': '本书可在这里获取：',
     'cta.amazon': 'Amazon', 'cta.amazon.s': '平装 · 电子书',
     'cta.kobo': 'Kobo', 'cta.kobo.s': '电子书',
-    'book.it.note': '意大利语版（Dialoghi con la lavatrice）已上市；英文版随应用一同发布。',
     'foot.quick': '快速指南', 'foot.terms': '使用条款', 'foot.notice': '声明与许可',
     'foot.cw': '© 2026 Fabio Garzetti — A.N.S.E.L.M.O 源码可用（Apache 2.0 + Commons Clause）。'
   },
@@ -123,6 +123,7 @@ var I18N = {
     'sw.title': 'A.N.S.E.L.M.O', 'sw.sub': 'الطريق السهل إلى نماذج الذكاء الاصطناعي المحلية، بلا وصمة.',
     'fw.title': 'A.N.S.E.L.M.O — الواجهة الحية', 'fw.hint': 'اسحبني',
     'fw.ph': 'ضع لقطة الواجهة في assets/anselmo-ui.png',
+    'phone.ph': 'ضع لقطة الهاتف في assets/anselmo-phone.jpg',
     'faq.h': 'عن البرنامج',
     'cta.github': 'احصل عليه من GitHub', 'cta.github.s': 'تنزيل · المصدر متاح',
     'cta.quickstart': 'البدء السريع — جاهز في 3 خطوات →',
@@ -133,7 +134,6 @@ var I18N = {
     'book.avail': 'الكتاب متاح هنا:',
     'cta.amazon': 'Amazon', 'cta.amazon.s': 'غلاف ورقي · كتاب إلكتروني',
     'cta.kobo': 'Kobo', 'cta.kobo.s': 'كتاب إلكتروني',
-    'book.it.note': 'النسخة الإيطالية (Dialoghi con la lavatrice) صدرت بالفعل؛ والنسخة الإنجليزية تأتي مع التطبيق.',
     'foot.quick': 'دليل سريع', 'foot.terms': 'شروط الاستخدام', 'foot.notice': 'إشعار وترخيص',
     'foot.cw': '© 2026 Fabio Garzetti — A.N.S.E.L.M.O مصدره متاح (Apache 2.0 + Commons Clause).'
   }

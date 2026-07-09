@@ -1,79 +1,55 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>A.N.S.E.L.M.O</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            background-color: #0B1A35;
-            color: #FFFFFF;
-            font-family: 'Courier New', monospace;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .container {
-            text-align: center;
-            padding: 2rem;
-        }
-
-        h1 {
-            color: #FFC857;
-            font-size: 3rem;
-            letter-spacing: 0.5em;
-            margin-bottom: 1rem;
-            text-transform: uppercase;
-        }
-
-        .subtitle {
-            color: #4ECDC4;
-            font-size: 1.2rem;
-            letter-spacing: 0.3em;
-            margin-bottom: 3rem;
-        }
-
-        .images-wrapper {
-            display: flex;
-            justify-content: center;
-            gap: 2rem;
-        }
-
-        .cover-image, .ui-image {
-            height: auto;
-            max-height: 400px;
-            width: auto;
-            border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(78, 205, 196, 0.3);
-        }
-
-        .status {
-            margin-top: 2rem;
-            color: #8892B0;
-            font-size: 0.9rem;
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A.N.S.E.L.M.O — your AI, on your machine</title>
+<meta name="description" content="A.N.S.E.L.M.O — the easy way to run local AI models on your own computer, stigma not included. Private, and honest about the energy it uses. From the novel The Washing Machine Dialogues.">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>A.N.S.E.L.M.O</h1>
-        <p class="subtitle">is coming soon</p>
-        
-        <div class="images-wrapper">
-            <img src="assets/cover.png" alt="A.N.S.E.L.M.O Cover" class="cover-image">
-            <img src="assets/anselmo-ui.png" alt="A.N.S.E.L.M.O UI" class="ui-image">
-        </div>
-        
-        <p class="status">v0.922 • initializing...</p>
+<div class="watermark" aria-hidden="true"></div>
+<div class="wrap">
+
+  <div class="top">
+    <div class="brandmini" data-i18n="brand.mini">A.N.S.E.L.M.O · <b>local AI</b></div>
+    <div class="top-r">
+      <button class="langbtn" id="langbtn" title="Language">EN ▾</button>
     </div>
+  </div>
+
+  <header class="hero">
+    <h1>A.N.S.E.L.M.O</h1>
+    <div class="tag" data-i18n="hero.tag">The easy way into local AI models, stigma not included.</div>
+  </header>
+
+  <section class="sec">
+    <div class="entries">
+      <a class="entry" href="software.html">
+        <div class="k" data-i18n="entry.app.k">The software</div>
+        <div class="t" data-i18n="entry.app.t">Want to talk to A.N.S.E.L.M.O from your&nbsp;PC?</div>
+        <div class="d" data-i18n="entry.app.d">For the washing machine, we are not quite there yet.</div>
+        <div class="go" data-i18n="entry.app.go">Enter →</div>
+      </a>
+      <a class="entry" href="book.html">
+        <div class="k" data-i18n="entry.book.k">The book</div>
+        <div class="t" data-i18n="entry.book.t">The Washing Machine Dialogues</div>
+        <div class="d" data-i18n="entry.book.d">The novel A.N.S.E.L.M.O was born from.</div>
+        <div class="go" data-i18n="entry.book.go">Enter →</div>
+      </a>
+    </div>
+  </section>
+
+  <footer>
+    <nav>
+      <a data-link="quick" target="_blank" rel="noopener" data-i18n="foot.quick">Quick guide</a>
+      <a data-link="terms" target="_blank" rel="noopener" data-i18n="foot.terms">Terms of Use</a>
+      <a data-link="notice" target="_blank" rel="noopener" data-i18n="foot.notice">Notice &amp; license</a>
+      <a data-link="github" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+    <div class="cw" data-i18n="foot.cw">© 2026 Fabio Garzetti — A.N.S.E.L.M.O is source-available (Apache 2.0 + Commons Clause).</div>
+  </footer>
+</div>
+<script src="site.js"></script>
 </body>
 </html>
