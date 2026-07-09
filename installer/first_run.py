@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
 Selmo first-run engine setup (stdlib only -- runs on the bundled embeddable
-Python). It downloads ONLY the llama.cpp backend matched to the machine:
-
-  NVIDIA card -> CUDA build (+ cudart runtime libs)
-  otherwise   -> Vulkan build (also runs on CPU)
+Python). It downloads the llama.cpp Vulkan backend, one engine that runs on any
+GPU (NVIDIA / AMD / Intel) and on the CPU alone. On an NVIDIA card the optional
+Install-CUDA add-on later swaps this for the faster CUDA build + cudart libs
+(see addon_cuda.py); keeping the base Vulkan-only is what makes it work on every
+machine out of the box.
 
 Selmo is model-agnostic, so no model is forced on you. After the engine is
 ready, first run OFFERS a default model (Mistral-7B-Instruct v0.3, ~3.5 GB -

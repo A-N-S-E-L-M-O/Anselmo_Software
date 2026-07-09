@@ -38,6 +38,13 @@ def download(url, dest, min_bytes=0):
     dest.parent.mkdir(parents=True, exist_ok=True)
     part = dest.with_suffix(dest.suffix + ".part")
     have = part.stat().st_size if part.exists() else 0
+    # A .part that already meets the expected size is a completed download that
+    # never got renamed (an earlier wrong size gate, or an interrupt before the
+    # rename). Finalize it rather than resuming past EOF, which the server 416s.
+    if have and min_bytes and have >= min_bytes:
+        part.replace(dest)
+        print(f"  [done] {dest.name}  ({human(have)}, already downloaded)")
+        return True
     req  = urllib.request.Request(url, headers=dict(UA))
     if have:
         req.add_header("Range", f"bytes={have}-")

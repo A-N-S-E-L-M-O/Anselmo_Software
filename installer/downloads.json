@@ -2,7 +2,7 @@
   "backend": {
     "_comment": "Backend (llama.cpp) downloaded on first run, matched to the GPU. Whole zips from the official releases so server+libs are same build.",
     "api": "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest",
-    "cuda_zip": "bin-win-cuda-.*-x64\\.zip$",
+    "cuda_zip": "^llama-.*-bin-win-cuda-.*-x64\\.zip$",
     "cudart_zip": "cudart-.*-x64\\.zip$",
     "vulkan_zip": "bin-win-vulkan-x64\\.zip$"
   },

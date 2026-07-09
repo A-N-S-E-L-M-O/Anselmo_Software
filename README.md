@@ -7,7 +7,7 @@
 
 > *A.N.S.E.L.M.O: Algorithm for Neural Synthesis with Emotional-Linguistic Memory Optimization. Selmo, to friends.* From the book *Dialoghi con la lavatrice* (English edition: *The Washing Machine Dialogues*), which inspired this project.
 
-**Status:** `v0.925` · **Session:** `33`  
+**Status:** `v0.928` · `beta` · **Session:** `35`  
 A.N.S.E.L.M.O is **privacy-first by design**: your prompts, files, and conversations stay on your computer. It runs any open-source LLM with a permissive license on top of `llama.cpp`, behind a single HTML client.
 
 ## Features

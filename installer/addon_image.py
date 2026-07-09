@@ -14,7 +14,9 @@ What it installs:
       Qwen3-4B-Instruct-2507-Q4_K_M.gguf text encoder (--llm)
       ae.safetensors                     VAE (ungated Comfy-Org/z_image_turbo mirror)
 
-Re-runnable and idempotent. Restart Selmo afterwards to get the image button.
+The engine is installed unconditionally; the ~9 GB default weights are OFFERED
+and skippable (decline to use your own image model instead), the same pattern as
+the first-run LLM model. Re-runnable and idempotent. Restart Selmo afterwards.
 """
 import sys
 import tempfile
@@ -31,14 +33,14 @@ SD_WIN = r"sd-.*-bin-win-vulkan-x64\.zip$"
 WEIGHTS = [
     ("z_image_turbo-Q6_K.gguf",
      "https://huggingface.co/leejet/Z-Image-Turbo-GGUF/resolve/main/z_image_turbo-Q6_K.gguf",
-     5_500_000_000),
+     5_263_239_104),
     ("Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
      "https://huggingface.co/bartowski/Qwen_Qwen3-4B-Instruct-2507-GGUF/resolve/main/"
      "Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
-     2_300_000_000),
+     2_497_280_736),
     ("ae.safetensors",
      "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors",
-     300_000_000),
+     335_304_388),
 ]
 
 
@@ -85,9 +87,32 @@ def main():
     print(f"  extracting {name} -> bin\\sd\\  (isolated from the llama.cpp DLLs)")
     extract_flat(zp, BASE / "bin" / "sd")
 
-    # 2. the weights
-    print("\n  Downloading the image models into  image\\  (~9 GB total)...")
+    # 2. the weights - OFFERED and skippable, exactly like the first-run LLM
+    #    model. The engine above is installed unconditionally; the ~9 GB default
+    #    weights are optional, so a user who wants their own image model can
+    #    decline and drop it into image\ instead. A bare ENTER accepts; 'n'
+    #    declines; a non-interactive run (EOF) declines so nothing huge is pulled
+    #    silently.
     img = BASE / "image"
+    print()
+    print("-" * 60)
+    print("  The image ENGINE is installed. Download the default image model now?")
+    print("    Z-Image-Turbo Q6_K + Qwen3-4B encoder + FLUX VAE - ~9 GB, Apache 2.0.")
+    print("  Say no to skip and drop your own model into  image\\  instead")
+    print("  (see docs\\MODELS.md / selmo-image-models.ini). You can re-run this")
+    print("  installer any time to fetch the default later.")
+    print("-" * 60)
+    try:
+        ans = input("  Download the default image model now? [Y/n]  ").strip().lower()
+    except EOFError:
+        ans = "n"
+    if ans not in ("", "y", "yes"):
+        print("\n  [skip] No image model downloaded. Drop your own into  image\\  and")
+        print("         pick it in the browser settings, then restart Selmo.")
+        pause_close()
+        return
+
+    print("\n  Downloading the image model into  image\\  (~9 GB total)...")
     good = all(download(u, img / n, mb) for n, u, mb in WEIGHTS)
 
     print()

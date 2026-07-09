@@ -22,8 +22,11 @@ Prefer your own? Say no and drop a `.gguf` into `models\`; the recommended ones
 are listed in `MODELS.md` (in the Selmo folder).
 
 **3. Double-click `Selmo.cmd`**
-That is the only file to launch. Keep it handy (or make a Desktop shortcut:
-right-click `Selmo.cmd` → Send to → Desktop).
+That is the file to launch the **first** time. On that first run Selmo puts a
+**Selmo icon on your Desktop** (and in the Start menu) - from then on just click
+that little face to start it, and right-click it → **Pin to taskbar** to keep it
+one click away. (Deleted the icon by mistake? Double-click
+`Create-Selmo-Shortcut.cmd` in the Selmo folder to put it back.)
 
 Done. The browser opens with Selmo.
 
@@ -56,6 +59,10 @@ ignore — independently. Each is a single double-click; run it, then restart Se
 - **`Install-Image.cmd`** — local image generation (Z-Image-Turbo via
   stable-diffusion.cpp). It **needs a graphics card** (NVIDIA, AMD or Intel) and
   stops by itself on a PC without one. Downloads ~9 GB.
+- **`Install-CUDA.cmd`** — **NVIDIA only**: swaps Selmo's engine for the faster
+  CUDA build. The base uses a universal Vulkan engine that runs on any GPU and on
+  CPU; on an NVIDIA card CUDA is quicker. It stops by itself on a non-NVIDIA PC,
+  downloads a few hundred MB, and is reversible with `Uninstall-CUDA.cmd`.
 - **`Install-Hardware-Monitor.cmd`** — installs LibreHardwareMonitor so the energy
   monitor shows the **real CPU watts** instead of an estimate (asks for admin once,
   to read the CPU sensors).

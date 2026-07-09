@@ -277,6 +277,12 @@ def generate():
         "-H",    str(height),
         "--seed", str(seed),
         "--diffusion-fa",
+        # Decode the VAE in tiles. Without this the VAE allocates one huge
+        # contiguous compute buffer (~8.5 GB at 1024x1024); with the diffusion
+        # model + text encoder still resident after the LLM swap, that overflows
+        # a 12 GB GPU and the less-frugal Vulkan backend OOMs at decode. Tiling
+        # bounds it to a small buffer with no meaningful quality loss.
+        "--vae-tiling",
         "-o",    str(out_path),
     ]
     if init_path is not None:

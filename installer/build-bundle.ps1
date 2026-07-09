@@ -86,8 +86,8 @@ New-Item -ItemType Directory -Path (Join-Path $Dist "installer") | Out-Null
 # launcher + support scripts under installer\ (the shortcut runs
 # python\pythonw.exe with installer\boot.py -- no loose .vbs/.cmd to be
 # quarantined by antivirus)
-foreach ($f in @("boot.py","first_run.py","downloads.json",
-                 "_dl.py","addon_voice.py","addon_image.py","addon_uninstall.py")) {
+foreach ($f in @("boot.py","first_run.py","downloads.json","make_shortcut.py",
+                 "_dl.py","addon_voice.py","addon_image.py","addon_cuda.py","addon_uninstall.py")) {
   Copy-Item (Join-Path $PSScriptRoot $f) (Join-Path $Dist "installer\$f") -Force
 }
 # user-facing "adding a model" guide: source of truth is docs\MODELS.md, shipped
@@ -101,6 +101,12 @@ New-Item -ItemType Directory -Path (Join-Path $Dist "models") | Out-Null
 # (hidden) without installing.
 $cmd = "@echo off`r`nstart `"`" `"%~dp0python\pythonw.exe`" `"%~dp0installer\boot.py`"`r`n"
 Set-Content -Path (Join-Path $Dist "Selmo.cmd") -Value $cmd -NoNewline -Encoding ASCII
+
+# one-click "put the Selmo icon on my Desktop" helper. First launch already
+# creates it automatically (boot.py -> make_shortcut.py); this is for re-creating
+# it if the user deletes it. Visible console so the confirmation shows.
+$mkico = "@echo off`r`ntitle Selmo - Create Desktop Icon`r`n`"%~dp0python\python.exe`" `"%~dp0installer\make_shortcut.py`"`r`n"
+Set-Content -Path (Join-Path $Dist "Create-Selmo-Shortcut.cmd") -Value $mkico -NoNewline -Encoding ASCII
 
 # ---- optional add-on installers (independent, opt-in) ----------------------
 #   The base is untouched. Each of these adds ONE capability on top of it and
@@ -119,6 +125,11 @@ Set-Content -Path (Join-Path $Dist "Install-Voice.cmd") -Value $voice -NoNewline
 $image = "@echo off`r`ntitle Selmo - Install Image Generation`r`n`"%~dp0python\python.exe`" `"%~dp0installer\addon_image.py`"`r`n"
 Set-Content -Path (Join-Path $Dist "Install-Image.cmd") -Value $image -NoNewline -Encoding ASCII
 
+# CUDA backend swap (NVIDIA only): replaces the base Vulkan engine in bin\ with
+# the faster CUDA build + cudart libs. Reversible via Uninstall-CUDA.cmd.
+$cuda = "@echo off`r`ntitle Selmo - Install CUDA Backend (NVIDIA)`r`n`"%~dp0python\python.exe`" `"%~dp0installer\addon_cuda.py`"`r`n"
+Set-Content -Path (Join-Path $Dist "Install-CUDA.cmd") -Value $cuda -NoNewline -Encoding ASCII
+
 $hw = "@echo off`r`ntitle Selmo - Install Hardware Monitor`r`npowershell -ExecutionPolicy Bypass -File `"%~dp0setup-lhm.ps1`"`r`npause`r`n"
 Set-Content -Path (Join-Path $Dist "Install-Hardware-Monitor.cmd") -Value $hw -NoNewline -Encoding ASCII
 
@@ -129,6 +140,9 @@ Set-Content -Path (Join-Path $Dist "Uninstall-Voice.cmd") -Value $uv -NoNewline 
 
 $ui = "@echo off`r`ntitle Selmo - Uninstall Image Generation`r`n`"%~dp0python\python.exe`" `"%~dp0installer\addon_uninstall.py`" image`r`n"
 Set-Content -Path (Join-Path $Dist "Uninstall-Image.cmd") -Value $ui -NoNewline -Encoding ASCII
+
+$ucuda = "@echo off`r`ntitle Selmo - Uninstall CUDA Backend`r`n`"%~dp0python\python.exe`" `"%~dp0installer\addon_cuda.py`" revert`r`n"
+Set-Content -Path (Join-Path $Dist "Uninstall-CUDA.cmd") -Value $ucuda -NoNewline -Encoding ASCII
 
 $uh = "@echo off`r`ntitle Selmo - Uninstall Hardware Monitor`r`npowershell -ExecutionPolicy Bypass -File `"%~dp0setup-lhm.ps1`" -Uninstall`r`npause`r`n"
 Set-Content -Path (Join-Path $Dist "Uninstall-Hardware-Monitor.cmd") -Value $uh -NoNewline -Encoding ASCII
