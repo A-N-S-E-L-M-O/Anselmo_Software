@@ -19,7 +19,7 @@ Dropbox): they are slow and not needed.
 On the first launch Selmo offers to download a default (Mistral-7B-Instruct v0.3,
 Apache 2.0 and European, fits an 8 GB PC) - say yes and you are ready to chat.
 Prefer your own? Say no and drop a `.gguf` into `models\`; the recommended ones
-are listed in `MODELS.md` (in the Selmo folder).
+are listed in `docs\MODELS.md` (in the Selmo folder).
 
 **3. Double-click `Selmo.cmd`**
 That is the file to launch the **first** time. On that first run Selmo puts a
@@ -34,10 +34,13 @@ Done. The browser opens with Selmo.
 
 ## What happens on the first launch
 
-The **first** time, a black window opens and downloads the right engine for that
-PC (the NVIDIA build if there is an NVIDIA card, otherwise the build that also
-runs on CPU alone). It takes a minute or two and needs the internet **only this
-once**. Then the browser opens by itself.
+The **first** time, a black window opens and downloads Selmo's engine — a
+universal **Vulkan** build that runs on any GPU, and on the CPU alone when there
+is no graphics card. It takes a minute or two and needs the internet **only this
+once**. Then the browser opens by itself. (It does not pick a GPU-specific build
+for you: on an NVIDIA card you can *optionally* swap in the faster CUDA engine
+later with `Install-CUDA.cmd` — see the add-ons below — but Selmo runs as-is
+everywhere.)
 
 From the second launch on it starts straight away, even offline.
 
@@ -47,9 +50,9 @@ is just where you shut everything down (right-click → Exit).
 
 ---
 
-## Optional add-ons — voice, images, hardware monitor
+## Optional add-ons — voice, images, CUDA, hardware monitor
 
-The base edition is deliberately light: **chat, web search and documents**. Three
+The base edition is deliberately light: **chat, web search and documents**. Four
 optional add-ons live in the Selmo folder as separate files you can run — or
 ignore — independently. Each is a single double-click; run it, then restart Selmo.
 

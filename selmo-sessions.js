@@ -1,4 +1,105 @@
 'use strict';
+// --- Local QR code generator (byte mode, ECC L/M/Q/H, auto version+mask). ---
+// Self-contained, offline: builds a scannable QR of any short string (used for
+// the phone-access URL). Algorithm after Project Nayuki's QR generator (MIT).
+// Verified: versions 1-7 decode cleanly; the phone URL is ~38 chars (version 3).
+function selmoQrMatrix(text, eclName){
+  var ECC={L:0,M:1,Q:2,H:3}, ecl=ECC[eclName]!==undefined?ECC[eclName]:ECC.M;
+  var ECC_FORMAT=[1,0,3,2];
+  var ECC_CW=[
+    [0,7,10,15,20,26,18,20,24,30,18,20,24,26,30,22,24,28,30,28,28,28,28,30,30,26,28,30,30,30,30,30,30,30,30,30,30,30,30,30,30],
+    [0,10,16,26,18,24,16,18,22,22,26,30,22,22,24,24,28,28,26,26,26,26,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28],
+    [0,13,22,18,26,18,24,18,22,20,24,28,26,24,20,30,24,28,28,26,30,28,30,30,30,30,28,30,30,30,30,30,30,30,30,30,30,30,30,30,30],
+    [0,17,28,22,16,22,28,26,26,24,28,24,28,22,24,24,30,28,28,26,28,30,24,30,30,30,30,30,30,30,30,30,30,30,30,30,30,30,30,30,30]];
+  var ECC_BLK=[
+    [0,1,1,1,1,1,2,2,2,2,4,4,4,4,4,6,6,6,6,7,8,8,9,9,10,12,12,12,13,14,15,16,17,18,19,19,20,21,22,24,25],
+    [0,1,1,1,2,2,4,4,4,5,5,5,8,9,9,10,10,11,13,14,16,17,17,18,20,21,23,25,26,28,29,31,33,35,37,38,40,43,45,47,49],
+    [0,1,1,2,2,4,4,6,6,8,8,8,10,12,16,12,17,16,18,21,20,23,23,25,27,29,34,34,35,38,40,43,45,48,51,53,56,59,62,65,68],
+    [0,1,1,2,4,4,4,5,6,8,8,11,11,16,16,18,16,19,21,25,25,25,34,30,32,35,37,40,42,45,48,51,54,57,60,63,66,70,74,77,81]];
+  function mul(x,y){var z=0;for(var i=7;i>=0;i--){z=(z<<1)^((z>>>7)*0x11D);z^=((y>>>i)&1)*x;}return z&0xFF;}
+  function rsDiv(deg){var r=[];for(var i=0;i<deg;i++)r.push(0);r[deg-1]=1;var root=1;
+    for(var i=0;i<deg;i++){for(var j=0;j<r.length;j++){r[j]=mul(r[j],root);if(j+1<r.length)r[j]^=r[j+1];}root=mul(root,2);}return r;}
+  function rsRem(data,div){var r=div.map(function(){return 0;});data.forEach(function(b){var f=b^r.shift();r.push(0);div.forEach(function(c,i){r[i]^=mul(c,f);});});return r;}
+  function rawMods(v){var r=(16*v+128)*v+64;if(v>=2){var a=Math.floor(v/7)+2;r-=(25*a-10)*a-55;if(v>=7)r-=36;}return r;}
+  function dataCw(v){return Math.floor(rawMods(v)/8)-ECC_CW[ecl][v]*ECC_BLK[ecl][v];}
+  function alignPos(v){if(v===1)return [];var a=Math.floor(v/7)+2,step=(v===32)?26:Math.ceil((v*4+4)/(a*2-2))*2,r=[6];
+    for(var p=v*4+10;r.length<a;p-=step)r.splice(1,0,p);return r;}
+  var bytes=[];
+  for(var i=0;i<text.length;i++){var c=text.charCodeAt(i);
+    if(c<0x80)bytes.push(c);
+    else if(c<0x800)bytes.push(0xC0|(c>>6),0x80|(c&0x3F));
+    else if(c>=0xD800&&c<0xDC00&&i+1<text.length){var c2=text.charCodeAt(++i),cp=0x10000+((c-0xD800)<<10)+(c2-0xDC00);bytes.push(0xF0|(cp>>18),0x80|((cp>>12)&0x3F),0x80|((cp>>6)&0x3F),0x80|(cp&0x3F));}
+    else bytes.push(0xE0|(c>>12),0x80|((c>>6)&0x3F),0x80|(c&0x3F));}
+  var ver;
+  for(ver=1;ver<=40;ver++){var cc=(ver<=9)?8:16;if(4+cc+bytes.length*8<=dataCw(ver)*8)break;}
+  if(ver>40)throw new Error('QR: data too long');
+  var ccBits=(ver<=9)?8:16, bits=[];
+  function put(val,len){for(var i=len-1;i>=0;i--)bits.push((val>>>i)&1);}
+  put(4,4);put(bytes.length,ccBits);bytes.forEach(function(b){put(b,8);});
+  var cap=dataCw(ver)*8;
+  put(0,Math.min(4,cap-bits.length));
+  while(bits.length%8!==0)bits.push(0);
+  for(var pad=0xEC;bits.length<cap;pad^=0xEC^0x11)put(pad,8);
+  var dcw=[];for(var i=0;i<bits.length;i+=8){var b=0;for(var j=0;j<8;j++)b=(b<<1)|bits[i+j];dcw.push(b);}
+  var nb=ECC_BLK[ecl][ver], el=ECC_CW[ecl][ver], raw=Math.floor(rawMods(ver)/8);
+  var nsh=nb-raw%nb, shl=Math.floor(raw/nb), div=rsDiv(el), blks=[], k=0;
+  for(var i=0;i<nb;i++){var dl=shl-el+(i<nsh?0:1),dat=dcw.slice(k,k+dl);k+=dl;blks.push({dat:dat,ecc:rsRem(dat,div)});}
+  var cw=[], maxd=shl-el+1;
+  for(var i=0;i<maxd;i++)for(var b=0;b<blks.length;b++)if(i<blks[b].dat.length)cw.push(blks[b].dat[i]);
+  for(var i=0;i<el;i++)for(var b=0;b<blks.length;b++)cw.push(blks[b].ecc[i]);
+  var n=ver*4+17, mods=[], fn=[];
+  for(var y=0;y<n;y++){mods.push(new Array(n).fill(false));fn.push(new Array(n).fill(false));}
+  function sf(x,y,d){mods[y][x]=d;fn[y][x]=true;}
+  function finder(cx,cy){for(var dy=-4;dy<=4;dy++)for(var dx=-4;dx<=4;dx++){var x=cx+dx,y=cy+dy;if(x<0||x>=n||y<0||y>=n)continue;var d=Math.max(Math.abs(dx),Math.abs(dy));sf(x,y,d!==2&&d!==4);}}
+  finder(3,3);finder(n-4,3);finder(3,n-4);
+  for(var i=0;i<n;i++){if(!fn[6][i])sf(i,6,i%2===0);if(!fn[i][6])sf(6,i,i%2===0);}
+  var ap=alignPos(ver);
+  for(var a=0;a<ap.length;a++)for(var b=0;b<ap.length;b++){var cx=ap[a],cy=ap[b];
+    if((cx<=8&&cy<=8)||(cx<=8&&cy>=n-9)||(cx>=n-9&&cy<=8))continue;
+    for(var dy=-2;dy<=2;dy++)for(var dx=-2;dx<=2;dx++)sf(cx+dx,cy+dy,Math.max(Math.abs(dx),Math.abs(dy))!==1);}
+  for(var i=0;i<=8;i++){if(i!==6){fn[8][i]=true;fn[i][8]=true;}}
+  for(var i=0;i<8;i++){fn[8][n-1-i]=true;fn[n-1-i][8]=true;}
+  fn[8][8]=true;sf(8,n-8,true);
+  if(ver>=7){var rem=ver;for(var i=0;i<12;i++)rem=(rem<<1)^((rem>>>11)*0x1F25);var vb=(ver<<12)|rem;
+    for(var i=0;i<18;i++){var bit=((vb>>>i)&1)===1,a=Math.floor(i/3),c=i%3;sf(n-11+c,a,bit);sf(a,n-11+c,bit);}}
+  var bi=0;function gb(){if(bi>=cw.length*8)return false;var v=(cw[bi>>3]>>>(7-(bi&7)))&1;bi++;return v===1;}
+  for(var right=n-1;right>=1;right-=2){if(right===6)right=5;
+    for(var vert=0;vert<n;vert++)for(var jj=0;jj<2;jj++){var x=right-jj,up=((right+1)&2)===0,y=up?(n-1-vert):vert;if(!fn[y][x])mods[y][x]=gb();}}
+  function mask(m,x,y){switch(m){case 0:return (x+y)%2===0;case 1:return y%2===0;case 2:return x%3===0;case 3:return (x+y)%3===0;
+    case 4:return (Math.floor(x/3)+Math.floor(y/2))%2===0;case 5:return (x*y)%2+(x*y)%3===0;case 6:return ((x*y)%2+(x*y)%3)%2===0;case 7:return ((x+y)%2+(x*y)%3)%2===0;}}
+  function fmt(m){var d=(ECC_FORMAT[ecl]<<3)|m,rem=d;for(var i=0;i<10;i++)rem=(rem<<1)^((rem>>>9)*0x537);var bits=((d<<10)|rem)^0x5412;
+    for(var i=0;i<=5;i++)mods[i][8]=((bits>>>i)&1)===1;mods[7][8]=((bits>>>6)&1)===1;mods[8][8]=((bits>>>7)&1)===1;mods[8][7]=((bits>>>8)&1)===1;
+    for(var i=9;i<15;i++)mods[8][14-i]=((bits>>>i)&1)===1;
+    for(var i=0;i<8;i++)mods[8][n-1-i]=((bits>>>i)&1)===1;for(var i=8;i<15;i++)mods[n-15+i][8]=((bits>>>i)&1)===1;mods[n-8][8]=true;}
+  function applyMask(m){for(var y=0;y<n;y++)for(var x=0;x<n;x++)if(!fn[y][x]&&mask(m,x,y))mods[y][x]=!mods[y][x];}
+  function penalty(){var p=0;
+    for(var y=0;y<n;y++){var r=1;for(var x=1;x<n;x++){if(mods[y][x]===mods[y][x-1]){r++;if(r===5)p+=3;else if(r>5)p++;}else r=1;}}
+    for(var x=0;x<n;x++){var r=1;for(var y=1;y<n;y++){if(mods[y][x]===mods[y-1][x]){r++;if(r===5)p+=3;else if(r>5)p++;}else r=1;}}
+    for(var y=0;y<n-1;y++)for(var x=0;x<n-1;x++){var c=mods[y][x];if(c===mods[y][x+1]&&c===mods[y+1][x]&&c===mods[y+1][x+1])p+=3;}
+    var pat=[true,false,true,true,true,false,true];
+    function chk(arr){var cnt=0;for(var i=0;i+7<=arr.length;i++){var ok=true;for(var j=0;j<7;j++)if(arr[i+j]!==pat[j])ok=false;
+      if(ok){var b1=(i>=4)&&!arr[i-1]&&!arr[i-2]&&!arr[i-3]&&!arr[i-4];var b2=(i+11<=arr.length)&&!arr[i+7]&&!arr[i+8]&&!arr[i+9]&&!arr[i+10];if(b1||b2)cnt++;}}return cnt;}
+    for(var y=0;y<n;y++){var row=[];for(var x=0;x<n;x++)row.push(mods[y][x]);p+=40*chk(row);}
+    for(var x=0;x<n;x++){var col=[];for(var y=0;y<n;y++)col.push(mods[y][x]);p+=40*chk(col);}
+    var dark=0;for(var y=0;y<n;y++)for(var x=0;x<n;x++)if(mods[y][x])dark++;
+    p+=Math.floor(Math.abs(dark*20-n*n*10)/(n*n))*10;return p;}
+  var base=mods.map(function(r){return r.slice();}), best=0, bestS=Infinity;
+  for(var m=0;m<8;m++){for(var y=0;y<n;y++)for(var x=0;x<n;x++)mods[y][x]=base[y][x];applyMask(m);fmt(m);var s=penalty();if(s<bestS){bestS=s;best=m;}}
+  for(var y=0;y<n;y++)for(var x=0;x<n;x++)mods[y][x]=base[y][x];applyMask(best);fmt(best);
+  return {size:n,modules:mods,version:ver};
+}
+// Render a QR of `url` onto a fresh canvas element and return it.
+function selmoRenderQr(url, cell){
+  cell=cell||5;var quiet=4;
+  var qr=selmoQrMatrix(url,'M'),n=qr.size,px=(n+quiet*2)*cell;
+  var cv=document.createElement('canvas');cv.width=px;cv.height=px;
+  cv.style.cssText='width:'+px+'px;height:'+px+'px;image-rendering:pixelated;border-radius:8px;display:block';
+  var ctx=cv.getContext('2d');
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,px,px);
+  ctx.fillStyle='#000000';
+  for(var y=0;y<n;y++)for(var x=0;x<n;x++)if(qr.modules[y][x])ctx.fillRect((x+quiet)*cell,(y+quiet)*cell,cell,cell);
+  return cv;
+}
 function getSessions(){
   try{return JSON.parse(localStorage.getItem(SESS_KEY)||'[]');}catch{return [];}
 }
@@ -218,8 +319,20 @@ function _openPhonePopup(url){
   var title=document.createElement('div');
   title.textContent='📱 Use Selmo from your phone';
   title.style.cssText='font-size:16px;font-weight:bold;margin-bottom:12px';
+  // QR of the same URL — scan it with the phone camera instead of typing.
+  var qrWrap=document.createElement('div');
+  qrWrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:14px';
+  var qrCap=document.createElement('div');
+  qrCap.textContent='Scan with your phone camera:';
+  qrCap.style.cssText='font-size:13px;opacity:.9';
+  try{
+    var qrPad=document.createElement('div');
+    qrPad.style.cssText='background:#fff;padding:10px;border-radius:10px;line-height:0';
+    qrPad.appendChild(selmoRenderQr(url,5));
+    qrWrap.appendChild(qrCap);qrWrap.appendChild(qrPad);
+  }catch(e){ qrWrap=null; }   // if anything fails, fall back to the address text only
   var p1=document.createElement('div');
-  p1.textContent='Type this address in your phone browser bar:';
+  p1.textContent='…or type this address in your phone browser bar:';
   p1.style.cssText='font-size:13px;opacity:.9;margin-bottom:8px';
   var link=document.createElement('code');
   link.textContent=url;
@@ -256,7 +369,7 @@ function _openPhonePopup(url){
   }).catch(function(){});
   cb.onchange=function(){ fetch('/phone/'+(cb.checked?'on':'off'),{method:'POST'}).catch(function(){}); };
   row.appendChild(copy);row.appendChild(close);
-  card.appendChild(title);card.appendChild(p1);card.appendChild(link);card.appendChild(acc);card.appendChild(warn);card.appendChild(row);card.appendChild(help);
+  card.appendChild(title);if(qrWrap)card.appendChild(qrWrap);card.appendChild(p1);card.appendChild(link);card.appendChild(acc);card.appendChild(warn);card.appendChild(row);card.appendChild(help);
   ov.appendChild(card);
   document.body.appendChild(ov);
 }

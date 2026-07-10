@@ -33,7 +33,7 @@
     <p><strong>1. Unzip the <code>Selmo</code> folder wherever you like</strong><br>
     The Desktop or <code>C:\Selmo</code> are both fine. Avoid cloud-synced folders (OneDrive, Dropbox): they are slow and not needed.</p>
     <p><strong>2. Get a model</strong><br>
-    On the first launch Selmo offers to download a default (Mistral-7B-Instruct v0.3, Apache 2.0 and European, fits an 8 GB PC) — say yes and you are ready to chat. Prefer your own? Say no and drop a <code>.gguf</code> into <code>models\</code>; the recommended ones are listed in <code>installer\MODELS.md</code>.</p>
+    On the first launch Selmo offers to download a default (Mistral-7B-Instruct v0.3, Apache 2.0 and European, fits an 8 GB PC) — say yes and you are ready to chat. Prefer your own? Say no and drop a <code>.gguf</code> into <code>models\</code>; the recommended ones are listed in <code>docs\MODELS.md</code>.</p>
     <p><strong>3. Double-click <code>Selmo.cmd</code></strong><br>
     That is the only file to launch. Keep it handy (or make a Desktop shortcut: right-click <code>Selmo.cmd</code> → Send to → Desktop).</p>
     <p>Done. The browser opens with Selmo.</p>
@@ -41,17 +41,18 @@
     <hr>
 
     <h2>What happens on the first launch</h2>
-    <p>The <strong>first</strong> time, a black window opens and downloads the right engine for that PC (the NVIDIA build if there is an NVIDIA card, otherwise the build that also runs on CPU alone). It takes a minute or two and needs the internet <strong>only this once</strong>. Then the browser opens by itself.</p>
+    <p>The <strong>first</strong> time, a black window opens and downloads Selmo's engine — a universal <strong>Vulkan</strong> build that runs on any GPU, and on the CPU alone when there is no graphics card. It takes a minute or two and needs the internet <strong>only this once</strong>. Then the browser opens by itself. (It does not pick a GPU-specific build for you: on an NVIDIA card you can <em>optionally</em> swap in the faster CUDA engine later with <code>Install-CUDA.cmd</code> — see the add-ons below — but Selmo runs as-is everywhere.)</p>
     <p>From the second launch on it starts straight away, even offline.</p>
     <p>Down by the clock, bottom-right, the <strong>Selmo icon</strong> appears: it is the engine running in the background. You pick the model and chat in the browser; the icon is just where you shut everything down (right-click → Exit).</p>
 
     <hr>
 
-    <h2>Optional add-ons — voice, images, hardware monitor</h2>
-    <p>The base edition is deliberately light: <strong>chat, web search and documents</strong>. Three optional add-ons live in the Selmo folder as separate files you can run — or ignore — independently. Each is a single double-click; run it, then restart Selmo.</p>
+    <h2>Optional add-ons — voice, images, CUDA, hardware monitor</h2>
+    <p>The base edition is deliberately light: <strong>chat, web search and documents</strong>. Four optional add-ons live in the Selmo folder as separate files you can run — or ignore — independently. Each is a single double-click; run it, then restart Selmo.</p>
     <ul>
       <li><strong><code>Install-Voice.cmd</code></strong> — speak to Selmo (Whisper transcription) and have it read replies aloud (Kokoro). Downloads ~330 MB; the transcription model is fetched the first time you use the microphone.</li>
       <li><strong><code>Install-Image.cmd</code></strong> — local image generation (Z-Image-Turbo via stable-diffusion.cpp). It <strong>needs a graphics card</strong> (NVIDIA, AMD or Intel) and stops by itself on a PC without one. Downloads ~9 GB.</li>
+      <li><strong><code>Install-CUDA.cmd</code></strong> — <strong>NVIDIA only</strong>: swaps Selmo's engine for the faster CUDA build. The base is a universal Vulkan engine that runs on any GPU and on CPU; on an NVIDIA card CUDA is quicker. It stops by itself on a non-NVIDIA PC, downloads a few hundred MB, and is reversible with <code>Uninstall-CUDA.cmd</code>.</li>
       <li><strong><code>Install-Hardware-Monitor.cmd</code></strong> — installs LibreHardwareMonitor so the energy monitor shows the <strong>real CPU watts</strong> instead of an estimate (asks for admin once, to read the CPU sensors).</li>
     </ul>
     <p>Until an add-on is installed, its buttons in the bottom bar stay greyed out — nothing in the interface pretends to work when the service behind it is missing.</p>

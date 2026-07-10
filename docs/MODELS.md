@@ -55,7 +55,9 @@ Qwen3-30B-A3B and 35B-A3B are **Mixture-of-Experts** models: ~30-35B total
 parameters but only ~3B active per token, so they punch far above their
 inference cost. On a 12 GB GPU the trick is `-ngl 99` to place the whole model on
 the GPU, then `--n-cpu-moe N` to claw the experts of N layers back into system
-RAM until it fits 12 GB. The shipped `[Qwen3]` section uses `--n-cpu-moe 26` at
+RAM until it fits 12 GB. The `[Qwen3]` launch preset in `selmo-models.ini` (the
+tuned flags ship with Selmo; the **model itself is not bundled** - you download
+it, like every model) uses `--n-cpu-moe 26` at
 ctx 32768; **start at ~26 and lower N while VRAM holds** - fewer offloaded layers
 means more experts on the GPU and higher speed. On the reference box (RTX 4070 Ti
 12 GB + 32 GB RAM) this runs at **>30 tokens/second**, which is what makes a
