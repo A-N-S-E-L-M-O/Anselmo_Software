@@ -36,6 +36,15 @@ var I18N = {
     'fw.title': 'A.N.S.E.L.M.O — live interface', 'fw.hint': 'drag me',
     'fw.ph': 'Drop the interface screenshot at assets/anselmo-ui.png',
     'phone.ph': 'Drop the phone screenshot at assets/anselmo-phone.jpg',
+    'caps.h': 'Main capabilities',
+    'cap.energy': 'Energy monitoring', 'cap.energy.d': 'Real-time watts + Wh per session',
+    'cap.think': 'Reasoning / THINK', 'cap.think.d': 'Dedicated panel for reasoning models',
+    'cap.mobile': 'Mobile access', 'cap.mobile.d': 'Phone access via HTTPS on local network',
+    'cap.docs': 'Documents & chunking', 'cap.docs.d': 'Full-file analysis, auto-chunking, vision & OCR',
+    'cap.voice': 'Voice loop', 'cap.voice.d': 'Whisper STT + Kokoro TTS, hands-free',
+    'cap.web': 'Web search', 'cap.web.d': 'Optional, off by default, privacy-first',
+    'cap.img': 'Image-to-image', 'cap.img.d': 'Generate from text or existing image',
+    'cap.chat': 'Chat', 'cap.chat.d': 'Local conversation, zero cloud',
     'faq.h': 'About the software',
     'cta.github': 'Get it on GitHub', 'cta.github.s': 'Download · source available',
     'cta.quickstart': 'Quick start — up and running in 3 steps →',
@@ -68,6 +77,15 @@ var I18N = {
     'fw.title': 'A.N.S.E.L.M.O — interfaz en vivo', 'fw.hint': 'arrástrame',
     'fw.ph': 'Coloca la captura de la interfaz en assets/anselmo-ui.png',
     'phone.ph': 'Coloca la captura del teléfono en assets/anselmo-phone.jpg',
+    'caps.h': 'Capacidades principales',
+    'cap.energy': 'Monitoreo de energía', 'cap.energy.d': 'Vatios en tiempo real + Wh por sesión',
+    'cap.think': 'Razonamiento / THINK', 'cap.think.d': 'Panel dedicado para modelos de razonamiento',
+    'cap.mobile': 'Acceso móvil', 'cap.mobile.d': 'Acceso desde el teléfono vía HTTPS en la red local',
+    'cap.docs': 'Documentos y fragmentación', 'cap.docs.d': 'Análisis de archivos completos, fragmentación automática, visión y OCR',
+    'cap.voice': 'Bucle de voz', 'cap.voice.d': 'Whisper STT + Kokoro TTS, manos libres',
+    'cap.web': 'Búsqueda web', 'cap.web.d': 'Opcional, desactivada por defecto, prioriza la privacidad',
+    'cap.img': 'Imagen a imagen', 'cap.img.d': 'Genera a partir de texto o de una imagen existente',
+    'cap.chat': 'Chat', 'cap.chat.d': 'Conversación local, sin nube',
     'faq.h': 'Sobre el software',
     'cta.github': 'Descárgalo en GitHub', 'cta.github.s': 'Descarga · código disponible',
     'cta.quickstart': 'Guía rápida — en marcha en 3 pasos →',
@@ -96,6 +114,15 @@ var I18N = {
     'fw.title': 'A.N.S.E.L.M.O — 实时界面', 'fw.hint': '拖动我',
     'fw.ph': '把界面截图放到 assets/anselmo-ui.png',
     'phone.ph': '把手机截图放到 assets/anselmo-phone.jpg',
+    'caps.h': '主要功能',
+    'cap.energy': '能耗监测', 'cap.energy.d': '实时功率 + 每次会话 Wh',
+    'cap.think': '推理 / THINK', 'cap.think.d': '为推理模型设的专用面板',
+    'cap.mobile': '移动访问', 'cap.mobile.d': '通过本地网络 HTTPS 手机访问',
+    'cap.docs': '文档与分块', 'cap.docs.d': '整文件分析、自动分块、视觉与 OCR',
+    'cap.voice': '语音闭环', 'cap.voice.d': 'Whisper STT + Kokoro TTS，免提',
+    'cap.web': '网络搜索', 'cap.web.d': '可选，默认关闭，隐私优先',
+    'cap.img': '图生图', 'cap.img.d': '从文字或现有图像生成',
+    'cap.chat': '对话', 'cap.chat.d': '本地对话，零云端',
     'faq.h': '关于软件',
     'cta.github': '在 GitHub 获取', 'cta.github.s': '下载 · 源码可用',
     'cta.quickstart': '快速开始 — 三步即可运行 →',
@@ -124,6 +151,15 @@ var I18N = {
     'fw.title': 'A.N.S.E.L.M.O — الواجهة الحية', 'fw.hint': 'اسحبني',
     'fw.ph': 'ضع لقطة الواجهة في assets/anselmo-ui.png',
     'phone.ph': 'ضع لقطة الهاتف في assets/anselmo-phone.jpg',
+    'caps.h': 'القدرات الرئيسية',
+    'cap.energy': 'مراقبة الطاقة', 'cap.energy.d': 'واط لحظي + Wh لكل جلسة',
+    'cap.think': 'الاستدلال / THINK', 'cap.think.d': 'لوحة مخصّصة لنماذج الاستدلال',
+    'cap.mobile': 'الوصول من الجوال', 'cap.mobile.d': 'وصول الهاتف عبر HTTPS على الشبكة المحلية',
+    'cap.docs': 'المستندات والتقسيم', 'cap.docs.d': 'تحليل الملف كاملًا، تقسيم تلقائي، رؤية و OCR',
+    'cap.voice': 'حلقة الصوت', 'cap.voice.d': 'Whisper STT + Kokoro TTS، بلا استخدام اليدين',
+    'cap.web': 'بحث الويب', 'cap.web.d': 'اختياري، معطّل افتراضيًا، يراعي الخصوصية',
+    'cap.img': 'صورة إلى صورة', 'cap.img.d': 'توليد من نص أو من صورة موجودة',
+    'cap.chat': 'محادثة', 'cap.chat.d': 'محادثة محلية، بلا سحابة',
     'faq.h': 'عن البرنامج',
     'cta.github': 'احصل عليه من GitHub', 'cta.github.s': 'تنزيل · المصدر متاح',
     'cta.quickstart': 'البدء السريع — جاهز في 3 خطوات →',
@@ -296,6 +332,7 @@ function setLang(code){
     btn.textContent = (m ? m.name : LANG.toUpperCase()) + ' ▾';
   }
   applyI18n();
+  buildCaps();
   if(window.onLangChange) window.onLangChange();
 }
 function initLang(){
@@ -325,30 +362,14 @@ function initLang(){
 
 /* ---- capability matrix ---- */
 var CAPS = [
-  { icon:'<path d="M13 2L3 14h9l-1 8 10-12h-9z"/>',
-    ct:'Energy monitoring',
-    cd:'Real-time watts + Wh per session' },
-  { icon:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h10M7 12h7M7 16h4"/><path d="M17 14l2 2-2 2"/>',
-    ct:'Reasoning / THINK',
-    cd:'Dedicated panel for reasoning models' },
-  { icon:'<rect x="7" y="2" width="10" height="20" rx="2"/><circle cx="12" cy="18" r="1"/>',
-    ct:'Mobile access',
-    cd:'Phone access via HTTPS on local network' },
-  { icon:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/>',
-    ct:'Documents & chunking',
-    cd:'Full-file analysis, auto-chunking, vision & OCR' },
-  { icon:'<rect x="9" y="2" width="6" height="9" rx="3"/><path d="M5.5 10a6.5 6.5 0 0013 0"/><path d="M12 16V20M9.5 20h5"/>',
-    ct:'Voice loop',
-    cd:'Whisper STT + Kokoro TTS, hands-free' },
-  { icon:'<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/>',
-    ct:'Web search',
-    cd:'Optional, off by default, privacy-first' },
-  { icon:'<rect x="3" y="6" width="11" height="9" rx="1.5"/><rect x="10" y="9" width="11" height="9" rx="1.5"/><path d="M14 3l4 4-4 4"/>',
-    ct:'Image-to-image',
-    cd:'Generate from text or existing image' },
-  { icon:'<path d="M4 4h16v11H9l-4 4v-4H4z"/>',
-    ct:'Chat',
-    cd:'Local conversation, zero cloud' }
+  { icon:'<path d="M13 2L3 14h9l-1 8 10-12h-9z"/>', k:'cap.energy' },
+  { icon:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h10M7 12h7M7 16h4"/><path d="M17 14l2 2-2 2"/>', k:'cap.think' },
+  { icon:'<rect x="7" y="2" width="10" height="20" rx="2"/><circle cx="12" cy="18" r="1"/>', k:'cap.mobile' },
+  { icon:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/>', k:'cap.docs' },
+  { icon:'<rect x="9" y="2" width="6" height="9" rx="3"/><path d="M5.5 10a6.5 6.5 0 0013 0"/><path d="M12 16V20M9.5 20h5"/>', k:'cap.voice' },
+  { icon:'<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/>', k:'cap.web' },
+  { icon:'<rect x="3" y="6" width="11" height="9" rx="1.5"/><rect x="10" y="9" width="11" height="9" rx="1.5"/><path d="M14 3l4 4-4 4"/>', k:'cap.img' },
+  { icon:'<path d="M4 4h16v11H9l-4 4v-4H4z"/>', k:'cap.chat' }
 ];
 
 function buildCaps(){
@@ -357,8 +378,8 @@ function buildCaps(){
   el.innerHTML = CAPS.map(function(c){
     return '<div class="cap">'+
       '<div class="ic"><svg viewBox="0 0 24 24">'+c.icon+'</svg></div>'+
-      '<div class="ct">'+c.ct+'</div>'+
-      '<div class="cd">'+c.cd+'</div>'+
+      '<div class="ct">'+t(c.k)+'</div>'+
+      '<div class="cd">'+t(c.k+'.d')+'</div>'+
       '</div>';
   }).join('');
 }

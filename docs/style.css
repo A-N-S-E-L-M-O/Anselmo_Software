@@ -112,8 +112,8 @@ html[dir="rtl"] .pitch{text-align:right}
 
 /* capability matrix — static display tiles, not buttons */
 .caps{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:2px 0}
-.cap{background:var(--surface); border:1px solid var(--border); border-radius:12px;
-  padding:16px 12px 14px; text-align:center; cursor:default}
+.cap{background:none; border:0; border-radius:0;
+  padding:14px 10px; text-align:center; cursor:default}
 .cap .ic{height:30px; margin-bottom:10px; display:flex; align-items:center; justify-content:center}
 .cap .ic svg{width:28px; height:28px; fill:none; stroke:var(--cyan); stroke-width:1.6;
   stroke-linecap:round; stroke-linejoin:round}
