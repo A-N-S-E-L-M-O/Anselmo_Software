@@ -79,6 +79,10 @@ let gen=false,abort=null,tokSec=0,_genT0=0,_genTok=0,_tokScale=100,wh=0,whAll=0,
 let vadInstance=null,vadConvo=false,vadAwaitingReply=false,_ttsPending=false;
 // active TTS playback handles, so the STOP button can interrupt speech (v0.918)
 let _ttsCtx=null,_ttsSrc=null,_ttsAbort=null,_ttsFire=null;
+// streaming TTS: speak sentence-by-sentence as the answer streams in (v0.930)
+let _ttsQueue=[],_ttsBuf='',_ttsRawTail='',_ttsFence=false,
+    _ttsStreamActive=false,_ttsStreamDone=false,_ttsWorking=false,
+    _ttsCtxS=null,_ttsNextAt=0,_ttsScheduled=0,_ttsSources=[],_ttsLang=null;
 
 // SYSTEM POWER MONITOR
 const SYS_MAX=500,PSU_EFF_EST=0.88,OTHER_DC_EST=45;

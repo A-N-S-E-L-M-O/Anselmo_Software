@@ -178,9 +178,10 @@ async function sendMsg(){
       bub.innerHTML='';
       let full='',rthink='',t=0;
       const tp=makeThinkPanel(inner);
+      ttsSpeakStart();   // begin streaming TTS: speak each sentence as it closes
       await streamTokens(res,
-        c=>{full+=c;t++;_genTok++;bub.textContent=full;scrollBot();},
-        r=>{_genTok++;if(!IS_THINK_ON){full+=r;t++;bub.textContent=full;scrollBot();return;}if(!rthink)markThinking();rthink+=r;tp.append(r);});
+        c=>{full+=c;t++;_genTok++;bub.textContent=full;scrollBot();ttsSpeakFeed(c);},
+        r=>{_genTok++;if(!IS_THINK_ON){full+=r;t++;bub.textContent=full;scrollBot();ttsSpeakFeed(r);return;}if(!rthink)markThinking();rthink+=r;tp.append(r);});
       tp.seal();
       bub.innerHTML=marked.parse(full);addDownloadBar(bub,inner,full);
       toks+=t;localStorage.setItem('stoks',toks);
@@ -195,8 +196,9 @@ async function sendMsg(){
       ).join(' \xb7 ')+' \xb7 '+t+' tok \xb7 '+(wh-whStart).toFixed(4)+' Wh';
       inner.appendChild(ledger);
       saveSession();
-      speakText(full);
+      ttsSpeakEnd();   // flush the last sentence; playback finishes on its own
     }catch(e){
+      stopTts();   // stream threw before ttsSpeakEnd: don't leave TTS state (mic mute / stop button) stuck
       if(e.name!=='AbortError'){bub.textContent='Error: '+e.message;bub.style.borderColor='var(--red)';}
       else{bub.textContent=bub.textContent||'[stopped]';}
     }
@@ -244,9 +246,10 @@ async function sendMsg(){
     bub.innerHTML='';
     let full='',rthink='',t=0;
     const tp=makeThinkPanel(inner);
+    ttsSpeakStart();   // begin streaming TTS: speak each sentence as it closes
     await streamTokens(res,
-      c=>{full+=c;t++;_genTok++;bub.textContent=full;scrollBot();},
-      r=>{_genTok++;if(!IS_THINK_ON){full+=r;t++;bub.textContent=full;scrollBot();return;}if(!rthink)markThinking();rthink+=r;tp.append(r);});
+      c=>{full+=c;t++;_genTok++;bub.textContent=full;scrollBot();ttsSpeakFeed(c);},
+      r=>{_genTok++;if(!IS_THINK_ON){full+=r;t++;bub.textContent=full;scrollBot();ttsSpeakFeed(r);return;}if(!rthink)markThinking();rthink+=r;tp.append(r);});
     tp.seal();
     bub.innerHTML=marked.parse(full);addDownloadBar(bub,inner,full);
     toks+=t;localStorage.setItem('stoks',toks);
@@ -256,8 +259,9 @@ async function sendMsg(){
     meta.textContent=t+' tok \xb7 '+(wh-whStart).toFixed(4)+' Wh';
     inner.appendChild(meta);
     saveSession();
-    speakText(full);
+    ttsSpeakEnd();   // flush the last sentence; playback finishes on its own
   }catch(e){
+    stopTts();   // stream threw before ttsSpeakEnd: don't leave TTS state (mic mute / stop button) stuck
     if(e.name!=='AbortError'){
       bub.textContent='Error: '+e.message;bub.style.borderColor='var(--red)';bub.style.color='var(--red)';chatHistory.pop();
       if(imgDbg){imgDbg.textContent+='  \u2192 fetch fallita: '+e.message;}

@@ -220,12 +220,19 @@ function _ttsShowStop(on){
 // Web Speech, then runs the same cleanup as a natural end so the UI returns
 // to a ready state for the next interaction.
 function stopTts(){
-  if(!_ttsPending&&!_ttsFire)return;
+  if(!_ttsPending)return;
+  _ttsStreamActive=false;
+  _ttsQueue=[];_ttsBuf='';_ttsRawTail='';_ttsFence=false;
   if(_ttsAbort){try{_ttsAbort.abort();}catch(e){}_ttsAbort=null;}
+  if(_ttsSources&&_ttsSources.length){_ttsSources.forEach(s=>{try{s.onended=null;s.stop(0);}catch(e){}});}
+  _ttsSources=[];
   if(_ttsSrc){try{_ttsSrc.onended=null;_ttsSrc.stop(0);}catch(e){}_ttsSrc=null;}
-  if(_ttsCtx){try{_ttsCtx.close();}catch(e){}_ttsCtx=null;}
+  if(_ttsCtxS){try{_ttsCtxS.close();}catch(e){}_ttsCtxS=null;}
+  if(_ttsCtx){try{_ttsCtx.close();}catch(e){}_ttsCtx=null;}   // legacy single-shot ctx
   if('speechSynthesis' in window){try{window.speechSynthesis.cancel();}catch(e){}}
-  if(_ttsFire){_ttsFire();}
+  _ttsScheduled=0;_ttsNextAt=0;_ttsWorking=false;
+  if(_ttsFire){_ttsFire();_ttsFire=null;}   // legacy single-shot fire
+  _ttsFinish();
 }
 // --- TTS language: follow the TEXT, not the UI (models answer in whatever
 // language they like). Kokoro is handled by the bridge (langdetect -> voice +
@@ -266,43 +273,162 @@ function _speakWeb(text,_fire){
   _ttsShowStop(true);
   window.speechSynthesis.speak(utt);
 }
-function speakText(text){
-  const _forceTts=pttForceTts;pttForceTts=false;
-  if(!ttsOk||(!ttsEnabled&&!_forceTts)||!text.trim()){vadAfterSpeak();return;}
-  text=cleanForTts(text);
-  if(!text){vadAfterSpeak();return;}
-  _ttsPending=true;
-  let _done=false;
-  const _fire=()=>{if(_done)return;_done=true;_ttsFire=null;_ttsSrc=null;_ttsCtx=null;_ttsAbort=null;_ttsShowStop(false);vadAfterSpeak();};
-  _ttsFire=_fire;
-  if(kokoroOk){
-    _ttsAbort=new AbortController();
-    fetch(`${TTS_URL}/speak`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text}),   // the bridge picks voice/speed/lang from the text
-      signal:_ttsAbort.signal
-    }).then(r=>{
-      if(!r.ok)throw new Error('TTS error '+r.status);
-      return r.arrayBuffer();
-    }).then(buf=>{
-      const ctx=new(window.AudioContext||window.webkitAudioContext)();
-      _ttsCtx=ctx;
-      return ctx.decodeAudioData(buf).then(decoded=>{
-        const src=ctx.createBufferSource();
-        _ttsSrc=src;
-        src.buffer=decoded;
-        src.connect(ctx.destination);
-        src.onended=()=>{try{ctx.close();}catch(e){}_fire();};
-        _ttsShowStop(true);
-        src.start(0);
-      });
-    }).catch(e=>{
-      if(e&&e.name==='AbortError')return;   // stopped by the user; cleanup already ran
-      console.warn('Kokoro TTS error, fallback Web Speech:',e);
-      _speakWeb(text,_fire);
-    });
-  }else{
-    _speakWeb(text,_fire);
+// ---- Streaming TTS (v0.930) ------------------------------------------------
+// Instead of synthesizing the whole answer once it finishes, we cut the
+// streamed text into full sentences and speak them as they close, so playback
+// starts on the first sentence and continues gaplessly. The language is locked
+// from the first sentence so the voice can't flip mid-answer, and ``` code
+// fences are skipped (a whole code block would otherwise be read out).
+function _ttsKokoroLang(text){
+  return {it:'it',en:'en-us',fr:'fr-fr',de:'de',es:'es',pt:'pt-br'}[_detectLang(text)]||'en-us';
+}
+function _ttsShortLang(){
+  return {it:'it','en-us':'en','fr-fr':'fr',de:'de',es:'es','pt-br':'pt'}[_ttsLang]||(_ttsLang?'en':null);
+}
+// Append raw streamed markdown to the speakable buffer, dropping ``` fenced
+// blocks. Keeps up to 2 trailing chars back in case a ``` marker is split
+// across chunks.
+function _ttsIngest(chunk){
+  let s=_ttsRawTail+chunk;_ttsRawTail='';let i=0;
+  while(i<s.length){
+    const fi=s.indexOf('```',i);
+    if(fi===-1){
+      const cut=Math.max(i,s.length-2);
+      if(!_ttsFence)_ttsBuf+=s.slice(i,cut);
+      _ttsRawTail=s.slice(cut);break;
+    }
+    if(!_ttsFence)_ttsBuf+=s.slice(i,fi);
+    _ttsFence=!_ttsFence;i=fi+3;
   }
+}
+// End index of the first COMPLETE sentence in s, or -1. '.' '!' '?' count only
+// when followed by whitespace (so decimals like 3.14 don't split); a newline
+// always ends a line. A terminator at the very end waits for more text unless
+// the stream has finished.
+function _ttsFindEnd(s){
+  for(let i=0;i<s.length;i++){
+    const c=s[i];
+    if(c==='\n')return i;
+    if(c==='.'||c==='!'||c==='?'){
+      const nx=s[i+1];
+      if(nx===undefined)return _ttsStreamDone?i:-1;
+      if(/\s/.test(nx))return i;
+    }
+  }
+  return -1;
+}
+function _ttsDrain(){
+  let idx;
+  while((idx=_ttsFindEnd(_ttsBuf))!==-1){
+    const sentence=cleanForTts(_ttsBuf.slice(0,idx+1));
+    _ttsBuf=_ttsBuf.slice(idx+1);
+    if(sentence)_ttsEnqueue(sentence);
+  }
+}
+function _ttsEnqueue(sentence){
+  if(_ttsLang===null)_ttsLang=_ttsKokoroLang(sentence);
+  _ttsQueue.push(sentence);
+  _ttsPump();
+}
+// One consumer at a time. Synthesize + schedule each sentence, returning as
+// soon as it is SCHEDULED (not when it finishes) so the next sentence is
+// synthesized while the current one is still playing.
+async function _ttsPump(){
+  if(_ttsWorking||!_ttsStreamActive)return;
+  _ttsWorking=true;
+  try{
+    while(_ttsStreamActive&&_ttsQueue.length){
+      await _ttsSynthPlay(_ttsQueue.shift());
+    }
+  }finally{
+    _ttsWorking=false;
+    _ttsMaybeFinish();
+  }
+}
+async function _ttsSynthPlay(text){
+  if(!kokoroOk){_speakWebQueue(text);return;}
+  let buf;
+  try{
+    _ttsAbort=new AbortController();
+    const r=await fetch(`${TTS_URL}/speak`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text,lang:_ttsLang||undefined}),   // lang locked so the voice stays put
+      signal:_ttsAbort.signal
+    });
+    if(!r.ok)throw new Error('TTS error '+r.status);
+    buf=await r.arrayBuffer();
+  }catch(e){
+    if(e&&e.name==='AbortError')return;   // stopped by the user
+    console.warn('Kokoro TTS error, fallback Web Speech:',e);
+    _speakWebQueue(text);return;
+  }
+  if(!_ttsStreamActive)return;
+  const ctx=_ttsCtxS||(_ttsCtxS=new(window.AudioContext||window.webkitAudioContext)());
+  let decoded;
+  try{decoded=await ctx.decodeAudioData(buf);}catch(e){return;}
+  if(!_ttsStreamActive)return;
+  const src=ctx.createBufferSource();
+  src.buffer=decoded;src.connect(ctx.destination);
+  const startAt=Math.max(ctx.currentTime,_ttsNextAt);   // schedule right after the previous one -> gapless
+  _ttsNextAt=startAt+decoded.duration;
+  _ttsSources.push(src);_ttsSrc=src;_ttsScheduled++;
+  src.onended=()=>{
+    const k=_ttsSources.indexOf(src);if(k>=0)_ttsSources.splice(k,1);
+    _ttsScheduled--;_ttsMaybeFinish();
+  };
+  _ttsShowStop(true);
+  src.start(startAt);
+}
+function _speakWebQueue(text){
+  if(!('speechSynthesis' in window))return;
+  const prof=_ttsProfile(_ttsShortLang()||_detectLang(text));
+  const utt=new SpeechSynthesisUtterance(text);
+  utt.lang=prof.web;utt.rate=prof.rate;
+  const v=_pickWebVoice(prof.web);if(v)utt.voice=v;
+  _ttsScheduled++;
+  const dec=()=>{_ttsScheduled--;_ttsMaybeFinish();};
+  utt.onend=dec;utt.onerror=dec;
+  _ttsShowStop(true);
+  window.speechSynthesis.speak(utt);   // Web Speech queues utterances natively, so order is preserved
+}
+function _ttsMaybeFinish(){
+  if(_ttsStreamDone&&!_ttsQueue.length&&!_ttsWorking&&_ttsScheduled<=0)_ttsFinish();
+}
+function _ttsFinish(){
+  if(!_ttsPending)return;
+  _ttsPending=false;_ttsStreamActive=false;
+  try{if(_ttsCtxS)_ttsCtxS.close();}catch(e){}
+  _ttsCtxS=null;_ttsSources=[];_ttsScheduled=0;_ttsNextAt=0;_ttsSrc=null;_ttsAbort=null;
+  _ttsShowStop(false);
+  vadAfterSpeak();
+}
+// Public API used by the send paths: start before the stream, feed each content
+// delta, end when the stream closes.
+function ttsSpeakStart(){
+  const _force=pttForceTts;pttForceTts=false;
+  _ttsStreamActive=!!(ttsOk&&(ttsEnabled||_force));
+  _ttsQueue=[];_ttsBuf='';_ttsRawTail='';_ttsFence=false;_ttsStreamDone=false;
+  _ttsWorking=false;_ttsLang=null;_ttsNextAt=0;_ttsScheduled=0;_ttsSources=[];_ttsCtxS=null;
+  if(_ttsStreamActive)_ttsPending=true;
+  return _ttsStreamActive;
+}
+function ttsSpeakFeed(chunk){
+  if(!_ttsStreamActive||!chunk)return;
+  _ttsIngest(chunk);
+  _ttsDrain();
+}
+function ttsSpeakEnd(){
+  if(!_ttsStreamActive){vadAfterSpeak();return;}
+  _ttsStreamDone=true;
+  if(_ttsRawTail){if(!_ttsFence)_ttsBuf+=_ttsRawTail;_ttsRawTail='';}
+  _ttsDrain();
+  const rest=cleanForTts(_ttsBuf);_ttsBuf='';   // trailing text with no terminator
+  if(rest)_ttsEnqueue(rest);
+  _ttsMaybeFinish();
+}
+// Back-compat: speak a full string in one shot (start + feed + end).
+function speakText(text){
+  if(!ttsSpeakStart())return;
+  ttsSpeakFeed(text);
+  ttsSpeakEnd();
 }
