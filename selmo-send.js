@@ -160,7 +160,10 @@ async function sendMsg(){
         +(_hasDoc?'Attached document:\n'+fileChat+'\n\n':'')
         +(_imgAnalysis?'Image analysis:\n'+_imgAnalysis+'\n\n':'')
         +(isRagSearch?'Passages retrieved from your files for: ':'Web search results for: ')+webQuery+'\n\n'+formatted
-        +'\n\nBased on the image analysis'+((_hasDoc||_hasImg)?' and attached document/image':'')+' and the '+(isRagSearch?'retrieved passages':'web search results')+' above, answer the user\'s latest message directly in the same language. Be specific and useful. Cite sources as [1], [2], etc.';
+        +'\n\nBased on the image analysis'+((_hasDoc||_hasImg)?' and attached document/image':'')
+        +(isRagSearch
+          ? ' and the retrieved passages above, answer the user\'s latest message in the same language. Use the passages as your source of truth and reason over them to be genuinely helpful, but do NOT invent files, functions, paths, or facts that are not in the passages - each passage shows its source file, rely only on those. If the passages do not contain the answer, say so plainly instead of guessing. Reference sources as [1], [2].'
+          : ' and the web search results above, answer the user\'s latest message directly in the same language. Be specific and useful. Cite sources as [1], [2], etc.');
       if(fileImage){
         const urls=fileImage.dataUrls;
         const imgContent=urls.map(u=>({type:'image_url',image_url:{url:u}}));

@@ -47,7 +47,11 @@ selmo-image-config.json
 SelmoAI.lnk
 selmo-state.json
 
-# RAG mode: per-machine config (holds absolute corpus_dir) + built index
+# RAG mode: per-machine config (holds absolute corpus_dir) + built indexes
 selmo-rag-config.json
 selmo-rag.vecs.npy
 selmo-rag.meta.json
+selmo-rag.docs.vecs.npy
+selmo-rag.docs.meta.json
+selmo-rag.code.vecs.npy
+selmo-rag.code.meta.json

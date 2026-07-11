@@ -39,8 +39,17 @@ from xml.etree import ElementTree as ET
 PORT     = 8088
 BASE     = Path(__file__).resolve().parent
 CFG_PATH = BASE / "selmo-rag-config.json"
-VEC_PATH = BASE / "selmo-rag.vecs.npy"
-META_PATH= BASE / "selmo-rag.meta.json"
+
+def _idx_paths(kind):
+    """Per-mode index files: selmo-rag.docs.* / selmo-rag.code.*"""
+    return (BASE / f"selmo-rag.{kind}.vecs.npy", BASE / f"selmo-rag.{kind}.meta.json")
+
+# The bridge's own artifacts: never index them (a meta json holds every chunk
+# duplicated, which self-poisons retrieval). Skipped by absolute path.
+_SELF_PATHS = {os.path.abspath(str(p)) for p in (
+    CFG_PATH, BASE / "selmo-rag-embed.log",
+    BASE / "selmo-rag.vecs.npy", BASE / "selmo-rag.meta.json",   # legacy single index
+    *_idx_paths("docs"), *_idx_paths("code"))}
 
 DEFAULT_CFG = {
     "corpus_dir":       "",                       # folder to index (empty = none yet)
@@ -55,6 +64,15 @@ DEFAULT_CFG = {
     # (e.g. all-MiniLM). bge-* want a query instruction only.
     "doc_prefix":       "search_document: ",
     "query_prefix":     "search_query: ",
+    # Two retrieval modes, each with its own tiny embedder + its own index:
+    #   docs -> nomic-embed-text (prose)   |   code -> jina-embeddings-v2-base-code
+    # 'mode' is the active query mode; the client switches it from the folder bar.
+    "mode":             "docs",
+    "embed_url_code":   "http://127.0.0.1:8092",       # code embedder (jina) server
+    "embed_model_code": "jina-embeddings-v2-base-code",
+    "embed_model_path_code": "",                        # auto: first jina/code GGUF in models/
+    "doc_prefix_code":  "",                             # jina-v2 needs no task prefix
+    "query_prefix_code":"",
     # No hardcoded folder exclusions: the user unchecks subfolders in the picker
     # (relative names, one per top-level dir). Populated from the GUI, not code.
     "exclude_dirs":     [],
@@ -80,6 +98,57 @@ def allowed_exts(cfg):
     picked = cfg.get("formats") or []
     norm = {(e if e.startswith(".") else "." + e).lower() for e in picked}
     return norm or set(KNOWN_EXTS)
+
+# Extensions where function/class-aware chunking helps (code, not prose/markup).
+CODE_EXT = {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".c", ".h", ".cpp",
+            ".hpp", ".go", ".rs", ".rb", ".php", ".sh", ".bat", ".ps1", ".sql"}
+
+# Start of a function/class/method definition across common languages.
+_DEF_RE = re.compile(
+    r'^[ \t]*(?:'
+    r'(?:async[ \t]+)?def[ \t]+(\w+)'                          # python def
+    r'|class[ \t]+(\w+)'                                       # class
+    r'|(?:export[ \t]+)?(?:async[ \t]+)?function[ \t]+(\w+)'   # js function
+    r'|(?:export[ \t]+)?(?:const|let|var)[ \t]+(\w+)[ \t]*=[ \t]*'
+    r'(?:async[ \t]*)?(?:\([^)]*\)[ \t]*=>|function\b)'         # js arrow/fn const
+    r')', re.M)
+
+def _enclosing_symbol(text, upto):
+    """Name of the last function/class defined at or before `upto` (best effort)."""
+    last = None
+    for m in _DEF_RE.finditer(text, 0, upto):
+        last = m
+    return next((g for g in last.groups() if g), "") if last else ""
+
+def _line_offsets(text):
+    offs, c = [], 0
+    for ln in text.split("\n"):
+        offs.append(c); c += len(ln) + 1
+    return offs
+
+def _code_chunks(text, size):
+    """Split code at top-level definition boundaries so functions stay whole;
+    oversized blocks fall back to the char chunker."""
+    lines = text.split("\n")
+    offs = _line_offsets(text)
+    n = len(text)
+    starts = [0]
+    for i, ln in enumerate(lines):
+        if i and _DEF_RE.match(ln) and (len(ln) - len(ln.lstrip())) <= 4:
+            starts.append(i)
+    starts = sorted(set(starts))
+    ranges = []
+    for j, s in enumerate(starts):
+        a = offs[s]
+        b = offs[starts[j + 1]] if j + 1 < len(starts) else n
+        if b <= a:
+            continue
+        if b - a > size * 3:                       # huge block: sub-split by chars
+            for aa, bb in build_chunks(text[a:b], size):
+                ranges.append((a + aa, a + bb))
+        else:
+            ranges.append((a, b))
+    return ranges or build_chunks(text, size)
 
 # ── Reuse the proven extractor/chunker (no re-implementation) ──────────────────
 try:
@@ -175,73 +244,91 @@ def extract_any(path):
     return ""
 
 # ── Embeddings (llama.cpp --embeddings, OpenAI-style) ─────────────────────────
-_embed_child = None
+_embed_children = []
+atexit.register(lambda: [c.terminate() for c in _embed_children if c])
 
-def _find_embed_model():
-    """Auto-discover an embedding GGUF in models/ so no absolute path is needed.
-    Matches by the usual embedder name markers."""
+def _find_embed_model(include, exclude=()):
+    """Auto-discover an embedding GGUF in models/ by name markers (no path needed)."""
     mdir = BASE / "models"
     if not mdir.is_dir():
         return ""
-    marks = ("embed", "nomic", "minilm", "bge", "gte", "e5")
     for f in sorted(mdir.glob("*.gguf")):
-        if any(m in f.name.lower() for m in marks):
+        n = f.name.lower()
+        if any(m in n for m in include) and not any(x in n for x in exclude):
             return str(f)
     return ""
 
-def _maybe_autostart_embedder(cfg):
-    """Optionally spawn a private llama-server --embeddings child on a loopback
-    port. Paths are auto-resolved: the binary defaults to bin/llama-server.exe
-    (same one the tray uses) and the model to the first embedding GGUF found in
-    models/. So the only thing you have to provide is the model file itself; if
-    it is missing we skip gracefully and the bridge waits for an external
-    embed_url instead."""
-    global _embed_child
-    if not cfg.get("embed_autostart"):
-        return
-    if embedder_up(cfg):
-        print("  [rag] embeddings server already reachable; reusing it")
-        return
-    binp = cfg.get("llama_bin") or str(BASE / "bin" / "llama-server.exe")
-    modp = cfg.get("embed_model_path") or _find_embed_model()
-    if not (binp and os.path.exists(binp)):
-        print(f"  [rag] embed_autostart: llama-server not found at {binp}; skipping")
-        return
-    if not (modp and os.path.exists(modp)):
-        print("  [rag] embed_autostart: no embedding GGUF in models/ "
-              "(filename should contain embed/nomic/minilm/bge/gte/e5); skipping. "
-              "Drop one in models/ and restart.")
-        return
-    print(f"  [rag] embedder model: {os.path.basename(modp)}")
-    port = urllib.parse.urlparse(cfg["embed_url"]).port or 8091
+# Name markers used to auto-find each embedder in models/.
+_DOC_MARKS  = ("nomic", "minilm", "bge", "gte", "e5", "embed")
+_CODE_MARKS = ("code", "jina")
+
+def _embedder(kind, cfg):
+    """(url, model, prefixes) for a retrieval kind: 'docs' (nomic) or 'code' (jina)."""
+    if kind == "code":
+        return {"url":   cfg.get("embed_url_code") or "http://127.0.0.1:8092",
+                "model": cfg.get("embed_model_code") or "code",
+                "doc_prefix":   cfg.get("doc_prefix_code", ""),
+                "query_prefix": cfg.get("query_prefix_code", "")}
+    return {"url":   cfg.get("embed_url") or "http://127.0.0.1:8091",
+            "model": cfg.get("embed_model") or "local",
+            "doc_prefix":   cfg.get("doc_prefix", ""),
+            "query_prefix": cfg.get("query_prefix", "")}
+
+def _spawn_embedder(binp, modp, port, tag):
+    """Spawn one llama-server --embeddings child on a private loopback port.
+    -b/-ub 8192: the whole input must fit ONE physical batch (default 512 rejects
+    >512-token chunks with a 500). --n-gpu-layers 0 keeps this tiny model on CPU
+    so it never fights the main LLM for VRAM. Console hidden, stderr -> log."""
     try:
-        # -b/--ubatch 8192: embeddings must fit the whole input in ONE physical
-        # batch (default 512 rejects chunks > ~512 tokens). --n-gpu-layers 0
-        # keeps this tiny model on CPU so it never fights the main LLM for VRAM.
-        # Log the child's output to a file instead of hiding it, so a failed
-        # launch (bad flag, OOM, missing dll) is diagnosable. *.log is gitignored.
-        _elog = open(BASE / "selmo-rag-embed.log", "w", encoding="utf-8", errors="replace")
-        _embed_child = subprocess.Popen(
+        _elog = open(BASE / f"selmo-rag-embed-{tag}.log", "w", encoding="utf-8", errors="replace")
+        p = subprocess.Popen(
             [binp, "-m", modp, "--embeddings", "--host", "127.0.0.1",
              "--port", str(port), "--pooling", "mean",
              "-c", "8192", "-b", "8192", "-ub", "8192", "--n-gpu-layers", "0"],
             stdout=_elog, stderr=subprocess.STDOUT,
-            # Hide the console window on Windows (output already goes to the log),
-            # matching how the tray launches its other child processes.
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
-        atexit.register(lambda: _embed_child and _embed_child.terminate())
-        print(f"  [rag] spawned embeddings child on 127.0.0.1:{port} (pid {_embed_child.pid})")
+        _embed_children.append(p)
+        print(f"  [rag] spawned {tag} embedder on 127.0.0.1:{port} "
+              f"({os.path.basename(modp)}, pid {p.pid})")
     except Exception as e:
-        print(f"  [rag] could not spawn embeddings child: {e}")
+        print(f"  [rag] could not spawn {tag} embedder: {e}")
 
-def embed_batch(texts, cfg, prefix=""):
-    """POST texts to <embed_url>/v1/embeddings; return list[list[float]].
-    `prefix` is the model's task instruction (e.g. nomic's 'search_document: ')
-    prepended to each text. Raises on failure so callers can surface a clear error."""
-    url = cfg["embed_url"].rstrip("/") + "/v1/embeddings"
+def _maybe_autostart_embedder(cfg):
+    """Spawn BOTH tiny embedders on CPU if not already up: docs (nomic) + code
+    (jina). Paths auto-resolve to bin/llama-server.exe + the first matching GGUF
+    in models/; a missing model is skipped gracefully (that mode just stays empty)."""
+    if not cfg.get("embed_autostart"):
+        return
+    binp = cfg.get("llama_bin") or str(BASE / "bin" / "llama-server.exe")
+    if not os.path.exists(binp):
+        print(f"  [rag] embed_autostart: llama-server not found at {binp}; skipping")
+        return
+    plan = [
+        ("docs", _embedder("docs", cfg)["url"],
+         cfg.get("embed_model_path") or _find_embed_model(_DOC_MARKS, exclude=_CODE_MARKS)),
+        ("code", _embedder("code", cfg)["url"],
+         cfg.get("embed_model_path_code") or _find_embed_model(_CODE_MARKS)),
+    ]
+    for tag, url, modp in plan:
+        if embedder_up(url):
+            print(f"  [rag] {tag} embedder already reachable; reusing it")
+            continue
+        if not (modp and os.path.exists(modp)):
+            hint = "nomic-embed*" if tag == "docs" else "jina*/*code*"
+            print(f"  [rag] {tag} embedder: no matching GGUF in models/ ({hint}); skipping")
+            continue
+        port = urllib.parse.urlparse(url).port or (8091 if tag == "docs" else 8092)
+        _spawn_embedder(binp, modp, port, tag)
+
+def embed_batch(texts, emb, prefix=""):
+    """POST texts to an embedder <url>/v1/embeddings; return list[list[float]].
+    `emb` is the {url, model, ...} dict from _embedder(kind). `prefix` is the
+    model's task instruction (nomic's 'search_document: '); empty for jina.
+    Raises on failure so callers can surface a clear error."""
+    url = emb["url"].rstrip("/") + "/v1/embeddings"
     inp = [prefix + t for t in texts] if prefix else list(texts)
-    body = json.dumps({"model": cfg.get("embed_model", "local"),
+    body = json.dumps({"model": emb.get("model", "local"),
                        "input": inp}).encode("utf-8")
     req = urllib.request.Request(url, data=body,
                                  headers={"Content-Type": "application/json"})
@@ -250,57 +337,54 @@ def embed_batch(texts, cfg, prefix=""):
     rows = sorted(data.get("data", []), key=lambda d: d.get("index", 0))
     return [d["embedding"] for d in rows]
 
-def _embed_all(texts, cfg, prefix, on_progress=None):
-    """Embed many texts. Batches for speed, but if a batch is rejected (e.g.
-    llama-server returns 500 because the combined tokens exceed its batch/context
-    limit) it falls back to one request per item. A single item that still fails
-    propagates, so a genuine per-chunk problem surfaces instead of being hidden.
+def _embed_all(texts, emb, prefix, on_progress=None):
+    """Embed many texts with embedder `emb`. Batches for speed, but if a batch is
+    rejected (e.g. llama-server 500 when the combined tokens exceed its limit) it
+    falls back to one request per item. A single item that still fails propagates.
     on_progress(done) is called after each batch so callers can show progress."""
     out, B, i = [], 8, 0
     while i < len(texts):
         batch = texts[i:i + B]
         try:
-            out.extend(embed_batch(batch, cfg, prefix))
+            out.extend(embed_batch(batch, emb, prefix))
         except Exception:
             for t in batch:
-                out.extend(embed_batch([t], cfg, prefix))
+                out.extend(embed_batch([t], emb, prefix))
         i += B
         if on_progress:
             on_progress(len(out))
     return out
 
-def embedder_up(cfg):
+def embedder_up(url):
     # Short timeouts keep /status snappy so the client chip stays responsive.
-    try:
-        url = cfg["embed_url"].rstrip("/") + "/health"
-        with urllib.request.urlopen(url, timeout=1.5) as r:
-            return r.status < 500
-    except Exception:
-        # /health may be absent; a models probe is a good enough liveness check
+    for path in ("/health", "/v1/models"):
         try:
-            url = cfg["embed_url"].rstrip("/") + "/v1/models"
-            with urllib.request.urlopen(url, timeout=1.5) as r:
+            with urllib.request.urlopen(url.rstrip("/") + path, timeout=1.5) as r:
                 return r.status < 500
         except Exception:
-            return False
+            continue
+    return False
 
 # ── Vector store (numpy matrix + meta sidecar; faiss used for search if present)
 class Store:
-    def __init__(self):
+    def __init__(self, vec_path, meta_path, name=""):
+        self.vec_path  = vec_path
+        self.meta_path = meta_path
+        self.name = name
         self.vecs = None     # np.ndarray (n, dim), L2-normalised
         self.meta = []       # list of {source, title, chunk_id, text}
         self.index = None    # faiss index if available
         self.load()
 
     def load(self):
-        if HAS_NUMPY and VEC_PATH.exists() and META_PATH.exists():
+        if HAS_NUMPY and self.vec_path.exists() and self.meta_path.exists():
             try:
-                self.vecs = np.load(VEC_PATH)
-                self.meta = json.loads(META_PATH.read_text(encoding="utf-8"))
+                self.vecs = np.load(self.vec_path)
+                self.meta = json.loads(self.meta_path.read_text(encoding="utf-8"))
                 self._build_index()
-                print(f"  [rag] loaded index: {len(self.meta)} chunks")
+                print(f"  [rag] loaded {self.name} index: {len(self.meta)} chunks")
             except Exception as e:
-                print(f"  [rag] index load failed ({e}); starting empty")
+                print(f"  [rag] {self.name} index load failed ({e}); starting empty")
                 self.vecs, self.meta, self.index = None, [], None
 
     def _build_index(self):
@@ -311,9 +395,9 @@ class Store:
 
     def save(self):
         if HAS_NUMPY and self.vecs is not None:
-            np.save(VEC_PATH, self.vecs)
-        META_PATH.write_text(json.dumps(self.meta, ensure_ascii=False),
-                             encoding="utf-8")
+            np.save(self.vec_path, self.vecs)
+        self.meta_path.write_text(json.dumps(self.meta, ensure_ascii=False),
+                                  encoding="utf-8")
 
     def replace(self, vecs, meta):
         self.vecs = _normalise(vecs) if len(vecs) else None
@@ -342,7 +426,8 @@ def _normalise(vecs):
     norms[norms == 0] = 1.0
     return a / norms
 
-STORE = None  # built in main()
+STORE_DOC  = None  # docs index (nomic) — built in main()
+STORE_CODE = None  # code index (jina)  — built in main()
 
 # Live indexing progress, polled by the client via GET /progress so a long
 # reindex shows a bar instead of a single blocking request (which timed out
@@ -356,7 +441,8 @@ def reindex(cfg):
     corpus = cfg.get("corpus_dir", "").strip()
     if not corpus or not os.path.isdir(corpus):
         raise ValueError("corpus_dir is not set or does not exist")
-    files, chunk_texts, meta = [], [], []
+    files = []
+    doc_texts, doc_meta, code_texts, code_meta = [], [], [], []
     size = int(cfg.get("chunk_size", 1200))
     exclude = set(cfg.get("exclude_dirs", []))   # user-unchecked top-level subfolders
     allowed = allowed_exts(cfg)                   # user-selected formats (or all known)
@@ -367,33 +453,62 @@ def reindex(cfg):
             if Path(name).suffix.lower() not in allowed:
                 continue
             fpath = os.path.join(root, name)
+            if os.path.abspath(fpath) in _SELF_PATHS:   # skip our own index/config/log
+                continue
             text = extract_any(fpath)
             if not text.strip():
                 continue
             files.append(fpath)
             _PROGRESS["files"] = len(files)
-            for ci, (a, b) in enumerate(build_chunks(text, size)):
+            ext = Path(name).suffix.lower()
+            is_code = ext in CODE_EXT
+            rel = os.path.relpath(fpath, corpus)
+            ranges = _code_chunks(text, size) if is_code else build_chunks(text, size)
+            for ci, (a, b) in enumerate(ranges):
                 snippet = text[a:b].strip()
                 if not snippet:
                     continue
-                chunk_texts.append(snippet)
-                meta.append({
-                    "source":   fpath,
-                    "title":    name,
-                    "chunk_id": ci,
-                    "text":     snippet,
-                })
-    if not chunk_texts:
-        STORE.replace([], [])
-        return {"ok": True, "n_files": len(files), "n_chunks": 0}
-    # Embed in small batches with single-item fallback (see _embed_all); report
-    # progress so the client can draw a bar.
-    _PROGRESS.update({"phase": "embedding", "chunks_total": len(chunk_texts), "chunks": 0})
-    vecs = _embed_all(chunk_texts, cfg, cfg.get("doc_prefix", ""),
-                      lambda done: _PROGRESS.__setitem__("chunks", done))
+                # Contextual header: file path (+ enclosing function/class for code).
+                # Embedded AND shown to the model, so a query naming a file/symbol
+                # matches the right chunk and the model always knows its source.
+                sym = _enclosing_symbol(text, b) if is_code else ""
+                header = "File: " + rel + (" · " + sym if sym else "")
+                stored = header + "\n" + snippet
+                rec = {"source": fpath, "title": name, "chunk_id": ci, "text": stored}
+                # Route each file to its mode's index: code -> jina, everything
+                # else (prose/markup/config) -> nomic.
+                if is_code:
+                    code_texts.append(stored); code_meta.append(rec)
+                else:
+                    doc_texts.append(stored);  doc_meta.append(rec)
+    _PROGRESS.update({"phase": "embedding",
+                      "chunks_total": len(doc_texts) + len(code_texts), "chunks": 0})
+    # docs bucket -> nomic (primary: if its embedder is down, that's an error).
+    doc_emb = _embedder("docs", cfg)
+    if doc_texts:
+        if not embedder_up(doc_emb["url"]):
+            raise RuntimeError("docs embedder (nomic) not reachable at " + doc_emb["url"])
+        dvecs = _embed_all(doc_texts, doc_emb, doc_emb["doc_prefix"],
+                           lambda d: _PROGRESS.__setitem__("chunks", d))
+        STORE_DOC.replace(dvecs, doc_meta)
+    else:
+        STORE_DOC.replace([], [])
+    # code bucket -> jina (optional: skipped, not fatal, if jina isn't installed).
+    code_emb, note = _embedder("code", cfg), ""
+    if code_texts:
+        if embedder_up(code_emb["url"]):
+            base = len(doc_texts)
+            cvecs = _embed_all(code_texts, code_emb, code_emb["doc_prefix"],
+                               lambda d: _PROGRESS.__setitem__("chunks", base + d))
+            STORE_CODE.replace(cvecs, code_meta)
+        else:
+            note = ("code embedder (jina) not reachable - code index left unchanged; "
+                    "drop a jina/code GGUF in models/ and restart the tray")
     _PROGRESS["phase"] = "saving"
-    STORE.replace(vecs, meta)
-    return {"ok": True, "n_files": len(files), "n_chunks": len(meta)}
+    return {"ok": True, "n_files": len(files),
+            "docs": len(doc_meta), "code": (len(code_meta) if not note else 0),
+            "n_chunks": len(doc_meta) + (len(code_meta) if not note else 0),
+            "note": note}
 
 def start_reindex(cfg):
     """Kick off reindex in a background thread and return immediately, so the
@@ -416,18 +531,20 @@ def start_reindex(cfg):
     threading.Thread(target=_worker, daemon=True).start()
     return {"ok": True, "started": True}
 
-def search(query, k, cfg):
-    if STORE.vecs is None or not len(STORE.meta):
+def search(query, k, cfg, mode="docs"):
+    store = STORE_CODE if mode == "code" else STORE_DOC
+    if store is None or store.vecs is None or not len(store.meta):
         return []
-    qvec = embed_batch([query], cfg, cfg.get("query_prefix", ""))[0]
-    hits = STORE.search(qvec, k)
+    emb = _embedder("code" if mode == "code" else "docs", cfg)
+    qvec = embed_batch([query], emb, emb["query_prefix"])[0]
+    hits = store.search(qvec, k)
     out = []
     for i, _score in hits:
-        m = STORE.meta[i]
+        m = store.meta[i]
         out.append({
             "title":   m["title"],
             "url":     f'{m["source"]}#chunk-{m["chunk_id"]}',
-            "snippet": m["text"][:600],
+            "snippet": m["text"],   # whole chunk (already bounded by chunk_size)
         })
     return out
 
@@ -469,12 +586,20 @@ class Handler(BaseHTTPRequestHandler):
         cfg    = load_cfg()
 
         if parsed.path == "/status":
+            mode = cfg.get("mode", "docs")
+            doc_url, code_url = _embedder("docs", cfg)["url"], _embedder("code", cfg)["url"]
+            docs_up, code_up = embedder_up(doc_url), embedder_up(code_url)
             self._json({
                 "ok":          True,
                 "corpus_dir":  cfg.get("corpus_dir", ""),
-                "n_chunks":    len(STORE.meta),
+                "mode":        mode,
+                "n_chunks":    len(STORE_CODE.meta) if mode == "code" else len(STORE_DOC.meta),
+                "docs_chunks": len(STORE_DOC.meta),
+                "code_chunks": len(STORE_CODE.meta),
                 "embed_model": cfg.get("embed_model", ""),
-                "embedder_up": embedder_up(cfg),
+                "embedder_up": code_up if mode == "code" else docs_up,  # active mode
+                "docs_up":     docs_up,
+                "code_up":     code_up,
                 "backend":     "faiss" if HAS_FAISS else "numpy",
                 "exclude_dirs": cfg.get("exclude_dirs", []),
                 "formats":     cfg.get("formats", []),
@@ -483,10 +608,11 @@ class Handler(BaseHTTPRequestHandler):
         elif parsed.path == "/search":
             q = qs.get("q", [""])[0].strip()
             k = int(qs.get("n", [str(cfg.get("top_k", 5))])[0])
+            mode = qs.get("mode", [cfg.get("mode", "docs")])[0]
             if not q:
                 self._json({"error": "empty query"}); return
             try:
-                self._json(search(q, k, cfg))
+                self._json(search(q, k, cfg, mode))
             except Exception as e:
                 self._json({"error": f"search failed: {e}"})
 
@@ -512,7 +638,9 @@ class Handler(BaseHTTPRequestHandler):
                 for k in ("corpus_dir", "chunk_size", "embed_url",
                           "embed_model", "top_k", "embed_autostart",
                           "llama_bin", "embed_model_path",
-                          "exclude_dirs", "formats"):
+                          "exclude_dirs", "formats",
+                          "mode", "embed_url_code", "embed_model_code",
+                          "embed_model_path_code"):
                     if k in payload:
                         cfg[k] = payload[k]
                 CFG_PATH.write_text(json.dumps(cfg, ensure_ascii=False, indent=2),
@@ -543,21 +671,22 @@ class Handler(BaseHTTPRequestHandler):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
-    global STORE
+    global STORE_DOC, STORE_CODE
     cfg = load_cfg()
     print()
     print("  selmo_rag.py — local RAG (retrieval) bridge")
     print(f"  http://localhost:{PORT}/status")
-    print(f"  http://localhost:{PORT}/search?q=query")
+    print(f"  http://localhost:{PORT}/search?q=query&mode=docs|code")
     print(f"  vector backend: {'faiss' if HAS_FAISS else 'numpy'}"
           f"{'' if HAS_NUMPY else '  (numpy MISSING — install numpy)'}")
-    print(f"  embeddings: {cfg.get('embed_url')}  model={cfg.get('embed_model')}")
+    print(f"  docs embedder: {cfg.get('embed_url')}  |  code embedder: {cfg.get('embed_url_code')}")
     print()
     if not HAS_NUMPY:
         print("  [rag] FATAL: numpy is required. pip install numpy --break-system-packages")
         sys.exit(1)
     _maybe_autostart_embedder(cfg)
-    STORE = Store()
+    STORE_DOC  = Store(*_idx_paths("docs"), name="docs")
+    STORE_CODE = Store(*_idx_paths("code"), name="code")
     # Bind loopback only: reached exclusively through the front door
     # (/proxy/8088), which connects over 127.0.0.1. (security review parity with
     # selmo_web.py — never expose an unauthenticated bridge to the LAN.)

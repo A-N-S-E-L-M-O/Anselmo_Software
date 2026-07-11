@@ -103,7 +103,8 @@ var I18N = {
   'rag.error'         : { en: 'Error: {msg}',        it: 'Errore: {msg}',      fr: 'Erreur : {msg}' },
   'rag.prog.scanning' : { en: 'Scanning... {files} files', it: 'Scansione... {files} file', fr: 'Analyse... {files} fichiers' },
   'rag.prog.embedding': { en: 'Embedding {done}/{total} chunks ({pct}%)', it: 'Embedding {done}/{total} chunk ({pct}%)', fr: 'Embedding {done}/{total} chunks ({pct}%)' },
-  'rag.prog.saving'   : { en: 'Saving index...', it: 'Salvo indice...', fr: "Sauvegarde de l'index..." }
+  'rag.prog.saving'   : { en: 'Saving index...', it: 'Salvo indice...', fr: "Sauvegarde de l'index..." },
+  'ml.loading'        : { en: 'preparing the wash cycle', it: 'preparando il ciclo di lavaggio', fr: 'préparation du cycle de lavage' }
 };
 /* ---- Bindings: which element gets which key, and via which property ----------
    prop: 'text' -> textContent (only for elements with NO child markup)

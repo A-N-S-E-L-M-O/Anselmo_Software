@@ -236,6 +236,10 @@ aside{
 #rag-corpus:hover{border-color:var(--cyan);color:var(--cyan);}
 #rag-corpus .rc-path{color:var(--white);word-break:break-all;}
 #rag-corpus .rc-n{opacity:.75;}
+.rc-modes{display:inline-flex;gap:2px;margin:0 4px;vertical-align:middle;}
+.rc-m{font:inherit;font-size:10px;padding:1px 7px;border:1px solid var(--steel);border-radius:6px;background:transparent;color:var(--dim);cursor:pointer;text-transform:uppercase;letter-spacing:.5px;}
+.rc-m:hover{border-color:var(--cyan);color:var(--cyan);}
+.rc-m.on{border-color:var(--cyan);color:var(--cyan);background:rgba(68,221,238,.14);}
 .rag-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;}
 .rag-card{background:#00103a;border:1px solid var(--steel);border-radius:12px;padding:16px 18px;width:min(560px,92vw);max-height:82vh;overflow:auto;box-shadow:0 8px 40px rgba(0,0,0,.6);color:var(--white);}
 .rag-h{font-size:15px;color:var(--cyan);margin-bottom:10px;}
@@ -627,14 +631,12 @@ body.custom .odo-sep,body.custom .odo-unit{color:#2a2620;}
 #model-loading.show{display:flex;}
 .ml-box{text-align:center;font-family:var(--mono);}
 .ml-art{width:130px;height:130px;}
-.ml-thumbs{transform-origin:60px 88px;animation:ml-spin 1.1s linear infinite;}
+.ml-thumbs{transform-origin:60px 70px;animation:ml-spin 1.1s linear infinite;}
 @keyframes ml-spin{to{transform:rotate(360deg);}}
 .ml-title{font-size:23px;font-weight:bold;color:var(--yellow);letter-spacing:.1em;margin-top:4px;text-shadow:0 0 12px var(--glow-y);}
 .ml-title em{color:var(--cyan);font-style:normal;}
 .ml-text{font-size:12px;color:var(--dim);margin-top:9px;letter-spacing:.05em;}
 .ml-text b{color:var(--cyan);font-weight:normal;}
-.ml-btn{margin-top:12px;padding:8px 14px;border:1px solid var(--cyan);border-radius:var(--radius-sm);background:rgba(68,221,238,.12);color:var(--cyan);font-family:var(--mono);font-size:12px;cursor:pointer;}
-.ml-btn:hover{background:rgba(68,221,238,.22);}
 /* unloaded / inactive palette: grey the UI, keep the model button lit as the CTA */
 body.unloaded main,
 body.unloaded nav,
@@ -660,7 +662,7 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
   </div>
   <div class="h-center">
     <div class="wm" id="wm" onclick="openProfile()" title="Switch mode (A.N.S.E.L.M.O / Mizan / Custom)" style="cursor:pointer;">A.N.S.E.L.M.O<span class="wm-mode">mode</span></div>
-    <div class="hbadge">v0.931</div>
+    <div class="hbadge">v0.932</div>
   </div>
   <div class="h-right">
     <button id="model-btn" onclick="openSettings()" title="Click to change model / runtime settings"><span class="model-pre">model:</span>&nbsp;<span id="hdr-model">-</span></button>
@@ -873,7 +875,6 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
     <div class="set-section-label">Service</div>
     <div class="set-actions">
       <button class="set-btn" onclick="unloadLLM()">Unload (free VRAM)</button>
-      <button class="set-btn" onclick="reloadLLM()">Reload</button>
       <button class="set-btn set-danger" onclick="exitSelmo()">Exit Selmo</button>
     </div>
   </div>
@@ -889,32 +890,32 @@ body.unloaded #model-btn{box-shadow:0 0 0 2px var(--cyan),0 0 16px var(--glow-c)
 <div id="model-loading" onclick="if(event.target===this){_overlayDismissed=true;this.classList.remove('show');}" title="tap outside to dismiss">
   <div class="ml-box">
     <svg class="ml-art" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" fill="none">
-      <circle cx="60" cy="9" r="3.5" fill="var(--yellow)"/>
-      <line x1="60" y1="12" x2="60" y2="22" stroke="var(--yellow)" stroke-width="3"/>
-      <rect x="33" y="22" width="54" height="42" rx="12" stroke="var(--cyan)" stroke-width="3"/>
-      <circle cx="50" cy="42" r="4.5" fill="var(--cyan)"/>
-      <circle cx="70" cy="42" r="4.5" fill="var(--cyan)"/>
-      <rect x="44" y="66" width="32" height="24" rx="6" stroke="var(--steel)" stroke-width="2"/>
-      <g class="ml-thumbs">
-        <circle cx="60" cy="80" r="5.5" stroke="var(--yellow)" stroke-width="3"/>
-        <circle cx="60" cy="96" r="5.5" stroke="var(--yellow)" stroke-width="3"/>
+      <rect x="20" y="12" width="80" height="96" rx="13" stroke="var(--cyan)" stroke-width="3" fill="rgba(68,221,238,.05)"/>
+      <line x1="20" y1="33" x2="100" y2="33" stroke="var(--cyan)" stroke-width="2"/>
+      <rect x="28" y="20" width="22" height="5" rx="2.5" fill="var(--yellow)"/>
+      <circle cx="88" cy="23" r="4" stroke="var(--yellow)" stroke-width="2.5"/>
+      <circle cx="60" cy="70" r="31" stroke="var(--cyan)" stroke-width="3"/>
+      <clipPath id="ml-drum"><circle cx="60" cy="70" r="26"/></clipPath>
+      <g clip-path="url(#ml-drum)">
+        <image class="ml-thumbs" href="selmo-icon-preview.png" x="38" y="48" width="44" height="44"/>
       </g>
+      <circle cx="60" cy="70" r="26" stroke="var(--steel)" stroke-width="2"/>
     </svg>
     <div class="ml-title">A.N.S.E.L.M.O</div>
-    <div class="ml-text" id="ml-text">loading the model<b>...</b> twiddling thumbs</div>
+    <div class="ml-text" id="ml-text">preparing the wash cycle<b>...</b></div>
   </div>
 </div>
 
-<script src="selmo-i18n.js?v=0.931"></script>
-<script src="selmo-core.js?v=0.931"></script>
-<script src="selmo-bridges.js?v=0.931"></script>
-<script src="selmo-model.js?v=0.931"></script>
+<script src="selmo-i18n.js?v=0.932"></script>
+<script src="selmo-core.js?v=0.932"></script>
+<script src="selmo-bridges.js?v=0.932"></script>
+<script src="selmo-model.js?v=0.932"></script>
 <script src="selmo-docs.js?v=0.903"></script>
-<script src="selmo-chat.js?v=0.931"></script>
-<script src="selmo-send.js?v=0.931"></script>
+<script src="selmo-chat.js?v=0.932"></script>
+<script src="selmo-send.js?v=0.932"></script>
 <script src="selmo-media.js?v=0.930"></script>
-<script src="selmo-sessions.js?v=0.931"></script>
+<script src="selmo-sessions.js?v=0.932"></script>
 <script src="selmo-settings.js?v=0.919"></script>
-<script src="selmo-boot.js?v=0.931"></script>
+<script src="selmo-boot.js?v=0.932"></script>
 </body>
 </html>

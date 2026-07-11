@@ -161,7 +161,7 @@ function setModelState(s){
   const b=document.body, ov=document.getElementById('model-loading');
   if(s==='loading'){
     b.classList.remove('unloaded');
-    const t=document.getElementById('ml-text'); if(t)t.innerHTML='loading the model<b>...</b> twiddling thumbs';
+    const te=document.getElementById('ml-text'); if(te)te.innerHTML=(typeof t==='function'?t('ml.loading'):'preparing the wash cycle')+'<b>...</b>';
     const th=document.querySelector('.ml-thumbs'); if(th)th.style.display='';
     if(ov)ov.classList.add('show');
     _hideReviveBanner();
@@ -263,8 +263,15 @@ setTimeout(function(){ if(!_modelReadyShown && !_overlayDismissed && !document.b
           setModelState('imaging');
         }else if(_reloading){
           setModelState('loading');   // a deliberate LLM reload is in flight: thumbs, not grey "no model"
+        }else if(st && st.loaded){
+          // llama-server is up but /v1/models isn't ready yet -> the model is
+          // still loading; keep the spinner however long it takes and NEVER flip
+          // to grey "no model" (a big model can take a minute+ on first load).
+          if(!_overlayDismissed){ const h=document.getElementById('hdr-model'); if(h)h.textContent='loading...'; setModelState('loading'); }
+        }else if(st && st.loaded===false){
+          setModelState('unloaded');   // the tray confirms there is genuinely no model
         }else if(_checkTries>=7){
-          setModelState('unloaded');
+          setModelState('unloaded');   // tray ambiguous after a while: old fallback
         }else if(!_modelReadyShown && !_overlayDismissed){
           document.getElementById('hdr-model').textContent='loading...';
           setModelState('loading');

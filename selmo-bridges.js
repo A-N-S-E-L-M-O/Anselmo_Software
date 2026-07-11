@@ -67,11 +67,29 @@ function updateRagCorpusBar(){
     else msgs.appendChild(bar);
   }
   const dir=(ragStatus&&ragStatus.corpus_dir)||'';
-  const n=(ragStatus&&ragStatus.n_chunks)||0;
+  const mode=(ragStatus&&ragStatus.mode)||'docs';
+  const dn=(ragStatus&&ragStatus.docs_chunks)||0, cn=(ragStatus&&ragStatus.code_chunks)||0;
+  const n=mode==='code'?cn:dn;
   const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const sel='<span class="rc-modes">'
+    +'<button class="rc-m'+(mode==='docs'?' on':'')+'" data-m="docs">docs</button>'
+    +'<button class="rc-m'+(mode==='code'?' on':'')+'" data-m="code">code</button>'
+    +'</span>';
   bar.innerHTML = dir
-    ? '<span class="rc-ic">&#128193;</span> <span class="rc-path">'+esc(dir)+'</span> <span class="rc-n">· '+(n?t('rag.chunks',{n:n.toLocaleString('en')}):t('rag.bar.noindex'))+' · '+t('rag.bar.change')+'</span>'
-    : '<span class="rc-ic">&#128193;</span> <em>'+t('rag.bar.choose')+'</em>';
+    ? '<span class="rc-ic">&#128193;</span> <span class="rc-path">'+esc(dir)+'</span> '+sel
+      +' <span class="rc-n">· '+(n?t('rag.chunks',{n:n.toLocaleString('en')}):t('rag.bar.noindex'))+' · '+t('rag.bar.change')+'</span>'
+    : '<span class="rc-ic">&#128193;</span> '+sel+' <em>'+t('rag.bar.choose')+'</em>';
+  bar.querySelectorAll('.rc-m').forEach(b=>{ b.onclick=e=>{ e.stopPropagation(); ragSetMode(b.dataset.m); }; });
+}
+// Switch the active retrieval mode (docs/code): persist it and repaint. The two
+// indexes already exist, so the switch is instant - no re-index, nothing to name.
+async function ragSetMode(mode){
+  if(ragStatus&&ragStatus.mode===mode) return;
+  try{
+    await fetch(`${RAG}/config`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode})});
+    if(ragStatus) ragStatus.mode=mode;
+    checkRagBridge();
+  }catch(e){}
 }
 // Corpus picker modal: root folder + subfolder checkboxes + format checkboxes.
 function openRagPicker(){
@@ -158,7 +176,8 @@ async function ragDoIndex(){
 // as webSearch, so the send loop treats RAG results exactly like web results.
 async function ragSearch(query, n=5){
   try{
-    const url=`${RAG}/search?${new URLSearchParams({q:query,n})}`;
+    const mode=(ragStatus&&ragStatus.mode)||'docs';
+    const url=`${RAG}/search?${new URLSearchParams({q:query,n,mode})}`;
     const r=await fetch(url,{signal:AbortSignal.timeout(20000)});
     if(!r.ok) return [];
     const d=await r.json();
