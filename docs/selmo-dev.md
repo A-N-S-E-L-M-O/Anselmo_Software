@@ -1,5 +1,5 @@
 # Selmo — Development documentation
-*Updated session 35 · 2026-07-09 · v0.930 (beta)*
+*Updated session 35 · 2026-07-09 · v0.931 (beta)*
 
 > **Read first:** the **Lessons learned** section near the end of this file, and **`selmo-bug-report.md`**.
 > **Project language:** English only — see `selmo-manifesto.md`. Conversation with Fabio can be any language; every file artifact is English.
