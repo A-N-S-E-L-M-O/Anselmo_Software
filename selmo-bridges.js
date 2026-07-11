@@ -25,6 +25,146 @@ async function checkWebBridge(){
   }
   refreshCaps();
 }
+// ── RAG bridge (local retrieval, port 8088) ──────────────────────────────────
+let ragStatus={corpus_dir:'',n_chunks:0,embedder_up:false};
+async function checkRagBridge(){
+  const dot=document.getElementById('rag-dot');
+  const txt=document.getElementById('rag-txt');
+  function paint(col,label){
+    if(!dot||!txt)return;
+    dot.style.background='var('+col+')';dot.style.borderColor='var('+col+')';
+    dot.style.boxShadow=col==='--dim'?'none':'0 0 4px var('+col+')';
+    txt.style.color='var('+col+')';txt.textContent=label;
+  }
+  try{
+    // 6s: /status probes the embedder server-side (can take a few seconds while
+    // it boots), so a short client timeout would abort and mislabel the chip.
+    const r=await fetch(`${RAG}/status`,{signal:AbortSignal.timeout(6000)});
+    if(!r.ok) throw new Error();
+    const d=await r.json();
+    ragOk=true; ragStatus=d;
+    if(!d.embedder_up)         paint('--yellow','⚠ embedder OFF');
+    else if(!d.n_chunks)       paint('--yellow','rag: no index');
+    else                       paint('--green','rag: '+d.n_chunks+' chunks');
+  }catch(e){
+    ragOk=false; paint('--dim','rag off');
+  }
+  if(typeof updateRagCorpusBar==='function')updateRagCorpusBar();
+  if(typeof refreshCaps==='function')refreshCaps();
+}
+// The RAG corpus bar: a clickable line under the first conversation message,
+// shown only in RAG mode, with the current folder + chunk count. Opens the
+// folder/format picker on click. Lives inside #messages, re-created on demand.
+function updateRagCorpusBar(){
+  const msgs=document.getElementById('messages');
+  let bar=document.getElementById('rag-corpus');
+  if(!IS_RAG_ON){ if(bar)bar.remove(); return; }
+  if(!msgs) return;
+  if(!bar){
+    bar=document.createElement('div'); bar.id='rag-corpus'; bar.onclick=openRagPicker;
+    const first=msgs.querySelector('.msg');
+    if(first&&first.nextSibling) msgs.insertBefore(bar,first.nextSibling);
+    else msgs.appendChild(bar);
+  }
+  const dir=(ragStatus&&ragStatus.corpus_dir)||'';
+  const n=(ragStatus&&ragStatus.n_chunks)||0;
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  bar.innerHTML = dir
+    ? '<span class="rc-ic">&#128193;</span> <span class="rc-path">'+esc(dir)+'</span> <span class="rc-n">· '+(n?t('rag.chunks',{n:n.toLocaleString('en')}):t('rag.bar.noindex'))+' · '+t('rag.bar.change')+'</span>'
+    : '<span class="rc-ic">&#128193;</span> <em>'+t('rag.bar.choose')+'</em>';
+}
+// Corpus picker modal: root folder + subfolder checkboxes + format checkboxes.
+function openRagPicker(){
+  if(!ragOk){addMsg('assistant','⚠ '+t('rag.notactive'));return;}
+  const cur=(ragStatus&&ragStatus.corpus_dir)||'';
+  const ov=document.createElement('div'); ov.className='rag-overlay'; ov.id='rag-overlay';
+  ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+  ov.innerHTML='<div class="rag-card">'
+    +'<div class="rag-h">'+t('rag.pick.title')+'</div>'
+    +'<div class="rag-lab">'+t('rag.pick.root')+'</div>'
+    +'<div class="rag-row"><input id="ragp-root" type="text" placeholder="C:\\\\...\\\\folder" value="'+cur.replace(/"/g,'&quot;')+'"><button id="ragp-browse" class="rag-btn">'+t('rag.pick.browse')+'</button></div>'
+    +'<div id="ragp-body" class="rag-body"><div class="rag-hint">'+t('rag.pick.hint')+'</div></div>'
+    +'<div class="rag-act"><button id="ragp-cancel" class="rag-btn">'+t('rag.pick.cancel')+'</button><button id="ragp-index" class="rag-btn rag-primary">'+t('rag.pick.index')+'</button></div>'
+    +'</div>';
+  document.body.appendChild(ov);
+  document.getElementById('ragp-cancel').onclick=()=>ov.remove();
+  document.getElementById('ragp-browse').onclick=ragBrowse;
+  document.getElementById('ragp-index').onclick=ragDoIndex;
+  const inp=document.getElementById('ragp-root');
+  inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();ragBrowse();} });
+  if(cur) ragBrowse();
+}
+async function ragBrowse(){
+  const root=document.getElementById('ragp-root').value.trim();
+  const body=document.getElementById('ragp-body');
+  if(!root){ body.innerHTML='<div class="rag-hint">'+t('rag.pick.enterpath')+'</div>'; return; }
+  body.innerHTML='<div class="rag-hint">'+t('rag.pick.reading')+'</div>';
+  let d;
+  try{ d=await(await fetch(`${RAG}/browse?`+new URLSearchParams({dir:root}))).json(); }
+  catch(e){ body.innerHTML='<div class="rag-hint">'+t('rag.error',{msg:e.message})+'</div>'; return; }
+  if(!d.ok){ body.innerHTML='<div class="rag-hint">'+t('rag.pick.invalid')+(d.error?' ('+d.error+')':'')+'.</div>'; return; }
+  const curExcl=(ragStatus&&ragStatus.exclude_dirs)||[];
+  const curFmts=(ragStatus&&ragStatus.formats)||[];
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  const subHtml=d.subdirs.length
+    ? d.subdirs.map(s=>'<label class="rag-ck"><input type="checkbox" class="ragp-sub" value="'+esc(s)+'"'+(curExcl.indexOf(s)>=0?'':' checked')+'> '+esc(s)+'</label>').join('')
+    : '<div class="rag-hint">'+t('rag.pick.nosubs')+'</div>';
+  const fmtHtml=d.formats.length
+    ? d.formats.map(f=>'<label class="rag-ck"><input type="checkbox" class="ragp-fmt" value="'+esc(f.ext)+'"'+((!curFmts.length||curFmts.indexOf(f.ext)>=0)?' checked':'')+'> '+esc(f.ext)+' <span class="rc-n">('+f.count+')</span></label>').join('')
+    : '<div class="rag-hint">'+t('rag.pick.nofmt')+'</div>';
+  body.innerHTML='<div class="rag-lab">'+t('rag.pick.subs')+'</div><div class="rag-grid">'+subHtml+'</div>'
+    +'<div class="rag-lab">'+t('rag.pick.formats')+'</div><div class="rag-grid">'+fmtHtml+'</div>';
+}
+async function ragDoIndex(){
+  const rootEl=document.getElementById('ragp-root'); if(!rootEl)return;
+  const root=rootEl.value.trim(); if(!root){ ragBrowse(); return; }
+  const excl=[...document.querySelectorAll('.ragp-sub:not(:checked)')].map(c=>c.value);
+  const fmts=[...document.querySelectorAll('.ragp-fmt:checked')].map(c=>c.value);
+  const ov=document.getElementById('rag-overlay'); if(ov) ov.remove();
+  // Indexing runs in the bridge in the background; we poll /progress and draw a
+  // bar, so there is no single long request that times out through the proxy.
+  const m=addMsg('assistant','');
+  m.bub.innerHTML='<div>⏳ '+t('rag.indexing',{dir:root})+'</div>'
+    +'<div class="rag-prog"><div class="rag-prog-fill"></div></div>'
+    +'<div class="rag-prog-txt"></div>';
+  const fill=m.bub.querySelector('.rag-prog-fill');
+  const ptxt=m.bub.querySelector('.rag-prog-txt');
+  if(m.av)m.av.classList.add('thinking'); // spin the drum while indexing too
+  try{
+    await fetch(`${RAG}/config`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({corpus_dir:root,exclude_dirs:excl,formats:fmts})});
+    await(await fetch(`${RAG}/reindex`,{method:'POST'})).json();
+    await new Promise(resolve=>{
+      const iv=setInterval(async()=>{
+        let p; try{ p=await(await fetch(`${RAG}/progress`)).json(); }catch(e){ return; }
+        if(p.phase==='scanning'){ ptxt.textContent=t('rag.prog.scanning',{files:p.files}); }
+        else if(p.phase==='embedding'&&p.chunks_total){
+          const pct=Math.min(100,Math.round(p.chunks/p.chunks_total*100));
+          fill.style.width=pct+'%';
+          ptxt.textContent=t('rag.prog.embedding',{done:p.chunks,total:p.chunks_total,pct:pct});
+        }
+        else if(p.phase==='saving'){ fill.style.width='100%'; ptxt.textContent=t('rag.prog.saving'); }
+        if(p.done||p.indexing===false){
+          clearInterval(iv);
+          if(p.error){ m.bub.innerHTML='⚠ '+t('rag.failed',{err:p.error}); }
+          else { m.bub.innerHTML='✓ '+t('rag.indexed',{files:p.n_files,chunks:p.n_chunks}); }
+          if(m.av)m.av.classList.remove('thinking');
+          checkRagBridge(); scrollBot(); resolve();
+        } else { scrollBot(); }
+      },700);
+    });
+  }catch(e){ if(m.av)m.av.classList.remove('thinking'); m.bub.innerHTML='⚠ '+t('rag.error',{msg:e.message}); }
+}
+// Retrieve top-k chunks from the local corpus. Same {title,url,snippet} shape
+// as webSearch, so the send loop treats RAG results exactly like web results.
+async function ragSearch(query, n=5){
+  try{
+    const url=`${RAG}/search?${new URLSearchParams({q:query,n})}`;
+    const r=await fetch(url,{signal:AbortSignal.timeout(20000)});
+    if(!r.ok) return [];
+    const d=await r.json();
+    return Array.isArray(d)?d:[];
+  }catch(e){ return []; }
+}
 async function checkWhisperBridge(){
   try{
     const r=await fetch(`${WHISPER}/status`,{signal:AbortSignal.timeout(2000)});

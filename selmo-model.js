@@ -184,6 +184,7 @@ function announceModel(startupOnly){
   info.style.cssText='margin-top:5px;font-size:11px;opacity:.6';
   info.textContent=modelInfoLine();
   r.inner.appendChild(info);
+  if(typeof updateRagCorpusBar==='function')updateRagCorpusBar(); // RAG folder bar under the welcome
 }
 // A reasoning token arrived mid-stream. When the model's mode is declared in the
 // ini (or it is a controllable model) the button is the single source of truth,

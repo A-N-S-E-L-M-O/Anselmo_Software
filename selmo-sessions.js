@@ -125,6 +125,24 @@ function toggleWeb(){
   IS_WEB_ON=!IS_WEB_ON;
   const btn=document.getElementById('web-btn');
   if(btn){btn.classList.toggle('on',IS_WEB_ON);btn.textContent=IS_WEB_ON?'WEB ●':'WEB';}
+  // RAG and WEB are mutually exclusive: only one retrieval source per turn.
+  if(IS_WEB_ON&&IS_RAG_ON){IS_RAG_ON=false;const rb=document.getElementById('rag-btn');if(rb){rb.classList.remove('on');rb.textContent='RAG';}}
+}
+// RAG mode: an explicit, separate retrieval mode (twin of WEB). Turning it on
+// only checks the bridge + embedder; folder selection and indexing happen in
+// the corpus picker (the folder bar under the welcome). Normal chat and web are
+// untouched while it is off.
+async function toggleRag(){
+  const btn=document.getElementById('rag-btn');
+  if(!IS_RAG_ON){                                   // turning ON
+    if(!ragOk){addMsg('assistant','⚠ '+t('rag.notactive'));return;}
+    if(IS_WEB_ON){IS_WEB_ON=false;const wb=document.getElementById('web-btn');if(wb){wb.classList.remove('on');wb.textContent='WEB';}}
+    try{ ragStatus=await(await fetch(`${RAG}/status`)).json(); ragOk=true; }catch(e){}
+    if(ragStatus&&!ragStatus.embedder_up){addMsg('assistant','⚠ '+t('rag.embedderoff'));return;}
+  }
+  IS_RAG_ON=!IS_RAG_ON;
+  if(btn){btn.classList.toggle('on',IS_RAG_ON);btn.textContent=IS_RAG_ON?'RAG ●':'RAG';}
+  checkRagBridge();
 }
 // Reduce a live chatHistory message to a small, JSON-safe record for storage.
 // Base64 image data is dropped (kept only as an image COUNT): full-res images in
@@ -211,6 +229,7 @@ function loadSession(id){
   document.getElementById('messages').appendChild(traceLine()); // keep the model/params trace when viewing history
   s.history.forEach(renderStored);
   wh=0;sessStart=Date.now();clearFile();updCost();
+  if(typeof updateRagCorpusBar==='function')updateRagCorpusBar(); // RAG folder bar in loaded sessions
   scrollBot();
   renderSessionList();
 }

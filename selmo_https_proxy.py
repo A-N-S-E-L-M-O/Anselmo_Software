@@ -15,6 +15,7 @@ Single always-up entry point for the whole UI. It does two jobs:
        /proxy/8084/...  ->  selmo_tts
        /proxy/8086/...  ->  selmo_image
        /proxy/8087/...  ->  tray control API (LLM load/unload)
+       /proxy/8088/...  ->  selmo_rag (local retrieval / RAG mode)
        /proxy/8089/...  ->  llama-server (the LLM, now on a private port)
      anything else      ->  static file from the project folder
 
@@ -52,7 +53,7 @@ HTTPS_PORT = 8443
 
 # Backend ports we are willing to proxy. 8080 is us; never proxy to self.
 # 8085 is the optional LibreHardwareMonitor web server; harmless to allow.
-ALLOWED_PORTS = {8081, 8082, 8083, 8084, 8085, 8086, 8087, 8089}
+ALLOWED_PORTS = {8081, 8082, 8083, 8084, 8085, 8086, 8087, 8088, 8089}
 
 # --- Phone access (LAN exposure) gate --------------------------------------
 # The front door binds 0.0.0.0 so a phone on the same Wi-Fi reaches 8443. On a

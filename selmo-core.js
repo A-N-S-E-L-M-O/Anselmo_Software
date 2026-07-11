@@ -141,7 +141,7 @@ async function poll(){
   setOdo(wh);
   const _tbLbl=document.getElementById('gpu-topbar-lbl');
   if(_tbLbl)_tbLbl.textContent='SYS '+(real?'':'~')+Math.round(watts)+'W';
-  document.getElementById('wh-total').textContent=whAll.toFixed(3);
+  document.getElementById('wh-total').textContent=(whAll/1000).toFixed(3);
   updCost();
   document.getElementById('tok-tot').textContent=toks.toLocaleString('en');
   {const sf=document.getElementById('speed-fill');

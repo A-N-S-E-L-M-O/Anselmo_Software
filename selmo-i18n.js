@@ -31,57 +31,80 @@ try {
 // ship a new language; nothing else changes.
 var SELMO_LANGS = [
   { code: 'en', name: 'English' },
-  { code: 'it', name: 'Italiano' }
+  { code: 'it', name: 'Italiano' },
+  { code: 'fr', name: 'Français' }
 ];
 
 /* ---- Dictionary: key -> { en, it, ... } -------------------------------------
    Semantic dotted keys (NOT the English text), so rewording English never
    breaks other languages. 'en' values mirror the current markup exactly. */
+/* ---- Dictionary: key -> { en, it, fr } ------------------------------------- */
 var I18N = {
   // header toolbar
-  'nav.new_chat'      : { en: '+ NEW CHAT',                         it: '+ NUOVA CHAT' },
-  'nav.export'        : { en: '↓ EXPORT',                      it: '↓ ESPORTA' },
-  'toolbar.web'       : { en: 'Web search ON/OFF',                  it: 'Ricerca web ON/OFF' },
-  'toolbar.think'     : { en: 'Extended reasoning ON/OFF',          it: 'Ragionamento esteso ON/OFF' },
-  'toolbar.history'   : { en: 'History',                            it: 'Cronologia' },
-  'toolbar.dashboard' : { en: 'Dashboard',                          it: 'Cruscotto' },
-  'toolbar.model'     : { en: 'Click to change model / runtime settings',
-                          it: 'Clicca per cambiare modello / impostazioni' },
-  'toolbar.profile'   : { en: 'Switch mode (A.N.S.E.L.M.O / Mizan / Custom)',
-                          it: 'Cambia modalità (A.N.S.E.L.M.O / Mizan / Custom)' },
+  'nav.new_chat'      : { en: '+ NEW CHAT',          it: '+ NUOVA CHAT',       fr: '+ NOUVELLE CHAT' },
+  'nav.export'        : { en: '↓ EXPORT',            it: '↓ ESPORTA',          fr: '↓ EXPORTER' },
+  'toolbar.web'       : { en: 'Web search ON/OFF',   it: 'Ricerca web ON/OFF', fr: 'Recherche web ON/OFF' },
+  'toolbar.think'     : { en: 'Extended reasoning ON/OFF', it: 'Ragionamento esteso ON/OFF', fr: 'Raisonnement étendu ON/OFF' },
+  'toolbar.history'   : { en: 'History',             it: 'Cronologia',         fr: 'Historique' },
+  'toolbar.dashboard' : { en: 'Dashboard',           it: 'Cruscotto',          fr: 'Tableau de bord' },
+  'toolbar.model'     : { en: 'Click to change model / runtime settings', it: 'Clicca per cambiare modello / impostazioni', fr: 'Cliquez pour changer le modèle / les paramètres d\'exécution' },
+  'toolbar.profile'   : { en: 'Switch mode (A.N.S.E.L.M.O / Mizan / Custom)', it: 'Cambia modalità (A.N.S.E.L.M.O / Mizan / Custom)', fr: 'Changer de mode (A.N.S.E.L.M.O / Mizan / Personnalisé)' },
   // input row
-  'input.file'        : { en: '+ FILE',                             it: '+ FILE' },
-  'input.imgocr'      : { en: '+ IMG/OCR',                          it: '+ IMG/OCR' },
-  'input.imgocr_t'    : { en: "Image or PDF for the model's vision / OCR",
-                          it: 'Immagine o PDF per la vista / OCR del modello' },
-  'input.placeholder' : { en: 'Type a message...',                 it: 'Scrivi un messaggio...' },
-  'input.send_t'      : { en: 'Generate document',                 it: 'Genera documento' },
-  'input.genimg_t'    : { en: 'Generate an image from your prompt - click to choose the mode (text-to-image / img2img)',
-                          it: "Genera un'immagine dal tuo prompt - clicca per scegliere la modalita' (text-to-image / img2img)" },
-  'input.stop'        : { en: 'STOP',                              it: 'STOP' },
-  'input.mic_t'       : { en: 'Voice transcription (Whisper)',     it: 'Trascrizione vocale (Whisper)' },
-  'input.vad_t'       : { en: 'Hands-free conversation (VAD) - detects pauses and sends on its own',
-                          it: 'Conversazione a mani libere (VAD) - rileva le pause e invia da solo' },
-  'input.tts_t'       : { en: 'Read responses aloud (Kokoro TTS)', it: 'Leggi le risposte ad alta voce (Kokoro TTS)' },
+  'input.file'        : { en: '+ FILE',              it: '+ FILE',             fr: '+ FICHIER' },
+  'input.imgocr'      : { en: '+ IMG/OCR',           it: '+ IMG/OCR',          fr: '+ IMG/OCR' },
+  'input.imgocr_t'    : { en: "Image or PDF for the model's vision / OCR", it: 'Immagine o PDF per la vista / OCR del modello', fr: "Image ou PDF pour la vision/OCR du modèle" },
+  'input.placeholder' : { en: 'Type a message...',   it: 'Scrivi un messaggio...', fr: 'Tapez un message...' },
+  'input.send_t'      : { en: 'Generate document',   it: 'Genera documento',   fr: 'Générer le document' },
+  'input.genimg_t'    : { en: 'Generate an image from your prompt - click to choose the mode (text-to-image / img2img)', it: "Genera un'immagine dal tuo prompt - clicca per scegliere la modalita' (text-to-image / img2img)", fr: "Générer une image à partir de votre prompt - cliquez pour choisir le mode (texte-vers-image / image-à-image)" },
+  'input.stop'        : { en: 'STOP',                it: 'STOP',               fr: 'ARRÊTER' },
+  'input.mic_t'       : { en: 'Voice transcription (Whisper)', it: 'Trascrizione vocale (Whisper)', fr: "Transcription vocale (Whisper)" },
+  'input.vad_t'       : { en: 'Hands-free conversation (VAD) - detects pauses and sends on its own', it: 'Conversazione a mani libere (VAD) - rileva le pause e invia da solo', fr: "Conversation mains libres (VAD) - détecte les pauses et envoie automatiquement" },
+  'input.tts_t'       : { en: 'Read responses aloud (Kokoro TTS)', it: 'Leggi le risposte ad alta voce (Kokoro TTS)', fr: "Lire les réponses à voix haute (Kokoro TTS)" },
   // profile modal
-  'profile.title'     : { en: 'PROFILE',                           it: 'PROFILO' },
-  'profile.close'     : { en: 'Close',                             it: 'Chiudi' },
+  'profile.title'     : { en: 'PROFILE',             it: 'PROFILO',            fr: 'PROFIL' },
+  'profile.close'     : { en: 'Close',               it: 'Chiudi',             fr: 'Fermer' },
   // left sidebar + dashboard panel labels
-  'panel.history'     : { en: 'history',                           it: 'cronologia' },
-  'panel.power'       : { en: 'system power draw',                 it: 'potenza di sistema' },
-  'panel.watthours'   : { en: 'session watt-hours',               it: 'watt-ora sessione' },
-  'stat.toksec'       : { en: 'tok/sec',                           it: 'tok/sec' },
-  'stat.wh_session'   : { en: 'Wh session',                        it: 'Wh sessione' },
-  'stat.wh_total'     : { en: 'Wh total',                          it: 'Wh totali' },
-  'stat.session_cost' : { en: 'session cost',                      it: 'costo sessione' },
-  'stat.total_cost'   : { en: 'total cost',                        it: 'costo totale' },
-  'stat.eur_kwh'      : { en: 'euro/kWh',                          it: 'euro/kWh' },
-  'stat.tokens_gen'   : { en: 'tokens generated',                  it: 'token generati' },
+  'panel.history'     : { en: 'history',             it: 'cronologia',         fr: 'historique' },
+  'panel.power'       : { en: 'system power draw',   it: 'potenza di sistema', fr: 'consommation système' },
+  'panel.watthours'   : { en: 'session watt-hours',  it: 'watt-ora sessione',  fr: 'wattheures de session' },
+  'stat.toksec'       : { en: 'tok/sec',             it: 'tok/sec',            fr: 'tok/sec' },
+  'stat.wh_session'   : { en: 'Wh session',          it: 'Wh sessione',        fr: 'Wh session' },
+  'stat.wh_total'     : { en: 'kWh total',           it: 'kWh totali',         fr: 'kWh total' },
+  'stat.session_cost' : { en: 'session cost',        it: 'costo sessione',     fr: 'coût de session' },
+  'stat.total_cost'   : { en: 'total cost',          it: 'costo totale',       fr: 'coût total' },
+  'stat.eur_kwh'      : { en: 'euro/kWh',            it: 'euro/kWh',           fr: '€/kWh' },
+  'stat.tokens_gen'   : { en: 'tokens generated',    it: 'token generati',     fr: 'tokens générés' },
   // conversation + footer
-  'welcome.line1'     : { en: 'New conversation.',                 it: 'Nuova conversazione.' },
-  'footer.privacy'    : { en: 'Only web searches transmitted',     it: 'Solo le ricerche web vengono trasmesse' }
+  'welcome.line1'     : { en: 'New conversation.',   it: 'Nuova conversazione.', fr: 'Nouvelle conversation.' },
+  'footer.privacy'    : { en: 'Only web searches transmitted', it: 'Solo le ricerche web vengono trasmesse', fr: 'Seules les recherches Web sont transmises' },
+  // RAG mode: corpus bar + folder/format picker + status messages
+  'rag.pick.title'    : { en: 'RAG - folder, subfolders and formats', it: 'RAG - cartella, sottocartelle e formati', fr: 'RAG - dossier, sous-dossiers et formats' },
+  'rag.pick.root'     : { en: 'Root folder',         it: 'Cartella radice',    fr: 'Dossier racine' },
+  'rag.pick.browse'   : { en: 'Browse',              it: 'Sfoglia',            fr: 'Parcourir' },
+  'rag.pick.cancel'   : { en: 'Cancel',              it: 'Annulla',            fr: 'Annuler' },
+  'rag.pick.index'    : { en: 'Index',               it: 'Indicizza',          fr: ' indexer' }, // "Index" as verb is tricky; often kept or "Créer l'index". Let's use "indexer" for action.
+  'rag.pick.hint'     : { en: 'Enter a folder and press Browse.', it: 'Inserisci una cartella e premi Sfoglia.', fr: 'Entrez un dossier et cliquez sur Parcourir.' },
+  'rag.pick.reading'  : { en: 'Reading folder...',   it: 'Leggo la cartella...', fr: "Lecture du dossier..." },
+  'rag.pick.enterpath': { en: 'Enter a folder path.',it: 'Inserisci un percorso cartella.', fr: 'Entrez le chemin d\'un dossier.' },
+  'rag.pick.invalid'  : { en: 'Invalid folder',      it: 'Cartella non valida', fr: 'Dossier invalide' },
+  'rag.pick.subs'     : { en: 'Subfolders to include', it: 'Sottocartelle da includere', fr: 'Sous-dossiers à inclure' },
+  'rag.pick.formats'  : { en: 'File formats',        it: 'Formati file',       fr: "Formats de fichiers" },
+  'rag.pick.nosubs'   : { en: 'No subfolders.',      it: 'Nessuna sottocartella.', fr: 'Aucun sous-dossier.' },
+  'rag.pick.nofmt'    : { en: 'No indexable formats found.', it: 'Nessun formato indicizzabile trovato.', fr: "Aucun format indexable trouvé." },
+  'rag.bar.choose'    : { en: 'click to choose the folder to index', it: 'clicca per scegliere la cartella da indicizzare', fr: 'cliquez pour choisir le dossier à indexer' },
+  'rag.bar.change'    : { en: 'click to change',     it: 'clicca per cambiare', fr: 'cliquez pour changer' },
+  'rag.bar.noindex'   : { en: 'no index',            it: 'nessun indice',      fr: 'aucun index' },
+  'rag.chunks'        : { en: '{n} chunks',          it: '{n} chunk',          fr: '{n} chunks' }, // "chunks" is standard in RAG context, even in FR.
+  'rag.notactive'     : { en: 'RAG bridge not active - start selmo_rag.py.', it: 'RAG bridge non attivo - avvia selmo_rag.py.', fr: 'Pont RAG inactif - lancez selmo_rag.py.' },
+  'rag.embedderoff'   : { en: 'Embedder not reachable - start a llama.cpp --embeddings server (or set embed_autostart). RAG needs it to index and search.', it: "Embedder non raggiungibile - avvia un server llama.cpp --embeddings (o imposta embed_autostart). Serve per indicizzare e cercare.", fr: 'Embedder inaccessible - lancez un serveur llama.cpp --embeddings (ou définissez embed_autostart). Le RAG en a besoin pour indexer et rechercher.' },
+  'rag.indexing'      : { en: 'Indexing {dir}... this can take a while.', it: "Indicizzo {dir}... puo' volerci un po'.", fr: "Indexation de {dir}... cela peut prendre un moment." },
+  'rag.indexed'       : { en: 'Indexed {files} files -> {chunks} chunks.', it: 'Indicizzati {files} file -> {chunks} chunk.', fr: '{files} fichiers indexés -> {chunks} chunks.' },
+  'rag.failed'        : { en: 'Indexing failed: {err}', it: 'Indicizzazione fallita: {err}', fr: "Échec de l'indexation : {err}" },
+  'rag.error'         : { en: 'Error: {msg}',        it: 'Errore: {msg}',      fr: 'Erreur : {msg}' },
+  'rag.prog.scanning' : { en: 'Scanning... {files} files', it: 'Scansione... {files} file', fr: 'Analyse... {files} fichiers' },
+  'rag.prog.embedding': { en: 'Embedding {done}/{total} chunks ({pct}%)', it: 'Embedding {done}/{total} chunk ({pct}%)', fr: 'Embedding {done}/{total} chunks ({pct}%)' },
+  'rag.prog.saving'   : { en: 'Saving index...', it: 'Salvo indice...', fr: "Sauvegarde de l'index..." }
 };
-
 /* ---- Bindings: which element gets which key, and via which property ----------
    prop: 'text' -> textContent (only for elements with NO child markup)
          'title'/'placeholder' -> the matching attribute

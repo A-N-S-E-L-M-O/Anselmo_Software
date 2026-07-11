@@ -19,14 +19,16 @@ function handleKey(e){
 function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,140)+'px';}
 function addMsg(role,text,streaming){
   const wrap=document.createElement('div');wrap.className='msg '+role;
-  const av=document.createElement('div');av.className='av';av.textContent=role==='user'?'tu':'⚡';
+  const av=document.createElement('div');av.className='av';
+  if(role==='user'){av.textContent='tu';}
+  else{av.innerHTML='<img src="selmo-icon-preview.png" alt="Selmo" draggable="false">';if(streaming)av.classList.add('thinking');}
   const inner=document.createElement('div');
   const bub=document.createElement('div');bub.className='bubble';
   if(streaming){bub.innerHTML='<span style="opacity:.5">&#x25ca;</span>';}else{bub.textContent=text;}
   inner.appendChild(bub);
   if(role==='user'){wrap.appendChild(inner);wrap.appendChild(av);}else{wrap.appendChild(av);wrap.appendChild(inner);}
   document.getElementById('messages').appendChild(wrap);scrollBot();
-  return{bub,inner,wrap};
+  return{bub,inner,wrap,av};
 }
 function imgThumbStrip(urls){
   const strip=document.createElement('div');

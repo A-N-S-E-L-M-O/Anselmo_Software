@@ -14,6 +14,7 @@ const _ORIGIN=_http?'':'http://127.0.0.1:8080';
 const API=_ORIGIN+'/proxy/8089';     // llama-server (LLM), now behind the front door
 const GMON=_ORIGIN+'/proxy/8082';
 const WEB=_ORIGIN+'/proxy/8081';
+const RAG=_ORIGIN+'/proxy/8088';
 const CTRL=_ORIGIN+'/proxy/8087';
 let webOk=false;
 let imgOk=false, visionOk=false;
@@ -119,6 +120,8 @@ fetch('/selmo-config.json').then(function(r){return r.ok?r.json():null;}).then(f
 
 checkWebBridge();
 setInterval(checkWebBridge, 30000);
+checkRagBridge();
+setInterval(checkRagBridge, 10000); // poll often so the chip catches the embedder booting + reindex
 
 // ── Whisper bridge ────────────────────────────────────────────────────────────
 const WHISPER=_ORIGIN+'/proxy/8083';
@@ -280,6 +283,7 @@ setTimeout(function(){ if(!_modelReadyShown && !_overlayDismissed && !document.b
 // Thinking flag and instruction for reasoning models (updated on model detect)
 let IS_THINK_ON=false;
 let IS_WEB_ON=false; // reasoning toggle — off di default
+let IS_RAG_ON=false, ragOk=false; // RAG mode — off di default
 let REASON_FIRST=false; // model opens <think> in its prompt template (Olmo): stream starts in reasoning
 let MODEL_READY=false; // true only once /props returned a real ctx; chunk tasks gate on it
 let _traceDone=false;

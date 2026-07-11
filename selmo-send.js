@@ -36,13 +36,21 @@ async function sendMsg(){
     isWebSearch=true;
     webQuery=txt.trim();
   }
+  // RAG mode reuses the web retrieval branch below, swapping the search source.
+  // Off by default and mutually exclusive with web, so the normal path is intact.
+  let isRagSearch=false;
+  if(IS_RAG_ON&&!isWebSearch&&txt.trim().length>0){
+    if(!ragOk){addMsg('assistant','⚠ RAG bridge not active — start selmo_rag.py to use RAG mode.');endTurn();return;}
+    isRagSearch=true;
+    webQuery=txt.trim();
+  }
   const isDateTimeQuery=!isWebSearch&&/^\s*(che (giorno|ora)|what (day|date|time)|date|time|day)\b[^\n]*\??$/i.test(txt);
 
   let content=txt;
   let proactiveSources=[];
   let imgDbg=null;
 
-  function endTurn(){gen=false;btn.style.display='inline-block';stopBtn.style.display='none';abort=null;inp.focus();if(vadConvo&&vadAwaitingReply){setTimeout(function(){if(vadConvo&&vadAwaitingReply&&!_ttsPending&&!gen)vadResume();},200);}}
+  function endTurn(){gen=false;document.querySelectorAll('.av.thinking').forEach(a=>a.classList.remove('thinking'));btn.style.display='inline-block';stopBtn.style.display='none';abort=null;inp.focus();if(vadConvo&&vadAwaitingReply){setTimeout(function(){if(vadConvo&&vadAwaitingReply&&!_ttsPending&&!gen)vadResume();},200);}}
 
   if(isDateTimeQuery&&webOk){
     try{
@@ -52,7 +60,7 @@ async function sendMsg(){
     }catch{/* bridge down — proceed without datetime */}
   }
 
-  if(isWebSearch){
+  if(isWebSearch||isRagSearch){
     const um=addMsg('user',(fileImage?(fileImage.pages>1?'\uD83D\uDDBC\uFE0F ['+fileImage.pages+'p] ':'\uD83D\uDDBC\uFE0F '):'')+txt);
     const{bub,inner}=addMsg('assistant','',true);
     const whStart=wh;
@@ -64,7 +72,7 @@ async function sendMsg(){
       // STEP 1 — doc:   pass a text snippet to rewriteQuery so the query is doc-aware.
       const _docCtx=fileChat?fileChat.slice(0,1500):'';
       let _imgAnalysis='';
-      if(fileImage){
+      if(fileImage&&!isRagSearch){
         bub.innerHTML=`<span style="color:var(--yellow)">&#x1F50D; Reading image...</span>`;
         scrollBot();
         try{
@@ -124,7 +132,7 @@ async function sendMsg(){
       const _eq=webQuery.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       bub.innerHTML=`<span style="color:var(--yellow)">&#x1F50D; Searching: <em>${_eq}</em>...</span>`;
       scrollBot();
-      const results=await webSearch(webQuery,5);
+      const results=isRagSearch?await ragSearch(webQuery,5):await webSearch(webQuery,5);
       if(!results.length){
         bub.textContent='No results for "'+webQuery+'".';
         endTurn();return;
@@ -151,8 +159,8 @@ async function sendMsg(){
       const ctxMsg=(recentClean?'Recent conversation:\n'+recentClean+'\n\n':'')
         +(_hasDoc?'Attached document:\n'+fileChat+'\n\n':'')
         +(_imgAnalysis?'Image analysis:\n'+_imgAnalysis+'\n\n':'')
-        +'Web search results for: '+webQuery+'\n\n'+formatted
-        +'\n\nBased on the image analysis'+((_hasDoc||_hasImg)?' and attached document/image':'')+' and the web search results above, answer the user\'s latest message directly in the same language. Be specific and useful. Cite sources as [1], [2], etc.';
+        +(isRagSearch?'Passages retrieved from your files for: ':'Web search results for: ')+webQuery+'\n\n'+formatted
+        +'\n\nBased on the image analysis'+((_hasDoc||_hasImg)?' and attached document/image':'')+' and the '+(isRagSearch?'retrieved passages':'web search results')+' above, answer the user\'s latest message directly in the same language. Be specific and useful. Cite sources as [1], [2], etc.';
       if(fileImage){
         const urls=fileImage.dataUrls;
         const imgContent=urls.map(u=>({type:'image_url',image_url:{url:u}}));
@@ -191,7 +199,7 @@ async function sendMsg(){
       const _rq=rawQuery.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       ledger.innerHTML='&#x1F50E; <span title="query sent to the engine">“'+_eq+'”</span>'
         +(rawQuery!==webQuery?' <span style="opacity:.55">← '+_rq+'</span>':'')+'<br>'
-        +'&#x1F310; '+results.map((r,i)=>
+        +(isRagSearch?'&#x1F4C4; ':'&#x1F310; ')+results.map((r,i)=>
         '<a href="'+r.url+'" target="_blank" rel="noopener" style="color:var(--cyan);text-decoration:none">['+(i+1)+'] '+r.title+'</a>'
       ).join(' \xb7 ')+' \xb7 '+t+' tok \xb7 '+(wh-whStart).toFixed(4)+' Wh';
       inner.appendChild(ledger);
