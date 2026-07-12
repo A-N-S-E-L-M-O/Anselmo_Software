@@ -1,6 +1,8 @@
 {
-  "agent_roots": [],
-  "agent_allow_writes": false,
+  "agent_roots": [
+    "C:\\Users\\Fabio.DESKTOP-H58J97H\\Documents\\SELMO ESPERIMENTI"
+  ],
+  "agent_allow_writes": true,
   "agent_max_steps": 12,
   "agent_timeout_s": 120,
   "agent_max_tool_output": 16384,

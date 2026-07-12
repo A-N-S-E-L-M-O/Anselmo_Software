@@ -414,16 +414,30 @@ function updateAgentRootsBar(){
       +' <span class="ar-n">\xb7 '+t('agent.bar.change')+'</span>'
     : '🤖 <em>'+t('agent.roots_empty')+'</em>';
 }
+// Best-effort starting folder when no root is set yet, so "Browse" works without
+// the user typing a path. Derive the home from the RAG corpus_dir (…\Users\<name>),
+// else the drive root, else C:\.
+function agentGuessHome(){
+  try{
+    const cd=(typeof ragStatus!=='undefined'&&ragStatus&&ragStatus.corpus_dir)||'';
+    let m=cd.match(/^([A-Za-z]:[\\/]+Users[\\/]+[^\\/]+)/);
+    if(m) return m[1];
+    m=cd.match(/^([A-Za-z]:)[\\/]/);
+    if(m) return m[1]+'\\';
+  }catch(e){}
+  return 'C:\\';
+}
 function openAgentPicker(){
   if(!AGENT_OK){ addMsg('assistant','⚠ '+t('agent.bridge_off')); return; }
   const cur=((agentStatus&&agentStatus.agent_roots)||[])[0]||'';
+  const start=cur||agentGuessHome();   // pre-fill so the navigator has a starting point
   const ov=document.createElement('div'); ov.className='rag-overlay'; ov.id='agent-overlay';
   ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
   const wOn=!!(agentStatus&&agentStatus.agent_allow_writes);
   ov.innerHTML='<div class="rag-card">'
     +'<div class="rag-h">🤖 '+t('agent.roots_panel')+'</div>'
     +'<div class="rag-lab">'+t('agent.roots_label')+'</div>'
-    +'<div class="rag-row"><input id="agp-root" type="text" placeholder="C:\\\\...\\\\cartella" value="'+cur.replace(/"/g,'&quot;')+'"><button id="agp-browse" class="rag-btn">'+t('rag.pick.browse')+'</button></div>'
+    +'<div class="rag-row"><input id="agp-root" type="text" placeholder="C:\\\\...\\\\cartella" value="'+start.replace(/"/g,'&quot;')+'"><button id="agp-browse" class="rag-btn">'+t('rag.pick.browse')+'</button></div>'
     +'<div id="agp-body" class="rag-body"><div class="rag-hint">'+t('agent.roots_label')+'</div></div>'
     +'<label class="rag-lab" style="display:flex;align-items:center;gap:.5em;cursor:pointer;margin-top:8px">'
     +'<input id="agp-writes" type="checkbox"'+(wOn?' checked':'')+'> ✍️ '+t('agent.allow_writes')+'</label>'
@@ -436,7 +450,7 @@ function openAgentPicker(){
   document.getElementById('agp-browse').onclick=agentBrowse;
   const inp=document.getElementById('agp-root');
   inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); agentBrowse(); } });
-  if(cur) agentBrowse();
+  agentBrowse();   // show the folder list right away from the pre-filled start
 }
 // Navigate the filesystem to pick the agent's root folder (like the RAG picker):
 // list subfolders as clickable rows, descend into them, ".." to go up. /browse is
@@ -444,9 +458,9 @@ function openAgentPicker(){
 // confined to that root by _resolve_agent_path on the server.
 async function agentBrowse(){
   const inp=document.getElementById('agp-root'); if(!inp) return;
-  const root=inp.value.trim();
+  let root=inp.value.trim();
+  if(!root){ root=agentGuessHome(); inp.value=root; }   // empty -> start from home
   const body=document.getElementById('agp-body');
-  if(!root){ body.innerHTML='<div class="rag-hint">'+t('agent.roots_label')+'</div>'; return; }
   body.innerHTML='<div class="rag-hint">'+t('rag.pick.reading')+'</div>';
   let d;
   try{ d=await(await fetch(`${RAG}/browse?`+new URLSearchParams({dir:root}))).json(); }
