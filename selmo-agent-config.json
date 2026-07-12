@@ -1,0 +1,248 @@
+{
+  "agent_roots": [],
+  "agent_allow_writes": false,
+  "agent_max_steps": 12,
+  "agent_timeout_s": 120,
+  "agent_max_tool_output": 16384,
+  "agent_max_write_bytes": 5242880,
+  "agent_tools_enabled": [
+    "list_dir",
+    "read_file",
+    "search_text",
+    "rag_search",
+    "write_file"
+  ],
+  "agent_builtin_tools": [
+    {
+      "name": "list_dir",
+      "label_key": "agent.tool.list_dir",
+      "desc": "List the files and subfolders inside a directory (one level) within an allowed root. Use this to discover what exists before reading.",
+      "icon": "📁",
+      "transport": "http",
+      "endpoint": "/proxy/8088/fs/list",
+      "method": "GET",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "dir": {
+            "type": "string",
+            "description": "Directory path relative to an allowed root"
+          }
+        },
+        "required": [
+          "dir"
+        ]
+      }
+    },
+    {
+      "name": "read_file",
+      "label_key": "agent.tool.read_file",
+      "desc": "Read the full text of a file within an allowed root (or a line range via start/end). Works on text, code, pdf, docx and odt. Use this to see the actual contents.",
+      "icon": "📖",
+      "transport": "http",
+      "endpoint": "/proxy/8088/fs/read",
+      "method": "GET",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "File path relative to an allowed root"
+          },
+          "start": {
+            "type": "integer",
+            "description": "First line (1-indexed, optional)"
+          },
+          "end": {
+            "type": "integer",
+            "description": "Last line inclusive (optional)"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      }
+    },
+    {
+      "name": "search_text",
+      "label_key": "agent.tool.search_text",
+      "desc": "Search the allowed roots for a regular expression and return matching file/line/text. Use this to locate where something appears across many files.",
+      "icon": "🔎",
+      "transport": "http",
+      "endpoint": "/proxy/8088/fs/grep",
+      "method": "GET",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "description": "Regex pattern to search"
+          },
+          "glob": {
+            "type": "string",
+            "description": "File glob filter, e.g. *.py"
+          },
+          "n": {
+            "type": "integer",
+            "description": "Max results (default 20)"
+          }
+        },
+        "required": [
+          "q"
+        ]
+      }
+    },
+    {
+      "name": "rag_search",
+      "label_key": "agent.tool.rag_search",
+      "desc": "Semantic search over the indexed corpus: describe what you are looking for in natural language and get the most relevant chunks. Use this to find the right file, then read_file to see it in full.",
+      "icon": "🧩",
+      "transport": "http",
+      "endpoint": "/proxy/8088/search",
+      "method": "GET",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "description": "Natural language query"
+          },
+          "n": {
+            "type": "integer",
+            "description": "Number of results (default 5)"
+          }
+        },
+        "required": [
+          "q"
+        ]
+      }
+    },
+    {
+      "name": "write_file",
+      "label_key": "agent.tool.write_file",
+      "desc": "Create or overwrite a file with the given text content, inside an allowed root. Writes the WHOLE file (send the complete new content, not a diff). Use this to save code, notes or documents into the folder. Only available when writing is enabled for the folder.",
+      "icon": "✍️",
+      "transport": "http",
+      "endpoint": "/proxy/8088/fs/write",
+      "method": "POST",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "File path relative to an allowed root (parent folders are created as needed)"
+          },
+          "content": {
+            "type": "string",
+            "description": "The full text content to write into the file"
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ]
+      }
+    }
+  ],
+  "agent_custom_tools": [
+    {
+      "name": "open_url_in_firefox",
+      "label_key": "agent.tool.open_url_in_firefox",
+      "icon": "🦊",
+      "transport": "http",
+      "endpoint": "/proxy/8088/agent/tool/run",
+      "method": "POST",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "URL to open"
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
+      "cmd_template": [
+        "firefox",
+        "{url}"
+      ],
+      "arg_patterns": {
+        "url": "^https?://[\\w./?=&#:@%-]+$"
+      },
+      "capture_stdout": false,
+      "timeout_s": 5,
+      "enabled": false
+    },
+    {
+      "name": "open_document_libreoffice",
+      "label_key": "agent.tool.open_document_libreoffice",
+      "icon": "📝",
+      "transport": "http",
+      "endpoint": "/proxy/8088/agent/tool/run",
+      "method": "POST",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Document path relative to an allowed root"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "cmd_template": [
+        "soffice",
+        "{path}"
+      ],
+      "arg_patterns": {},
+      "capture_stdout": false,
+      "timeout_s": 5,
+      "enabled": false
+    },
+    {
+      "name": "compose_email_thunderbird",
+      "label_key": "agent.tool.compose_email_thunderbird",
+      "icon": "📧",
+      "transport": "http",
+      "endpoint": "/proxy/8088/agent/tool/run",
+      "method": "POST",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "description": "Recipient email"
+          },
+          "subject": {
+            "type": "string",
+            "description": "Email subject"
+          },
+          "body": {
+            "type": "string",
+            "description": "Email body"
+          }
+        },
+        "required": [
+          "to",
+          "subject"
+        ]
+      },
+      "cmd_template": [
+        "thunderbird",
+        "-compose",
+        "to='{to}',subject='{subject}',body='{body}'"
+      ],
+      "arg_patterns": {
+        "to": "^[\\w.@+-]+$",
+        "subject": "^[^\\r\\n]{1,200}$"
+      },
+      "capture_stdout": false,
+      "timeout_s": 5,
+      "enabled": false
+    }
+  ]
+}

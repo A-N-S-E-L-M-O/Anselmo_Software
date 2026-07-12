@@ -41,8 +41,8 @@ var SELMO_LANGS = [
 /* ---- Dictionary: key -> { en, it, fr } ------------------------------------- */
 var I18N = {
   // header toolbar
-  'nav.new_chat'      : { en: '+ NEW CHAT',          it: '+ NUOVA CHAT',       fr: '+ NOUVELLE CHAT' },
-  'nav.export'        : { en: '↓ EXPORT',            it: '↓ ESPORTA',          fr: '↓ EXPORTER' },
+  'nav.new_chat'      : { en: 'New chat',            it: 'Nuova chat',         fr: 'Nouveau chat' },
+  'nav.export'        : { en: 'Export',              it: 'Esporta',            fr: 'Exporter' },
   'toolbar.web'       : { en: 'Web search ON/OFF',   it: 'Ricerca web ON/OFF', fr: 'Recherche web ON/OFF' },
   'toolbar.think'     : { en: 'Extended reasoning ON/OFF', it: 'Ragionamento esteso ON/OFF', fr: 'Raisonnement étendu ON/OFF' },
   'toolbar.history'   : { en: 'History',             it: 'Cronologia',         fr: 'Historique' },
@@ -104,15 +104,38 @@ var I18N = {
   'rag.prog.scanning' : { en: 'Scanning... {files} files', it: 'Scansione... {files} file', fr: 'Analyse... {files} fichiers' },
   'rag.prog.embedding': { en: 'Embedding {done}/{total} chunks ({pct}%)', it: 'Embedding {done}/{total} chunk ({pct}%)', fr: 'Embedding {done}/{total} chunks ({pct}%)' },
   'rag.prog.saving'   : { en: 'Saving index...', it: 'Salvo indice...', fr: "Sauvegarde de l'index..." },
-  'ml.loading'        : { en: 'preparing the wash cycle', it: 'preparando il ciclo di lavaggio', fr: 'préparation du cycle de lavage' }
+  'ml.loading'        : { en: 'preparing the wash cycle', it: 'preparando il ciclo di lavaggio', fr: 'préparation du cycle de lavage' },
+  // agent mode
+  'agent.toggle_t'                     : { en: 'Agent ON/OFF',                        it: 'Agente ON/OFF',                                              fr: 'Agent ON/OFF' },
+  'agent.step'                         : { en: 'Step {n}/{max}',                       it: 'Passo {n}/{max}',                                            fr: 'Étape {n}/{max}' },
+  'agent.tool.list_dir'                : { en: 'listing {dir}',                        it: 'elenco {dir}',                                               fr: 'liste {dir}' },
+  'agent.tool.read_file'               : { en: 'reading {path}',                       it: 'lettura {path}',                                             fr: 'lecture {path}' },
+  'agent.tool.search_text'             : { en: 'grep: {q}',                            it: 'grep: {q}',                                                  fr: 'grep : {q}' },
+  'agent.tool.write_file'              : { en: 'writing {path}',                       it: 'scrittura {path}',                                           fr: 'écriture {path}' },
+  'agent.allow_writes'                 : { en: 'Let the agent write in this folder',    it: "Consenti all'agente di scrivere in questa cartella",          fr: "Autoriser l'agent à écrire dans ce dossier" },
+  'agent.bar.writes_on'                : { en: 'writable',                              it: 'scrivibile',                                                 fr: 'inscriptible' },
+  'agent.tool.rag_search'              : { en: 'RAG search: {q}',                      it: 'Ricerca RAG: {q}',                                           fr: 'Recherche RAG : {q}' },
+  'agent.tool.open_url_in_firefox'     : { en: 'opening in Firefox: {url}',            it: 'apro in Firefox: {url}',                                     fr: 'ouverture dans Firefox : {url}' },
+  'agent.tool.open_document_libreoffice': { en: 'opening in LibreOffice: {path}',      it: 'apro in LibreOffice: {path}',                                fr: 'ouverture dans LibreOffice : {path}' },
+  'agent.tool.compose_email_thunderbird': { en: 'composing email to {to}',             it: 'compongo email a {to}',                                      fr: "rédaction d'un email à {to}" },
+  'agent.stopped'                      : { en: 'Agent stopped.',                       it: 'Agente fermato.',                                            fr: 'Agent arrêté.' },
+  'agent.max_steps'                    : { en: 'Max steps ({max}) reached.',           it: 'Passi massimi ({max}) raggiunti.',                            fr: "Nombre maximal d'étapes ({max}) atteint." },
+  'agent.error'                        : { en: 'Agent error: {msg}',                   it: 'Errore agente: {msg}',                                       fr: "Erreur de l'agent : {msg}" },
+  'agent.no_tool_support'              : { en: 'This model does not support tool calling. Load a compatible model with --jinja.', it: 'Questo modello non supporta il tool calling. Carica un modello compatibile con --jinja.', fr: 'Ce modèle ne prend pas en charge les appels d’outils. Chargez un modèle compatible avec --jinja.' },
+  'agent.bridge_off'                   : { en: 'Agent bridge not running (start selmo_rag.py).', it: 'Bridge agente non attivo (avvia selmo_rag.py).', fr: "Le bridge de l'agent n'est pas actif (lancez selmo_rag.py)." },
+  'agent.bar.change'                   : { en: 'change', it: 'cambia', fr: 'changer' },
+  'agent.roots_empty'                  : { en: 'No agent roots configured. Add folders in agent settings.', it: 'Nessuna cartella radice configurata. Aggiungine nelle impostazioni agente.', fr: "Aucun dossier racine configuré. Ajoutez des dossiers dans les paramètres de l'agent." },
+  'agent.roots_panel'                  : { en: 'Agent folders',                        it: 'Cartelle agente',                                            fr: "Dossiers de l'agent" },
+  'agent.roots_label'                  : { en: 'Folders the agent can access:',        it: "Cartelle a cui l'agente può accedere:",                  fr: "Dossiers accessibles par l'agent :" },
+  'agent.btn_label'                    : { en: 'Agent',                                it: 'Agente',                                                     fr: 'Agent' }
 };
 /* ---- Bindings: which element gets which key, and via which property ----------
    prop: 'text' -> textContent (only for elements with NO child markup)
          'title'/'placeholder' -> the matching attribute
    Applied only when the active language is not English. */
 var I18N_BIND = [
-  { sel: '#new-chat',        prop: 'text',        key: 'nav.new_chat' },
-  { sel: '#export-chat',     prop: 'text',        key: 'nav.export' },
+  { sel: '#new-chat',        prop: 'title',       key: 'nav.new_chat' },
+  { sel: '#export-chat',     prop: 'title',       key: 'nav.export' },
   { sel: '#web-btn',         prop: 'title',       key: 'toolbar.web' },
   { sel: '#think-btn',       prop: 'title',       key: 'toolbar.think' },
   { sel: '#mob-nav-btn',     prop: 'title',       key: 'toolbar.history' },
@@ -130,7 +153,9 @@ var I18N_BIND = [
   { sel: '#vad-btn',         prop: 'title',       key: 'input.vad_t' },
   { sel: '#tts-btn',         prop: 'title',       key: 'input.tts_t' },
   { sel: '#profile-modal .pm-title', prop: 'text',  key: 'profile.title' },
-  { sel: '#profile-modal .pm-x',     prop: 'title', key: 'profile.close' }
+  { sel: '#profile-modal .pm-x',     prop: 'title', key: 'profile.close' },
+  { sel: '#agent-btn',               prop: 'title',       key: 'agent.toggle_t' },
+  { sel: '#agent-step',              prop: 'textContent', key: 'agent.step' }
 ];
 
 /* ---- t(): look up a key in the active language; interpolate {vars} ---------- */
@@ -234,8 +259,8 @@ function _i18nPicker() {
     var btn = document.createElement('button');
     btn.id = 'lang-btn';
     btn.title = 'Language';
-    btn.style.cssText = 'font-family:var(--mono);font-size:13px;letter-spacing:.07em;'
-      + 'padding:7px 12px;border-radius:var(--radius-xs);cursor:pointer;'
+    btn.style.cssText = 'font-family:var(--mono);font-size:16px;line-height:1;letter-spacing:.07em;'
+      + 'padding:5px 11px;border-radius:var(--radius-xs);cursor:pointer;'
       + 'transition:all .18s var(--ease);white-space:nowrap;flex-shrink:0;'
       + 'background:rgba(255,255,255,.025);border:1px solid var(--steel);color:var(--dim);';
     btn.onmouseover = function () { btn.style.borderColor = 'var(--cyan)'; btn.style.color = 'var(--cyan)'; };

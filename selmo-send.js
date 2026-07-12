@@ -29,6 +29,35 @@ async function sendMsg(){
   // /think: toggle extended reasoning
 
 
+  // ── Agent mode ──────────────────────────────────────────────────────────────
+  // Gate on the toggle only, not the flapping AGENT_OK poll: the config is cached
+  // and agentLoop surfaces a clear error if the bridge is genuinely unreachable.
+  if(IS_AGENT_ON){
+    chatHistory.push({role:'user',content:txt,_orig:txt});
+    addMsg('user',txt);
+    const{bub,inner}=addMsg('assistant','',true);
+    // Tool-trace lines go ABOVE the bubble so the final marked.parse(bub)
+    // never erases them — the transcript keeps the record of what Selmo did.
+    const traceBox=document.createElement('div');
+    traceBox.className='agent-trace-box';
+    inner.insertBefore(traceBox,bub);
+    try{
+      const cfg=window._agentCfg||await loadAgentConfig().catch(()=>null);
+      if(!cfg) throw new Error('no agent config');
+      window._agentCfg=cfg;
+      const finalText=await agentLoop(txt,chatHistory,traceBox,cfg);
+      bub.innerHTML=marked.parse(finalText);
+      addDownloadBar(bub,inner,finalText);
+      chatHistory.push({role:'assistant',content:finalText});
+      saveSession();
+    }catch(e){
+      console.warn('agentLoop failed:',e);
+      bub.textContent='[agent error: '+e.message+']';
+      bub.style.borderColor='var(--red)';
+    }
+    endTurn();return;
+  }
+
   let isWebSearch=false;
   let webQuery='';
   if(IS_WEB_ON&&txt.trim().length>0){

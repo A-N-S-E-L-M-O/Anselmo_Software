@@ -124,9 +124,11 @@ function setImageMode(on){
 function toggleWeb(){
   IS_WEB_ON=!IS_WEB_ON;
   const btn=document.getElementById('web-btn');
-  if(btn){btn.classList.toggle('on',IS_WEB_ON);btn.textContent=IS_WEB_ON?'WEB ●':'WEB';}
+  if(btn){btn.classList.toggle('on',IS_WEB_ON);}  // icon button: state shown by .on border/glow
   // RAG and WEB are mutually exclusive: only one retrieval source per turn.
   if(IS_WEB_ON&&IS_RAG_ON){IS_RAG_ON=false;const rb=document.getElementById('rag-btn');if(rb){rb.classList.remove('on');rb.textContent='RAG';}}
+  // Agent is a third grounding source — turn it off too.
+  if(IS_WEB_ON&&typeof agentOffFor==='function')agentOffFor('web');
 }
 // RAG mode: an explicit, separate retrieval mode (twin of WEB). Turning it on
 // only checks the bridge + embedder; folder selection and indexing happen in
@@ -136,7 +138,8 @@ async function toggleRag(){
   const btn=document.getElementById('rag-btn');
   if(!IS_RAG_ON){                                   // turning ON
     if(!ragOk){addMsg('assistant','⚠ '+t('rag.notactive'));return;}
-    if(IS_WEB_ON){IS_WEB_ON=false;const wb=document.getElementById('web-btn');if(wb){wb.classList.remove('on');wb.textContent='WEB';}}
+    if(IS_WEB_ON){IS_WEB_ON=false;const wb=document.getElementById('web-btn');if(wb){wb.classList.remove('on');}}
+    if(typeof agentOffFor==='function')agentOffFor('rag');
     try{ ragStatus=await(await fetch(`${RAG}/status`)).json(); ragOk=true; }catch(e){}
     if(ragStatus&&!ragStatus.embedder_up){addMsg('assistant','⚠ '+t('rag.embedderoff'));return;}
   }

@@ -137,7 +137,7 @@ function applyThinkMode(){
   if(!THINK_CAPABLE){            // non-reasoning model: keep it visible but greyed/disabled
     btn.style.display='';
     btn.setAttribute('aria-disabled','true'); btn.style.opacity='.35'; btn.style.cursor='not-allowed';
-    btn.classList.remove('on'); btn.textContent='THINK';
+    btn.classList.remove('on');
     btn.title='This model has no reasoning mode';
     IS_THINK_ON=false; syncThinkPrompt(); return;
   }
@@ -145,12 +145,12 @@ function applyThinkMode(){
   if(THINK_NATIVE){
     IS_THINK_ON=true;
     btn.setAttribute('aria-disabled','true');btn.style.opacity='.6';btn.style.cursor='default';
-    btn.classList.add('on');btn.textContent='THINK ●';
+    btn.classList.add('on');
     btn.title='This model always reasons';
   }else{
     IS_THINK_ON=localStorage.getItem('sthink')!=='0'; // default ON, remembered
     btn.removeAttribute('aria-disabled');btn.disabled=false;btn.style.opacity='';btn.style.cursor='';
-    btn.classList.toggle('on',IS_THINK_ON);btn.textContent=IS_THINK_ON?'THINK ●':'THINK';
+    btn.classList.toggle('on',IS_THINK_ON);
     btn.title='Extended reasoning ON/OFF';
   }
   syncThinkPrompt();
@@ -196,7 +196,7 @@ function markThinking(){
   if(THINK_MODE||INSTRUCTED||THINK_KWARG)return;
   THINK_CAPABLE=true; THINK_NATIVE=true; IS_THINK_ON=true;
   const btn=document.getElementById('think-btn');
-  if(btn){btn.style.display='';btn.classList.add('on');btn.textContent='THINK ●';}
+  if(btn){btn.style.display='';btn.classList.add('on');}
   syncThinkPrompt();
 }
 function toggleThink(){
@@ -204,7 +204,7 @@ function toggleThink(){
   localStorage.setItem('sthink',IS_THINK_ON?'1':'0');
   syncThinkPrompt();
   const btn=document.getElementById('think-btn');
-  if(btn){btn.classList.toggle('on',IS_THINK_ON);btn.textContent=IS_THINK_ON?'THINK ●':'THINK';}
+  if(btn){btn.classList.toggle('on',IS_THINK_ON);}  // icon button: state shown by .on border/glow
 }
 // ── PRESET SAVE / LOAD ──
 // savePreset: download the current system prompt + sampling params as a .md file.

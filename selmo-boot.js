@@ -122,6 +122,21 @@ checkWebBridge();
 setInterval(checkWebBridge, 30000);
 checkRagBridge();
 setInterval(checkRagBridge, 10000); // poll often so the chip catches the embedder booting + reindex
+function checkAgentBridge(){
+  fetch(RAG+'/agent/config',{signal:AbortSignal.timeout(5000)})
+    .then(r=>r.ok?r.json():null)
+    .then(d=>{
+      if(d&&!d.error){
+        AGENT_OK=true;
+        if(typeof agentStatus!=='undefined'){ agentStatus.agent_roots=d.agent_roots||[]; agentStatus.agent_allow_writes=!!d.agent_allow_writes; }
+        if(d.agent_roots) window._agentCfg=d;
+        if(typeof updateAgentRootsBar==='function') updateAgentRootsBar();
+      }else{ AGENT_OK=false; }
+    })
+    .catch(()=>{ AGENT_OK=false; });
+}
+checkAgentBridge();
+setInterval(checkAgentBridge, 15000);
 
 // ── Whisper bridge ────────────────────────────────────────────────────────────
 const WHISPER=_ORIGIN+'/proxy/8083';
@@ -291,6 +306,8 @@ setTimeout(function(){ if(!_modelReadyShown && !_overlayDismissed && !document.b
 let IS_THINK_ON=false;
 let IS_WEB_ON=false; // reasoning toggle — off di default
 let IS_RAG_ON=false, ragOk=false; // RAG mode — off di default
+let IS_AGENT_ON=false;
+let AGENT_OK=false; // true quando agent/config risponde
 let REASON_FIRST=false; // model opens <think> in its prompt template (Olmo): stream starts in reasoning
 let MODEL_READY=false; // true only once /props returned a real ctx; chunk tasks gate on it
 let _traceDone=false;
@@ -398,6 +415,26 @@ setInterval(checkImageBridge,30000);
 refreshCaps();   // grey every action up-front; each bridge check re-enables its own
 document.addEventListener('click', _capClickGuard, true);  // block clicks on aria-disabled buttons
 
+// Wire toolbar buttons via addEventListener instead of relying on the inline
+// onclick attribute. On some setups the inline handler simply does not fire
+// (the click reaches the button but onclick is never invoked), which left the
+// AGENT/THINK toggles dead. addEventListener is reliable; we strip the inline
+// attribute first so there is never a double invocation.
+(function wireToolbar(){
+  var map={
+    'new-chat':    (typeof newChat==='function')    ? newChat    : null,
+    'export-chat': (typeof exportChat==='function')  ? exportChat : null,
+    'web-btn':     (typeof toggleWeb==='function')   ? toggleWeb  : null,
+    'rag-btn':     (typeof toggleRag==='function')   ? toggleRag  : null,
+    'think-btn':   (typeof toggleThink==='function') ? toggleThink: null,
+    'agent-btn':   (typeof toggleAgent==='function') ? toggleAgent: null
+  };
+  Object.keys(map).forEach(function(id){
+    var b=document.getElementById(id), fn=map[id];
+    if(b && typeof fn==='function'){ b.removeAttribute('onclick'); b.addEventListener('click', fn); }
+  });
+})();
+
 
 
 
@@ -433,5 +470,6 @@ if(window.visualViewport){
 
 
 
+document.getElementById('agent-btn')?.addEventListener('click', toggleAgent);
 _micHttpsBanner();
 _phoneField();   // desktop-only: show the "type this on your phone" address field

@@ -392,6 +392,106 @@ async function rewriteQuery(rawMsg, history, docContext){
     return rawMsg;
   }
 }
+// ── Agent roots bar + picker ──────────────────────────────────────────────────
+let agentStatus={agent_roots:[]};
+function updateAgentRootsBar(){
+  const msgs=document.getElementById('messages');
+  let bar=document.getElementById('agent-roots-bar');
+  if(!IS_AGENT_ON){ if(bar)bar.remove(); return; }
+  if(!msgs) return;
+  if(!bar){
+    bar=document.createElement('div'); bar.id='agent-roots-bar'; bar.onclick=openAgentPicker;
+    const first=msgs.querySelector('.msg');
+    if(first&&first.nextSibling) msgs.insertBefore(bar,first.nextSibling);
+    else msgs.appendChild(bar);
+  }
+  const roots=(agentStatus&&agentStatus.agent_roots)||[];
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const writes=!!(agentStatus&&agentStatus.agent_allow_writes);
+  const wtag=writes?' <span class="ar-w" title="'+esc(t('agent.allow_writes'))+'">✍️ '+esc(t('agent.bar.writes_on'))+'</span>':'';
+  bar.innerHTML=roots.length
+    ? '🤖 <span class="ar-path">'+roots.map(esc).join(', ')+'</span>'+wtag
+      +' <span class="ar-n">\xb7 '+t('agent.bar.change')+'</span>'
+    : '🤖 <em>'+t('agent.roots_empty')+'</em>';
+}
+function openAgentPicker(){
+  if(!AGENT_OK){ addMsg('assistant','⚠ '+t('agent.bridge_off')); return; }
+  const cur=((agentStatus&&agentStatus.agent_roots)||[])[0]||'';
+  const ov=document.createElement('div'); ov.className='rag-overlay'; ov.id='agent-overlay';
+  ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+  const wOn=!!(agentStatus&&agentStatus.agent_allow_writes);
+  ov.innerHTML='<div class="rag-card">'
+    +'<div class="rag-h">🤖 '+t('agent.roots_panel')+'</div>'
+    +'<div class="rag-lab">'+t('agent.roots_label')+'</div>'
+    +'<div class="rag-row"><input id="agp-root" type="text" placeholder="C:\\\\...\\\\cartella" value="'+cur.replace(/"/g,'&quot;')+'"><button id="agp-browse" class="rag-btn">'+t('rag.pick.browse')+'</button></div>'
+    +'<div id="agp-body" class="rag-body"><div class="rag-hint">'+t('agent.roots_label')+'</div></div>'
+    +'<label class="rag-lab" style="display:flex;align-items:center;gap:.5em;cursor:pointer;margin-top:8px">'
+    +'<input id="agp-writes" type="checkbox"'+(wOn?' checked':'')+'> ✍️ '+t('agent.allow_writes')+'</label>'
+    +'<div class="rag-act"><button id="agp-cancel" class="rag-btn">'+t('rag.pick.cancel')+'</button>'
+    +'<button id="agp-save" class="rag-btn rag-primary">'+t('rag.pick.index')+'</button></div>'
+    +'</div>';
+  document.body.appendChild(ov);
+  document.getElementById('agp-cancel').onclick=()=>ov.remove();
+  document.getElementById('agp-save').onclick=agentSaveRoots;
+  document.getElementById('agp-browse').onclick=agentBrowse;
+  const inp=document.getElementById('agp-root');
+  inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); agentBrowse(); } });
+  if(cur) agentBrowse();
+}
+// Navigate the filesystem to pick the agent's root folder (like the RAG picker):
+// list subfolders as clickable rows, descend into them, ".." to go up. /browse is
+// unrestricted (choosing the root is a config step); once saved, the agent is
+// confined to that root by _resolve_agent_path on the server.
+async function agentBrowse(){
+  const inp=document.getElementById('agp-root'); if(!inp) return;
+  const root=inp.value.trim();
+  const body=document.getElementById('agp-body');
+  if(!root){ body.innerHTML='<div class="rag-hint">'+t('agent.roots_label')+'</div>'; return; }
+  body.innerHTML='<div class="rag-hint">'+t('rag.pick.reading')+'</div>';
+  let d;
+  try{ d=await(await fetch(`${RAG}/browse?`+new URLSearchParams({dir:root}))).json(); }
+  catch(e){ body.innerHTML='<div class="rag-hint">'+t('rag.error',{msg:e.message})+'</div>'; return; }
+  if(!d.ok){ body.innerHTML='<div class="rag-hint">'+t('rag.pick.invalid')+(d.error?' ('+d.error+')':'')+'</div>'; return; }
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  let html='<div class="agp-item agp-up" data-nav="up">⬆ ..</div>';
+  html+= d.subdirs.length
+    ? d.subdirs.map(s=>'<div class="agp-item" data-sub="'+esc(s).replace(/"/g,'&quot;')+'"><span class="rc-ic">&#128193;</span> '+esc(s)+'</div>').join('')
+    : '<div class="rag-hint">'+t('rag.pick.nosubs')+'</div>';
+  body.innerHTML=html;
+  body.querySelectorAll('.agp-item').forEach(it=>{
+    it.onclick=()=>{
+      let p=inp.value.trim().replace(/[\\/]+$/,'');
+      if(it.dataset.nav==='up'){
+        p=p.replace(/[\\/][^\\/]*$/,'') || p;   // strip last segment (keep drive root)
+      }else{
+        const sep=(p.indexOf('\\')<0 && p.indexOf('/')>=0) ? '/' : '\\';
+        p=p+sep+it.dataset.sub;
+      }
+      inp.value=p; agentBrowse();
+    };
+  });
+}
+async function agentSaveRoots(){
+  const rootEl=document.getElementById('agp-root'); if(!rootEl)return;
+  const root=rootEl.value.trim();
+  const roots=root?[root]:[];
+  const wEl=document.getElementById('agp-writes');
+  const allowWrites=!!(wEl&&wEl.checked);
+  const ov=document.getElementById('agent-overlay'); if(ov) ov.remove();
+  try{
+    const r=await fetch(`${RAG}/agent/config`,{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({agent_roots:roots,agent_allow_writes:allowWrites})});
+    const d=await r.json();
+    if(!d.ok) throw new Error(d.error||'save failed');
+    agentStatus.agent_roots=roots;
+    agentStatus.agent_allow_writes=allowWrites;
+    window._agentCfg=null; // force reload at next send
+    updateAgentRootsBar();
+  }catch(e){
+    addMsg('assistant','⚠ Errore salvataggio cartella agente: '+e.message);
+  }
+}
 function loadProps(tries){
   tries=tries||0;
   fetch(`${API}/props`).then(r=>r.json()).then(p=>{

@@ -38,7 +38,8 @@ from xml.etree import ElementTree as ET
 
 PORT     = 8088
 BASE     = Path(__file__).resolve().parent
-CFG_PATH = BASE / "selmo-rag-config.json"
+CFG_PATH       = BASE / "selmo-rag-config.json"
+AGENT_CFG_PATH = BASE / "selmo-agent-config.json"
 
 def _idx_paths(kind):
     """Per-mode index files: selmo-rag.docs.* / selmo-rag.code.*"""
@@ -227,6 +228,29 @@ def _extract_pdf(path):
     except Exception as e:
         print(f"  [rag] pdf extract failed for {path}: {e}")
         return ""
+
+def _binary_extract_hint(ext):
+    """When a pdf/docx/odt read comes back empty, say WHY so the agent (and the
+    user) get an actionable reason instead of a silent blank."""
+    if ext == ".pdf":
+        have = False
+        try:
+            import pypdf  # noqa: F401
+            have = True
+        except Exception:
+            try:
+                import PyPDF2  # noqa: F401
+                have = True
+            except Exception:
+                have = False
+        if not have:
+            return ("[read_file: PDF text extraction is unavailable - the 'pypdf' "
+                    "library is not installed on the Selmo server. Install it with "
+                    "'pip install pypdf' and restart selmo_rag.py, then retry.]")
+        return ("[read_file: this PDF has no extractable text layer (it is likely a "
+                "scanned/image PDF). OCR is not available to the file tools; convert "
+                "it to text or provide a text version.]")
+    return (f"[read_file: could not extract any text from this {ext} file.]")
 
 def extract_any(path):
     ext = Path(path).suffix.lower()
@@ -572,6 +596,31 @@ def browse(dirpath, cfg):
     formats = [{"ext": e, "count": exts[e]} for e in sorted(exts)]
     return {"ok": True, "dir": dirpath, "subdirs": subdirs, "formats": formats}
 
+# ── Agent helpers ─────────────────────────────────────────────────────────────
+def _load_agent_cfg():
+    """Read selmo-agent-config.json; return {} on missing file."""
+    try:
+        return json.loads(AGENT_CFG_PATH.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except Exception as e:
+        print(f"  [rag] agent-config parse error ({e})")
+        return {}
+
+def _resolve_agent_path(cfg, rel_or_abs):
+    """Resolve a path against agent_roots; raise PermissionError if it escapes."""
+    roots = [r for r in cfg.get('agent_roots', []) if r]
+    if not roots:
+        raise PermissionError('No agent_roots configured')
+    for root in roots:
+        real_root = os.path.realpath(root)
+        candidate = (os.path.realpath(os.path.join(real_root, rel_or_abs))
+                     if not os.path.isabs(rel_or_abs)
+                     else os.path.realpath(rel_or_abs))
+        if candidate == real_root or candidate.startswith(real_root + os.sep):
+            return candidate
+    raise PermissionError(f'Path not in any allowed root: {rel_or_abs!r}')
+
 # ── HTTP handler (mirrors selmo_web.py) ───────────────────────────────────────
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
@@ -623,6 +672,171 @@ class Handler(BaseHTTPRequestHandler):
         elif parsed.path == "/progress":
             self._json(dict(_PROGRESS))
 
+        elif parsed.path == "/agent/config":
+            try:
+                self._json(_load_agent_cfg())
+            except Exception as e:
+                self._json({"error": str(e)})
+
+        elif parsed.path == "/fs/list":
+            try:
+                acfg = _load_agent_cfg()
+                rel  = qs.get("dir", [""])[0]
+                if not rel:
+                    self._json({"error": "dir parameter required"}); return
+                real = _resolve_agent_path(acfg, rel)
+                if not os.path.isdir(real):
+                    self._json({"error": f"not a directory: {rel!r}"}); return
+                entries = []
+                with os.scandir(real) as it:
+                    for entry in sorted(it, key=lambda x: (not x.is_dir(), x.name.lower())):
+                        entries.append({
+                            "name": entry.name,
+                            "type": "dir" if entry.is_dir() else "file",
+                            "size": entry.stat().st_size if entry.is_file() else None,
+                        })
+                self._json({"dir": rel, "entries": entries})
+            except PermissionError as e:
+                self._json({"error": str(e)})
+            except Exception as e:
+                self._json({"error": str(e)})
+
+        elif parsed.path == "/fs/read":
+            try:
+                acfg = _load_agent_cfg()
+                rel  = qs.get("path", [""])[0]
+                if not rel:
+                    self._json({"error": "path parameter required"}); return
+                real = _resolve_agent_path(acfg, rel)
+                if not os.path.isfile(real):
+                    self._json({"error": f"not a file: {rel!r}"}); return
+                ext = Path(real).suffix.lower()
+                if ext in (".docx", ".odt", ".pdf"):
+                    text = extract_any(real)
+                    if not text.strip():
+                        text = _binary_extract_hint(ext)
+                else:
+                    text = Path(real).read_text(encoding="utf-8", errors="replace")
+                start_p = qs.get("start", [""])[0]
+                end_p   = qs.get("end",   [""])[0]
+                if start_p or end_p:
+                    lines = text.splitlines(keepends=True)
+                    s = max(0, int(start_p) - 1) if start_p else 0
+                    e = int(end_p) if end_p else len(lines)
+                    text = "".join(lines[s:e])
+                max_out = acfg.get("agent_max_tool_output", 16384)
+                self._json({"path": rel, "text": text[:max_out],
+                            "truncated": len(text) > max_out})
+            except PermissionError as e:
+                self._json({"error": str(e)})
+            except Exception as e:
+                self._json({"error": str(e)})
+
+        elif parsed.path == "/fs/grep":
+            try:
+                acfg    = _load_agent_cfg()
+                pattern = qs.get("q", [""])[0]
+                if not pattern:
+                    self._json({"error": "q parameter required"}); return
+                glob_p  = qs.get("glob", ["*"])[0] or "*"
+                n_max   = int(qs.get("n", ["20"])[0])
+                roots   = [r for r in acfg.get("agent_roots", []) if r]
+                if not roots:
+                    self._json({"error": "No agent_roots configured"}); return
+                results = []
+                rg_ok   = False
+                for root in roots:
+                    if len(results) >= n_max:
+                        break
+                    try:
+                        rg_out = subprocess.run(
+                            ["rg", "--json", "-g", glob_p,
+                             "--max-count", str(n_max), "-e", pattern, root],
+                            capture_output=True, text=True, timeout=15
+                        )
+                        rg_ok = True
+                        for ln in rg_out.stdout.splitlines():
+                            if len(results) >= n_max:
+                                break
+                            try:
+                                obj = json.loads(ln)
+                                if obj.get("type") == "match":
+                                    d = obj["data"]
+                                    results.append({
+                                        "file": d["path"]["text"],
+                                        "line": d["line_number"],
+                                        "text": d["lines"]["text"].rstrip("\n"),
+                                    })
+                            except Exception:
+                                continue
+                    except FileNotFoundError:
+                        rg_ok = False
+                        break
+                    except Exception:
+                        break
+                if not rg_ok:
+                    import fnmatch as _fnmatch
+                    try:
+                        compiled = re.compile(pattern)
+                    except re.error as exc:
+                        self._json({"error": f"invalid regex: {exc}"}); return
+                    for root in roots:
+                        if len(results) >= n_max:
+                            break
+                        for dirpath, dirs, files in os.walk(root):
+                            dirs[:] = [d for d in dirs if not d.startswith(".")]
+                            for fname in sorted(files):
+                                if len(results) >= n_max:
+                                    break
+                                if not _fnmatch.fnmatch(fname, glob_p):
+                                    continue
+                                fpath = os.path.join(dirpath, fname)
+                                try:
+                                    with open(fpath, encoding="utf-8", errors="replace") as fh:
+                                        for lno, line in enumerate(fh, 1):
+                                            if compiled.search(line):
+                                                results.append({"file": fpath, "line": lno,
+                                                                "text": line.rstrip("\n")})
+                                                if len(results) >= n_max:
+                                                    break
+                                except Exception:
+                                    continue
+                self._json({"results": results, "count": len(results)})
+            except Exception as e:
+                self._json({"error": str(e)})
+
+        elif parsed.path == "/fs/raw":
+            # Serve the raw bytes of a file (root-scoped) so the browser can run
+            # its own proven extractors (PDF.js / JSZip / SheetJS) — the agent
+            # reuses the same document pipeline as the + FILE button, with no
+            # server-side PDF/office dependency. Text files stay on /fs/read.
+            try:
+                acfg = _load_agent_cfg()
+                rel  = qs.get("path", [""])[0]
+                if not rel:
+                    self._json({"error": "path parameter required"}); return
+                real = _resolve_agent_path(acfg, rel)
+                if not os.path.isfile(real):
+                    self._json({"error": f"not a file: {rel!r}"}); return
+                cap  = int(acfg.get("agent_max_raw_bytes", 25 * 1024 * 1024))
+                size = os.path.getsize(real)
+                if size > cap:
+                    self._json({"error": f"file too large for raw read: {size} bytes > {cap}"}); return
+                with open(real, "rb") as fh:
+                    data = fh.read()
+                self.send_response(200)
+                self.send_header("Access-Control-Allow-Origin",  "*")
+                self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type")
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            except PermissionError as e:
+                self._json({"error": str(e)})
+            except Exception as e:
+                self._json({"error": str(e)})
+
         else:
             self.send_response(404); self._cors(); self.end_headers()
 
@@ -653,6 +867,112 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(start_reindex(cfg))
             except Exception as e:
                 self._json({"ok": False, "error": str(e)})
+        elif parsed.path == "/agent/tool/run":
+            try:
+                length    = int(self.headers.get("Content-Length", 0) or 0)
+                payload   = json.loads(self.rfile.read(length) or b"{}")
+                tool_name = payload.get("name", "")
+                tool_args = dict(payload.get("args", {}))
+                acfg      = _load_agent_cfg()
+                tool = next((t for t in acfg.get("agent_custom_tools", [])
+                             if t.get("name") == tool_name), None)
+                if tool is None:
+                    self._json({"error": f"tool not found: {tool_name!r}"}); return
+                if not tool.get("enabled", True):
+                    self._json({"error": "tool disabled"}); return
+                arg_patterns = tool.get("arg_patterns", {})
+                for arg_nm, val in tool_args.items():
+                    pat = arg_patterns.get(arg_nm, "")
+                    if pat and not re.fullmatch(pat, str(val)):
+                        self._json({"error": f"argument {arg_nm!r} failed validation"}); return
+                for arg_nm in tool.get("schema", {}).get("properties", {}):
+                    if "path" in arg_nm.lower() and arg_nm in tool_args:
+                        val = str(tool_args[arg_nm])
+                        if not os.path.isabs(val):
+                            try:
+                                tool_args[arg_nm] = _resolve_agent_path(acfg, val)
+                            except PermissionError as e:
+                                self._json({"error": str(e)}); return
+                cmd_template = tool.get("cmd_template", [])
+                try:
+                    str_args = {k: str(v) for k, v in tool_args.items()}
+                    cmd = [part.format(**str_args) for part in cmd_template]
+                except KeyError as e:
+                    self._json({"error": f"missing argument for cmd_template: {e}"}); return
+                timeout_s = tool.get("timeout_s", 5)
+                capture   = tool.get("capture_stdout", False)
+                if capture:
+                    res = subprocess.run(cmd, shell=False, capture_output=True, timeout=timeout_s)
+                    self._json({"stdout": res.stdout.decode("utf-8", errors="replace"),
+                                "returncode": res.returncode})
+                else:
+                    res = subprocess.run(
+                        cmd, shell=False,
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        timeout=timeout_s
+                    )
+                    self._json({"returncode": res.returncode})
+            except subprocess.TimeoutExpired:
+                self._json({"error": "tool timed out"})
+            except FileNotFoundError as e:
+                self._json({"error": f"command not found: {e}"})
+            except Exception as e:
+                self._json({"error": str(e)})
+        elif parsed.path == "/agent/config":
+            try:
+                length  = int(self.headers.get("Content-Length", 0) or 0)
+                payload = json.loads(self.rfile.read(length) or b"{}")
+                acfg = _load_agent_cfg()
+                for k in ("agent_roots", "agent_allow_writes"):
+                    if k in payload:
+                        acfg[k] = payload[k]
+                AGENT_CFG_PATH.write_text(json.dumps(acfg, ensure_ascii=False, indent=2),
+                                          encoding="utf-8")
+                self._json({"ok": True,
+                            "agent_roots": acfg.get("agent_roots", []),
+                            "agent_allow_writes": bool(acfg.get("agent_allow_writes", False))})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)})
+        elif parsed.path == "/fs/write":
+            # Write a file INSIDE an allowed root. Two hard gates: writes must be
+            # explicitly enabled (agent_allow_writes), and the resolved path must
+            # sit within agent_roots — anything else is refused. No per-call
+            # confirmation by design: the folder is the boundary.
+            try:
+                length  = int(self.headers.get("Content-Length", 0) or 0)
+                payload = json.loads(self.rfile.read(length) or b"{}")
+                # execTool posts {name, args:{...}}; accept that or a flat body.
+                a       = payload.get("args", payload)
+                acfg    = _load_agent_cfg()
+                if not acfg.get("agent_allow_writes", False):
+                    self._json({"error": "writes are disabled — enable them for this folder first"}); return
+                rel     = a.get("path", "")
+                content = a.get("content", "")
+                if not rel:
+                    self._json({"error": "path parameter required"}); return
+                if not isinstance(content, str):
+                    self._json({"error": "content must be a string"}); return
+                cap = int(acfg.get("agent_max_write_bytes", 5 * 1024 * 1024))
+                if len(content.encode("utf-8")) > cap:
+                    self._json({"error": f"content too large: > {cap} bytes"}); return
+                real = _resolve_agent_path(acfg, rel)          # rejects outside roots
+                if os.path.abspath(real) in _SELF_PATHS:
+                    self._json({"error": "refusing to write a Selmo system file"}); return
+                if os.path.isdir(real):
+                    self._json({"error": f"path is a directory: {rel!r}"}); return
+                parent = os.path.dirname(real)
+                if parent and not os.path.isdir(parent):
+                    os.makedirs(parent, exist_ok=True)          # parent is within root
+                existed = os.path.isfile(real)
+                with open(real, "w", encoding="utf-8", newline="") as fh:
+                    fh.write(content)
+                self._json({"ok": True, "path": rel,
+                            "bytes": len(content.encode("utf-8")),
+                            "created": (not existed)})
+            except PermissionError as e:
+                self._json({"error": str(e)})
+            except Exception as e:
+                self._json({"error": str(e)})
         else:
             self.send_response(404); self._cors(); self.end_headers()
 
