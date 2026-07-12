@@ -59,6 +59,26 @@ async function agentExtractBinary(path, ext) {
   }
 }
 
+// System prompt for AGENT mode: makes the folder-access contract explicit so the
+// model actually uses the tools instead of inventing restrictions. Notes about
+// write / web are added only when those are enabled this turn.
+function agentSystemPrompt(cfg) {
+  const canWrite = !!(cfg && cfg.agent_allow_writes);
+  const canWeb   = (typeof IS_WEB_ON !== 'undefined' && IS_WEB_ON);
+  let s =
+    'You are operating in AGENT mode with direct tool access to a folder on the user\'s computer. ' +
+    'You have FULL read access to EVERY file inside the allowed folder — there is NO "only specified files" restriction, and files you have listed are readable. ' +
+    'To read a file, call read_file with its path relative to the folder (e.g. "index.html"); for a file in a subfolder use "sub/name.ext".\n\n' +
+    'Rules:\n' +
+    '- ALWAYS use the tools to check before answering. NEVER claim you cannot access, read or find a file without first calling read_file (or list_dir/search_text) on it. NEVER invent access restrictions.\n' +
+    '- Do not ask the user for anything you can obtain yourself by listing, reading or searching the folder.\n' +
+    '- Work concisely: chain the tools you need, then give the result.';
+  if (canWrite) s += '\n- You can create or overwrite files in the folder with write_file (send the COMPLETE file content, not a diff).';
+  if (canWeb)   s += '\n- You can search the live web with web_search for external or current information.';
+  s += '\n\nReply in the user\'s language.';
+  return s;
+}
+
 async function execTool(toolDef, args) {
   const maxOut = window._agentCfg?.agent_max_tool_output ?? 16384;
 
@@ -141,8 +161,15 @@ async function agentLoop(userMsg, chatHistory, targetDiv, cfg) {
   // user controls it with the Stop button, which aborts the in-flight call via the
   // shared abort controller. maxSteps stays only as a runaway guard.
 
-  // Build messages array (same format as normal path)
-  const messages = apiMessages(chatHistory, userMsg);
+  // Build messages, with an AGENT-mode system prompt prepended. The plain chat
+  // system prompt does not tell the model it has real folder access, so weak /
+  // instruct models confabulate restrictions ("only specified files are
+  // accessible") and refuse to call read_file. This makes the contract explicit.
+  const baseMessages = apiMessages(chatHistory, userMsg);
+  const agentSys = agentSystemPrompt(cfg);
+  const messages = (baseMessages[0] && baseMessages[0].role === 'system')
+    ? [{ role: 'system', content: agentSys + '\n\n' + (baseMessages[0].content || '') }, ...baseMessages.slice(1)]
+    : [{ role: 'system', content: agentSys }, ...baseMessages];
 
   const stepEl = document.getElementById('agent-step');
   let step = 0;

@@ -33,8 +33,21 @@ async function sendMsg(){
   // Gate on the toggle only, not the flapping AGENT_OK poll: the config is cached
   // and agentLoop surfaces a clear error if the bridge is genuinely unreachable.
   if(IS_AGENT_ON){
-    chatHistory.push({role:'user',content:txt,_orig:txt});
-    addMsg('user',txt);
+    // Attach a loaded image as visual feedback (needs a vision-capable model to be
+    // used). Same multimodal shape as the normal path: [image_url…, {text}].
+    let agUserContent=txt;
+    if(fileImage){
+      const urls=fileImage.dataUrls;
+      agUserContent=urls.map(u=>({type:'image_url',image_url:{url:u}}));
+      agUserContent.push({type:'text',text:txt});
+    }
+    chatHistory.push({role:'user',content:agUserContent,_orig:txt});
+    const _um=addMsg('user',(fileImage?'🖼️ ':'')+txt);
+    if(fileImage){
+      _um.inner.appendChild(imgThumbStrip(fileImage.dataUrls));
+      fileImage=null;
+      const _fb=document.getElementById('file-badge'); if(_fb) _fb.style.display='none';
+    }
     const{bub,inner}=addMsg('assistant','',true);
     // Tool-trace lines go ABOVE the bubble so the final marked.parse(bub)
     // never erases them — the transcript keeps the record of what Selmo did.
