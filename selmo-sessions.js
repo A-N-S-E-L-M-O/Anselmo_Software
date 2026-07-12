@@ -127,8 +127,8 @@ function toggleWeb(){
   if(btn){btn.classList.toggle('on',IS_WEB_ON);}  // icon button: state shown by .on border/glow
   // RAG and WEB are mutually exclusive: only one retrieval source per turn.
   if(IS_WEB_ON&&IS_RAG_ON){IS_RAG_ON=false;const rb=document.getElementById('rag-btn');if(rb){rb.classList.remove('on');rb.textContent='RAG';}}
-  // Agent is a third grounding source — turn it off too.
-  if(IS_WEB_ON&&typeof agentOffFor==='function')agentOffFor('web');
+  // WEB may coexist with AGENT: it becomes the agent's web_search tool. (Do NOT
+  // turn AGENT off here.)
 }
 // RAG mode: an explicit, separate retrieval mode (twin of WEB). Turning it on
 // only checks the bridge + embedder; folder selection and indexing happen in

@@ -14,9 +14,13 @@ function buildToolSchemas(cfg) {
   // Combine builtin + custom (filtered by agent_tools_enabled + enabled flag)
   const enabled = new Set(cfg.agent_tools_enabled || []);
   const allowWrites = !!cfg.agent_allow_writes;
+  const webOn = (typeof IS_WEB_ON !== 'undefined' && IS_WEB_ON);
   const builtins = (cfg.agent_builtin_tools || [])
-    // write_file is only offered to the model when writes are enabled for the folder.
-    .filter(t => enabled.has(t.name) && (t.name !== 'write_file' || allowWrites));
+    // write_file needs writes enabled for the folder; web_search needs WEB toggled
+    // on — without it the agent has no way out of the local machine.
+    .filter(t => enabled.has(t.name)
+      && (t.name !== 'write_file' || allowWrites)
+      && (t.name !== 'web_search' || webOn));
   const customs  = (cfg.agent_custom_tools  || []).filter(t => enabled.has(t.name) && t.enabled !== false);
   return [...builtins, ...customs].map(tool => ({
     type: 'function',
@@ -108,14 +112,34 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// A collapsed reasoning panel for one agent step (THINK on). Reuses the normal
+// think-panel CSS; static (one-shot text), unlike the streaming makeThinkPanel.
+function agentReasonPanel(text) {
+  const panel = document.createElement('div'); panel.className = 'think-panel collapsed';
+  const toggle = document.createElement('div'); toggle.className = 'think-toggle';
+  const arrow = document.createElement('span'); arrow.textContent = '▶';
+  const label = document.createElement('span'); label.textContent = '💭 ' + t('agent.reasoning');
+  toggle.appendChild(arrow); toggle.appendChild(label);
+  const body = document.createElement('div'); body.className = 'think-body'; body.textContent = text;
+  panel.appendChild(toggle); panel.appendChild(body);
+  let expanded = false;
+  toggle.addEventListener('click', () => {
+    expanded = !expanded;
+    panel.classList.toggle('collapsed', !expanded);
+    arrow.textContent = expanded ? '▼' : '▶';
+  });
+  return panel;
+}
+
 async function agentLoop(userMsg, chatHistory, targetDiv, cfg) {
   const schemas = buildToolSchemas(cfg);
   window._agentSchemas = schemas;
   window._agentCfg = cfg;
 
   const maxSteps = cfg.agent_max_steps ?? 12;
-  const timeoutMs = (cfg.agent_timeout_s ?? 120) * 1000;
-  const deadline = Date.now() + timeoutMs;
+  // No wall-clock timeout: local generation takes as long as it takes, and the
+  // user controls it with the Stop button, which aborts the in-flight call via the
+  // shared abort controller. maxSteps stays only as a runaway guard.
 
   // Build messages array (same format as normal path)
   const messages = apiMessages(chatHistory, userMsg);
@@ -132,27 +156,37 @@ async function agentLoop(userMsg, chatHistory, targetDiv, cfg) {
   if (stepEl) stepEl.style.display = 'inline-block';
 
   try {
-    while (step < maxSteps && Date.now() < deadline) {
+    while (step < maxSteps) {
       if (!gen) break;   // gen is the global abort flag set by abort()
 
       step++;
       if (stepEl) stepEl.textContent = t('agent.step', { n: step, max: maxSteps });
 
-      const body = {
+      // thinkKwargs() adds chat_template_kwargs.enable_thinking for kwarg models
+      // (Qwen3) so the THINK button controls the agent's reasoning too. Instr models
+      // already carry the reasoning instruction via the system prompt in messages.
+      const body = Object.assign({
         model: (typeof MODEL_FULL!=='undefined'?MODEL_FULL:'local'),
         messages: [...messages, ...toolHistory],
         tools: schemas.map(({ type, function: fn }) => ({ type, function: fn })),
         tool_choice: 'auto',
         stream: false,
         temperature: 0.1
-      };
+      }, (typeof thinkKwargs === 'function' ? thinkKwargs() : {}));
 
-      const r = await fetch('/proxy/8089/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(60000)
-      });
+      let r;
+      try {
+        r = await fetch('/proxy/8089/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: (typeof abort !== 'undefined' && abort) ? abort.signal : undefined
+        });
+      } catch (e) {
+        // Stop button aborted the in-flight generation — end cleanly, keep partial text.
+        if (e && (e.name === 'AbortError' || !gen)) return lastContent || t('agent.stopped');
+        throw e;
+      }
       if (!r.ok) {
         // The most common cause is a model/server without tool support
         // (no --jinja, or a chat template that declares no tools).
@@ -167,6 +201,12 @@ async function agentLoop(userMsg, chatHistory, targetDiv, cfg) {
       if (!choice) throw new Error('no choices');
 
       const msg = choice.message;
+      // Show the step's reasoning (THINK on) as a collapsed panel. It stays
+      // ephemeral: only content + tool_calls are pushed back into history.
+      if (msg.reasoning_content && msg.reasoning_content.trim()) {
+        targetDiv.appendChild(agentReasonPanel(msg.reasoning_content.trim()));
+        if (typeof scrollBot === 'function') scrollBot();
+      }
       if (msg.content) lastContent = msg.content;
 
       // No tool calls? Final answer.
@@ -223,18 +263,13 @@ async function toggleAgent() {
     btn.classList.toggle('on', IS_AGENT_ON);   // icon button: state shown by .on border/glow
     btn.setAttribute('aria-pressed', IS_AGENT_ON);
   }
-  // Agent, Web and RAG are three ways to ground a turn — only one at a time.
-  if (IS_AGENT_ON) {
-    if (typeof IS_WEB_ON !== 'undefined' && IS_WEB_ON) {
-      IS_WEB_ON = false;
-      const wb = document.getElementById('web-btn');
-      if (wb) { wb.classList.remove('on'); }
-    }
-    if (typeof IS_RAG_ON !== 'undefined' && IS_RAG_ON) {
-      IS_RAG_ON = false;
-      const rb = document.getElementById('rag-btn');
-      if (rb) { rb.classList.remove('on'); rb.textContent = 'RAG'; }
-    }
+  // WEB may stay on together with AGENT: it becomes the agent's web_search tool
+  // (explicitly gated — no WEB, no way out of the local machine). RAG-as-injection
+  // is redundant in agent mode (the agent already has rag_search), so drop it.
+  if (IS_AGENT_ON && typeof IS_RAG_ON !== 'undefined' && IS_RAG_ON) {
+    IS_RAG_ON = false;
+    const rb = document.getElementById('rag-btn');
+    if (rb) { rb.classList.remove('on'); rb.textContent = 'RAG'; }
   }
   if (typeof updateAgentRootsBar === 'function') updateAgentRootsBar();
   if (IS_AGENT_ON && !window._agentCfg) {

@@ -112,6 +112,8 @@ var I18N = {
   'agent.tool.read_file'               : { en: 'reading {path}',                       it: 'lettura {path}',                                             fr: 'lecture {path}' },
   'agent.tool.search_text'             : { en: 'grep: {q}',                            it: 'grep: {q}',                                                  fr: 'grep : {q}' },
   'agent.tool.write_file'              : { en: 'writing {path}',                       it: 'scrittura {path}',                                           fr: 'écriture {path}' },
+  'agent.tool.web_search'              : { en: 'web search: {q}',                      it: 'ricerca web: {q}',                                           fr: 'recherche web : {q}' },
+  'agent.reasoning'                    : { en: 'reasoning',                            it: 'ragionamento',                                               fr: 'raisonnement' },
   'agent.allow_writes'                 : { en: 'Let the agent write in this folder',    it: "Consenti all'agente di scrivere in questa cartella",          fr: "Autoriser l'agent à écrire dans ce dossier" },
   'agent.bar.writes_on'                : { en: 'writable',                              it: 'scrivibile',                                                 fr: 'inscriptible' },
   'agent.tool.rag_search'              : { en: 'RAG search: {q}',                      it: 'Ricerca RAG: {q}',                                           fr: 'Recherche RAG : {q}' },
@@ -213,6 +215,8 @@ function setLang(code) {
   // Applied unconditionally here (even for 'en') so switching BACK to English
   // restores the English chrome from the dictionary.
   applyI18n();
+  var lb = document.getElementById('lang-btn');
+  if (lb) lb.textContent = (SELMO_LANG || 'en').toUpperCase();   // keep the header code in sync
   return SELMO_LANG;
 }
 
@@ -259,13 +263,13 @@ function _i18nPicker() {
     var btn = document.createElement('button');
     btn.id = 'lang-btn';
     btn.title = 'Language';
-    btn.style.cssText = 'font-family:var(--mono);font-size:16px;line-height:1;letter-spacing:.07em;'
-      + 'padding:5px 11px;border-radius:var(--radius-xs);cursor:pointer;'
+    btn.style.cssText = 'font-family:var(--mono);font-size:13px;line-height:1;letter-spacing:.07em;'
+      + 'padding:6px 11px;border-radius:var(--radius-xs);cursor:pointer;'
       + 'transition:all .18s var(--ease);white-space:nowrap;flex-shrink:0;'
       + 'background:rgba(255,255,255,.025);border:1px solid var(--steel);color:var(--dim);';
     btn.onmouseover = function () { btn.style.borderColor = 'var(--cyan)'; btn.style.color = 'var(--cyan)'; };
     btn.onmouseout  = function () { btn.style.borderColor = 'var(--steel)'; btn.style.color = 'var(--dim)'; };
-    btn.textContent = '🌐';   // globe
+    btn.textContent = (SELMO_LANG || 'en').toUpperCase();   // 2-letter code of the current language
     var menu = document.createElement('div');
     menu.id = 'lang-menu';
     menu.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:100000;'

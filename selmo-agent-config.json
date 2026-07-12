@@ -10,7 +10,8 @@
     "read_file",
     "search_text",
     "rag_search",
-    "write_file"
+    "write_file",
+    "web_search"
   ],
   "agent_builtin_tools": [
     {
@@ -140,6 +141,31 @@
         "required": [
           "path",
           "content"
+        ]
+      }
+    },
+    {
+      "name": "web_search",
+      "label_key": "agent.tool.web_search",
+      "desc": "Search the live web and get back titles, URLs and snippets. Use this only for current or external information that is not in the local files. Available only when Web is enabled.",
+      "icon": "🌐",
+      "transport": "http",
+      "endpoint": "/proxy/8081/search",
+      "method": "GET",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "description": "Search query"
+          },
+          "n": {
+            "type": "integer",
+            "description": "Number of results (default 5)"
+          }
+        },
+        "required": [
+          "q"
         ]
       }
     }

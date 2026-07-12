@@ -415,23 +415,39 @@ setInterval(checkImageBridge,30000);
 refreshCaps();   // grey every action up-front; each bridge check re-enables its own
 document.addEventListener('click', _capClickGuard, true);  // block clicks on aria-disabled buttons
 
-// Wire toolbar buttons via addEventListener instead of relying on the inline
-// onclick attribute. On some setups the inline handler simply does not fire
-// (the click reaches the button but onclick is never invoked), which left the
-// AGENT/THINK toggles dead. addEventListener is reliable; we strip the inline
-// attribute first so there is never a double invocation.
-(function wireToolbar(){
-  var map={
-    'new-chat':    (typeof newChat==='function')    ? newChat    : null,
-    'export-chat': (typeof exportChat==='function')  ? exportChat : null,
-    'web-btn':     (typeof toggleWeb==='function')   ? toggleWeb  : null,
-    'rag-btn':     (typeof toggleRag==='function')   ? toggleRag  : null,
-    'think-btn':   (typeof toggleThink==='function') ? toggleThink: null,
-    'agent-btn':   (typeof toggleAgent==='function') ? toggleAgent: null
-  };
-  Object.keys(map).forEach(function(id){
-    var b=document.getElementById(id), fn=map[id];
-    if(b && typeof fn==='function'){ b.removeAttribute('onclick'); b.addEventListener('click', fn); }
+// Rebind inline onclick="..." handlers as real listeners. On some setups (a
+// privacy extension injecting a CSP) the inline attribute never fires: the click
+// reaches the element but the handler is not invoked, while el.onclick=fn and
+// addEventListener still work - which had left AGENT/THINK/Stop/Send dead by click.
+// Critical buttons get direct function refs (work even if eval is also blocked);
+// the remaining inline handlers (with args or inline logic) are rebound from their
+// attribute source. Strip the attribute first so nothing double-fires.
+(function wireInlineHandlers(){
+  try{
+    var refs={
+      'new-chat':newChat,'export-chat':exportChat,'web-btn':toggleWeb,'rag-btn':toggleRag,
+      'think-btn':toggleThink,'agent-btn':toggleAgent,'send':sendMsg,'stop':stopMsg,
+      'mic-btn':toggleMic,'vad-btn':toggleVad,'tts-btn':toggleTts,'model-btn':openSettings,
+      'file-clear':clearFile,'set-load-btn':confirmSwitch,'set-img-btn':confirmImage,
+      'wm':openProfile,'mob-overlay':closeOverlays,
+      'mob-nav-btn':function(){mobToggle('nav');},'mob-dash-btn':function(){mobToggle('dash');},
+      'gen-img-btn':function(ev){toggleImgMenu(ev);},
+      'upload-btn':function(){var i=document.getElementById('file-input');if(i)i.click();},
+      'upload-img-btn':function(){var i=document.getElementById('file-input-img');if(i)i.click();},
+      'pm-badge-selmo':function(){setProfile('selmo');},'pm-badge-mizan':function(){setProfile('mizan');},
+      'pm-badge-custom':function(){setProfile('custom');}
+    };
+    Object.keys(refs).forEach(function(id){
+      var b=document.getElementById(id), fn=refs[id];
+      if(b && typeof fn==='function'){ b.removeAttribute('onclick'); b.addEventListener('click', fn); }
+    });
+  }catch(e){ console.error('inline wiring (refs) failed:', e); }
+  // Anything still carrying an inline onclick (modal background click-to-close, etc.)
+  document.querySelectorAll('[onclick]').forEach(function(el){
+    var code=el.getAttribute('onclick'); if(!code) return;
+    var fn; try{ fn=new Function('event', code); }catch(e){ return; }  // eval blocked -> leave as-is
+    el.removeAttribute('onclick');
+    el.addEventListener('click', function(event){ try{ fn.call(el, event); }catch(err){ console.error('inline handler failed:', code, err); } });
   });
 })();
 
