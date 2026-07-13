@@ -216,6 +216,7 @@ def _parse_ini(ini_path: Path):
     default = {
         "srv": DEFAULT_SRV, "max": "unknown",
         "note": "", "tip": "", "chunking_size": DEFAULT_CSIZE, "think": "",
+        "agent": False,
     }
     sections: list[tuple[str, dict]] = []
 
@@ -236,6 +237,9 @@ def _parse_ini(ini_path: Path):
             "tip":           cur.get("tip",           ""),
             "chunking_size": int(cur.get("chunking_size", DEFAULT_CSIZE)),
             "think":         cur.get("think",          ""),
+            # agent-capable flag: only true when the ini section says so, so the
+            # AGENT toggle lights up just on a collaudato model (Qwen3.6-35B).
+            "agent":         str(cur.get("agent", "")).strip().lower() in ("1", "true", "yes", "on"),
         }
         if cur_name == "default":
             default.update(d)
@@ -1129,7 +1133,7 @@ def _action_switch(model: dict, ini_data: dict, srv_override=None, csize_overrid
     mmproj   = _find_mmproj(model["dir"])
 
     (BASE / "selmo-config.json").write_text(
-        json.dumps({"chunking_size": csize, "think": info.get("think", ""), "vision": bool(mmproj)}),
+        json.dumps({"chunking_size": csize, "think": info.get("think", ""), "vision": bool(mmproj), "agent": bool(info.get("agent", False))}),
         encoding="utf-8"
     )
     _current.update({"name": model["name"], "srv": srv, "mmproj": mmproj})
@@ -1414,7 +1418,7 @@ def main():
         print(f"  Vision   :  {vis}")
         print(f"  Chunking :  {csize} tokens / chunk")
         (BASE / "selmo-config.json").write_text(
-            json.dumps({"chunking_size": csize, "think": info.get("think", ""), "vision": bool(mmproj)}),
+            json.dumps({"chunking_size": csize, "think": info.get("think", ""), "vision": bool(mmproj), "agent": bool(info.get("agent", False))}),
             encoding="utf-8"
         )
         _current.update({"name": sel["name"], "srv": srv, "mmproj": mmproj, "loaded": False})

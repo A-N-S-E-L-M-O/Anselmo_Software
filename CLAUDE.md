@@ -39,3 +39,12 @@ Don't let confirmed-good work sit unrecorded: the moment Fabio confirms, give hi
 - `node --check` on the extracted script after every change; verify with the Read tool, not with `cat`/`wc` from bash.
 - Restart `llama-server` after a change (it can serve from cache); anti-cache meta + Ctrl+F5.
 - **Target browser: Firefox** (desktop + Firefox for Android). No Chrome-isms (`chrome://flags`, Chrome-only APIs); Firefox uses its **own NSS cert store**, not the OS one, and the phone mic needs a secure context — see BUG-MIC-01.
+
+## No hardcoded model names or UI text — DO NOT DEVIATE
+
+**No specific model name, and no user-facing text, is ever baked into the software (the `.js` or `.py`).** Models change — tomorrow's replaces today's — and the app must keep working across the swap.
+
+- **Model-specific behaviour lives in `selmo-models.ini`**, as per-section flags (`agent=true`, `think=`, `chunking_size`, …) matched by filename substring and propagated to the client via `selmo-config.json`. To make a model agent-capable, reasoning, etc., you set a flag in the ini — you never test a model name in code.
+- **All user-facing strings live in `selmo-i18n.js`** (it/en/fr), looked up by key. Tooltips, labels and messages are generic ("this model can't run agent mode"), never "load the Qwen3.6-35B". No English (or any) literal string in the code for something the user reads.
+- **A reference/recommended model is named only in the documentation** (`QUICKSTART.md`, `docs/…`), never in a tooltip, prompt, gate or default. Documentation is the one place a concrete model may be cited.
+- The existing `THINK_CAPABLE` / `AGENT_CAPABLE` gates are the pattern to copy: an ini flag → `selmo-config.json` → a capability boolean the client reads, with the button greyed and a localized tooltip when the flag is off.

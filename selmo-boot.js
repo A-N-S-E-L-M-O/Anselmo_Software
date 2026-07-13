@@ -113,8 +113,10 @@ fetch('/selmo-config.json').then(function(r){return r.ok?r.json():null;}).then(f
   if(cfg.chunking_size) CHUNK_SIZE_TOK=cfg.chunking_size;
   if(typeof cfg.think==='string') THINK_MODE=cfg.think.trim().toLowerCase();
   visionOk=!!cfg.vision;   // model has an mmproj -> image/vision button usable
+  AGENT_CAPABLE=!!cfg.agent; // ini agent=true: gate the AGENT toggle on a collaudato model
   CHUNK_SIZE=Math.floor(CHUNK_SIZE_TOK*3.8); // chars for display
   configureThink(); // re-derive once the declared mode is known (idempotent)
+  if(typeof applyAgentCap==='function') applyAgentCap(); // grey/enable AGENT per capability
   refreshCaps();
 }).catch(function(){});
 
@@ -316,6 +318,7 @@ let INSTRUCTED=false;    // 'instr': reasoning driven by the [THINK] system inst
 let THINK_NATIVE=false;  // 'native': model always reasons (Olmo/Gemma) -> button locked ON
 let THINK_KWARG=false;   // 'kwarg': toggle via chat_template_kwargs.enable_thinking (Qwen3)
 let THINK_MODE='';       // mode declared in selmo-models.ini (via selmo-config.json); '' = auto-detect
+let AGENT_CAPABLE=false;  // ini agent=true (via selmo-config.json): only then does the AGENT toggle light up
 let _chatTpl='';         // last chat_template seen (for re-deriving when config arrives after /props)
 let MODEL_FULL='local';  // active model name, shown in the conversation trace
 const THINK_INSTR='\n\nFirst draft your thinking process (inner monologue) until you arrive at a response. Format your response using Markdown. Write both your thoughts and the response in the same language as the input.\n\nYour thinking process must follow the template below:[THINK]Your thoughts or/and draft, like working through an exercise on scratch paper. Be as casual and as long as you want until you are confident to generate the response. Use the same language as the input.[/THINK]Here, provide a self-contained response.';

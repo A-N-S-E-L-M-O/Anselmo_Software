@@ -81,6 +81,20 @@ installed it), then delete the whole folder.
 
 ---
 
+## Advanced — Agent mode (folder access)
+
+Selmo has an **Agent** toggle in the bottom bar. With it on, the model can list,
+read and — if you allow it — write files in a folder you choose, working across
+several steps to finish a task. This is an **advanced feature**, off the everyday
+path, and it only works with a model that can call tools; on a model that can't,
+the Agent button stays **greyed**, with a tooltip that says so. The reference
+model, the one Selmo is tuned and tested against, is **Qwen3.6-35B-A3B** — a large
+model (~22 GB) that wants a capable graphics card and gives the best agent
+results. Most family PCs will not run that one, and that is fine: chat, web search
+and documents are the everyday tools and need nothing special.
+
+---
+
 ## The energy monitor — an on-screen estimate
 
 On the right of the screen A.N.S.E.L.M.O shows an **estimate** of the power your

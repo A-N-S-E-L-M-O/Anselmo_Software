@@ -114,6 +114,7 @@ var I18N = {
   'agent.tool.write_file'              : { en: 'writing {path}',                       it: 'scrittura {path}',                                           fr: 'écriture {path}' },
   'agent.tool.web_search'              : { en: 'web search: {q}',                      it: 'ricerca web: {q}',                                           fr: 'recherche web : {q}' },
   'agent.reasoning'                    : { en: 'reasoning',                            it: 'ragionamento',                                               fr: 'raisonnement' },
+  'chat.you'                           : { en: 'you',                                  it: 'tu',                                                         fr: 'toi' },
   'agent.allow_writes'                 : { en: 'Let the agent write in this folder',    it: "Consenti all'agente di scrivere in questa cartella",          fr: "Autoriser l'agent à écrire dans ce dossier" },
   'agent.bar.writes_on'                : { en: 'writable',                              it: 'scrivibile',                                                 fr: 'inscriptible' },
   'agent.tool.rag_search'              : { en: 'RAG search: {q}',                      it: 'Ricerca RAG: {q}',                                           fr: 'Recherche RAG : {q}' },
@@ -129,7 +130,8 @@ var I18N = {
   'agent.roots_empty'                  : { en: 'No agent roots configured. Add folders in agent settings.', it: 'Nessuna cartella radice configurata. Aggiungine nelle impostazioni agente.', fr: "Aucun dossier racine configuré. Ajoutez des dossiers dans les paramètres de l'agent." },
   'agent.roots_panel'                  : { en: 'Agent folders',                        it: 'Cartelle agente',                                            fr: "Dossiers de l'agent" },
   'agent.roots_label'                  : { en: 'Folders the agent can access:',        it: "Cartelle a cui l'agente può accedere:",                  fr: "Dossiers accessibles par l'agent :" },
-  'agent.btn_label'                    : { en: 'Agent',                                it: 'Agente',                                                     fr: 'Agent' }
+  'agent.btn_label'                    : { en: 'Agent',                                it: 'Agente',                                                     fr: 'Agent' },
+  'agent.not_capable'                  : { en: "This model can't run agent mode. Switch to an agent-capable model.", it: "Questo modello non può usare la modalità agente. Passa a un modello compatibile.", fr: "Ce modèle ne peut pas exécuter le mode agent. Passez à un modèle compatible." }
 };
 /* ---- Bindings: which element gets which key, and via which property ----------
    prop: 'text' -> textContent (only for elements with NO child markup)
@@ -193,6 +195,9 @@ function applyI18n() {
     _sweepAttr('[data-i18n]',       'data-i18n',       'text');
     _sweepAttr('[data-i18n-title]', 'data-i18n-title', 'title');
     _sweepAttr('[data-i18n-ph]',    'data-i18n-ph',    'placeholder');
+    // The #agent-btn tooltip depends on the model's capability, not just the
+    // language, so re-assert it after the static sweep set it to agent.toggle_t.
+    if (typeof applyAgentCap === 'function') applyAgentCap();
   } catch (e) {}
 }
 

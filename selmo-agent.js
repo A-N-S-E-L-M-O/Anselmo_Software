@@ -281,7 +281,43 @@ async function agentLoop(userMsg, chatHistory, targetDiv, cfg) {
   return lastContent ? (lastContent + '\n\n_' + reason + '_') : reason;
 }
 
+// Grey / enable the AGENT toggle from the model's capability flag (AGENT_CAPABLE,
+// read from selmo-config.json's `agent` key). Agent mode is an advanced feature:
+// it only behaves with a collaudato tool-calling model (Qwen3.6-35B-A3B via the
+// ini agent=true flag), so on every other model the button stays visible but
+// greyed, with a localized tooltip — same pattern as the THINK button. Called
+// from the config fetch (selmo-boot.js) and after each language switch (applyI18n).
+function applyAgentCap() {
+  const btn = document.getElementById('agent-btn');
+  if (!btn) return;
+  let cap = false;
+  try { cap = !!AGENT_CAPABLE; } catch (_) { cap = false; }
+  const tip = (k) => (typeof t === 'function' ? t(k) : k);
+  if (!cap) {
+    if (typeof IS_AGENT_ON !== 'undefined' && IS_AGENT_ON) {
+      IS_AGENT_ON = false;
+      if (typeof updateAgentRootsBar === 'function') updateAgentRootsBar();
+    }
+    btn.classList.remove('on');
+    btn.setAttribute('aria-disabled', 'true');
+    btn.setAttribute('aria-pressed', 'false');
+    btn.style.opacity = '.35';
+    btn.style.cursor = 'not-allowed';
+    btn.title = tip('agent.not_capable');
+    return;
+  }
+  btn.removeAttribute('aria-disabled');
+  btn.style.opacity = '';
+  btn.style.cursor = '';
+  btn.title = tip('agent.toggle_t');
+}
+
 async function toggleAgent() {
+  // Gate: agent mode needs a collaudato tool-calling model. On an incapable
+  // model the button is greyed (applyAgentCap) and a click is a no-op.
+  let cap = false;
+  try { cap = !!AGENT_CAPABLE; } catch (_) { cap = false; }
+  if (!cap) { applyAgentCap(); return; }
   // Toggle freely like WEB/RAG — never block on the bridge poll (AGENT_OK flaps
   // when selmo_rag.py is briefly slow to answer). sendMsg handles a down bridge.
   IS_AGENT_ON = !IS_AGENT_ON;
