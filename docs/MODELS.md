@@ -70,6 +70,27 @@ relying on them, and fall back to Magistral or LFM2-VL for image input if they
 misbehave. Practical requirement: a 12 GB GPU **and ~32 GB system RAM** for the
 offloaded experts; on less RAM, use a smaller model.
 
+## Embedding models for RAG / agent search (optional)
+
+RAG mode - semantic search over a folder of your own files, and the agent's
+`rag_search` tool - needs a small **embedding** model in `models\`, separate from
+the chat model. Selmo runs two retrieval modes, each with its own tiny embedder
+(CPU-only, auto-detected by a marker in the file name):
+
+| Mode | Embedder | For | Approx size |
+|---|---|---|---|
+| **docs** | `nomic-embed-text-v1.5` | prose: txt, md, docx, pdf, notes | ~146 MB (Q8) |
+| **code** | `jina-embeddings-v2-base-code` | source code | ~172 MB (Q8) |
+
+You switch mode from the folder bar in the UI. **Neither is needed just to chat**,
+and the agent's file tools (list, read, write, text search) work with no embedder
+at all. For documents, `nomic-embed-text` is the one that matters; **`jina` is
+optional** - add it only if you want code-aware semantic search over a codebase.
+If an embedder is missing, that mode simply stays empty and the other keeps
+working. Pull both as GGUF from Hugging Face (search for `nomic-embed-text-v1.5`
+and `jina-embeddings-v2-base-code`) and drop them in `models\`; the bridge finds
+them by name, no config needed.
+
 ## Where to download
 
 Pull GGUFs from Hugging Face - e.g. `bartowski` (Mistral), `utter-project`

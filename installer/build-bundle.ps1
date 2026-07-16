@@ -44,24 +44,32 @@ Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile $getpip
 #   self-signed cert on first run (the cert/key are excluded from the bundle).
 #   Without it there is no cert -> port 8443 stays down and the phone button
 #   (which reads the LAN IP the cert step writes to selmo-cert-ip.txt) vanishes.
+#   numpy: the RAG/agent bridge (selmo_rag.py) uses it for the brute-force
+#   cosine vector store (faiss is an optional speedup, not required). It's
+#   imported lazily, so the bridge starts without it, but RAG search needs it.
 & "$PyDir\python.exe" -m pip install --no-warn-script-location `
-    trafilatura requests psutil pynvml pystray Pillow cryptography
+    trafilatura requests psutil pynvml pystray Pillow cryptography numpy
 
 # ---- 3. app files ---------------------------------------------------------
 #   NEVER bundle secrets or per-machine runtime state: selmo.key/selmo.crt
 #   (TLS private key + cert, carry the LAN IP), selmo-cert-ip.txt, and the
-#   runtime selmo-config.json / selmo-state.json / selmo-image-config.json --
-#   all of these regenerate on first run (server/tray write them, cert is
-#   minted for the machine's own IP). Shipping selmo.key would leak Fabio's
-#   private key. See the Pre-launch checklist in selmo-dev.md.
+#   runtime selmo-config.json / selmo-state.json / selmo-image-config.json,
+#   and selmo-agent-config.json / selmo-rag-config.json -- all of these
+#   regenerate on first run (server/tray/bridge write them from safe defaults,
+#   cert is minted for the machine's own IP). Shipping selmo.key would leak
+#   Fabio's private key; shipping selmo-agent-config.json would leak his agent
+#   folder path AND ship agent_allow_writes=true -- both must regenerate empty
+#   (no agent_roots, writes off) until the user picks a folder in the UI. Also
+#   never ship the selmo-rag.*.npy / *.meta.json index (his indexed corpus).
+#   See the Pre-launch checklist in selmo-dev.md.
 $appFiles = @(
   "chat.html","chunk_pipeline.py",
-  "selmo_tray.py","selmo_server.py","selmo_https_proxy.py","selmo_web.py","selmo_gpu_monitor.py",
+  "selmo_tray.py","selmo_server.py","selmo_rag.py","selmo_https_proxy.py","selmo_web.py","selmo_gpu_monitor.py",
   "selmo_whisper.py","selmo_tts.py","selmo_image.py",
-  "selmo-i18n.js","selmo-boot.js","selmo-bridges.js","selmo-chat.js","selmo-core.js","selmo-docs.js",
+  "selmo-i18n.js","selmo-boot.js","selmo-agent.js","selmo-bridges.js","selmo-chat.js","selmo-core.js","selmo-docs.js",
   "selmo-media.js","selmo-model.js","selmo-send.js","selmo-sessions.js","selmo-settings.js",
   "selmo-image-models.ini","selmo-models.ini",
-  "selmo.ico",
+  "selmo.ico","selmo-icon-preview.png",
   "LICENSE","NOTICE","TERMS.md","README.md","QUICKSTART.md","selmo-manifesto.md"
 )
 foreach ($f in $appFiles) {

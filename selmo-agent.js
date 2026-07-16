@@ -156,7 +156,7 @@ async function agentLoop(userMsg, chatHistory, targetDiv, cfg) {
   window._agentSchemas = schemas;
   window._agentCfg = cfg;
 
-  const maxSteps = cfg.agent_max_steps ?? 12;
+  const maxSteps = cfg.agent_max_steps ?? 50;
   // No wall-clock timeout: local generation takes as long as it takes, and the
   // user controls it with the Stop button, which aborts the in-flight call via the
   // shared abort controller. maxSteps stays only as a runaway guard.
