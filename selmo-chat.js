@@ -20,7 +20,7 @@ function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrol
 function addMsg(role,text,streaming){
   const wrap=document.createElement('div');wrap.className='msg '+role;
   const av=document.createElement('div');av.className='av';
-  if(role==='user'){av.textContent='tu';}
+  if(role==='user'){av.textContent=(typeof t==='function'?t('chat.you'):'you');}
   else{av.innerHTML='<img src="selmo-icon-preview.png" alt="Selmo" draggable="false">';if(streaming)av.classList.add('thinking');}
   const inner=document.createElement('div');
   const bub=document.createElement('div');bub.className='bubble';
@@ -141,7 +141,7 @@ function addDownloadBar(bub,inner,md){
   bar.appendChild(mk('↓ .tsv',()=>dlReplyTsv(md)));
   inner.appendChild(bar);
 }
-function stopMsg(){if(abort){abort.abort();abort=null;}stopTts();}
+function stopMsg(){gen=false;if(abort){abort.abort();abort=null;}stopTts();} // gen=false: stops the multi-step agentLoop (its guard is `if(!gen) break;`) — abort alone only kills the in-flight fetch, so between steps / during a tool the loop would fire the next (unstoppable) generation
 // Robust SSE reader: buffers between reads (no tokens lost if
 // a 'data:' line is split in half) and reads both content and reasoning_content
 // (reasoning models like Gemma write the reasoning in reasoning_content).

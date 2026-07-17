@@ -597,8 +597,196 @@ def browse(dirpath, cfg):
     return {"ok": True, "dir": dirpath, "subdirs": subdirs, "formats": formats}
 
 # ── Agent helpers ─────────────────────────────────────────────────────────────
-def _load_agent_cfg():
-    """Read selmo-agent-config.json; return {} on missing file."""
+# The agent tool catalog and limits are DEFINED IN CODE so a fresh or portable
+# install has a working agent with no seed file. selmo-agent-config.json holds
+# ONLY the per-machine state (agent_roots, agent_allow_writes) written by the
+# folder picker; the catalog is sourced from here and never persisted. Rationale:
+# the catalog used to live only in a tracked JSON that also carried an absolute
+# per-machine path, so any build that shipped without that file left the agent
+# tool-less, and nothing regenerated it (the picker only writes the two keys).
+DEFAULT_AGENT_CFG = {
+    "agent_roots": [],
+    "agent_allow_writes": False,
+    "agent_max_steps": 50,
+    "agent_timeout_s": 120,
+    "agent_max_tool_output": 16384,
+    "agent_max_write_bytes": 5242880,
+    "agent_tools_enabled": ["list_dir", "read_file", "search_text",
+                            "rag_search", "write_file", "web_search"],
+    "agent_builtin_tools": [
+        {
+            "name": "list_dir",
+            "label_key": "agent.tool.list_dir",
+            "desc": "List the files and subfolders inside a directory (one level) within an allowed root. Use this to discover what exists before reading.",
+            "icon": "\U0001F4C1",
+            "transport": "http",
+            "endpoint": "/proxy/8088/fs/list",
+            "method": "GET",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "dir": {"type": "string", "description": "Directory path relative to an allowed root"}
+                },
+                "required": ["dir"]
+            }
+        },
+        {
+            "name": "read_file",
+            "label_key": "agent.tool.read_file",
+            "desc": "Read the full text of a file within an allowed root (or a line range via start/end). Works on text, code, pdf, docx and odt. Use this to see the actual contents.",
+            "icon": "\U0001F4D6",
+            "transport": "http",
+            "endpoint": "/proxy/8088/fs/read",
+            "method": "GET",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "File path relative to an allowed root"},
+                    "start": {"type": "integer", "description": "First line (1-indexed, optional)"},
+                    "end": {"type": "integer", "description": "Last line inclusive (optional)"}
+                },
+                "required": ["path"]
+            }
+        },
+        {
+            "name": "search_text",
+            "label_key": "agent.tool.search_text",
+            "desc": "Search the allowed roots for a regular expression and return matching file/line/text. Use this to locate where something appears across many files.",
+            "icon": "\U0001F50E",
+            "transport": "http",
+            "endpoint": "/proxy/8088/fs/grep",
+            "method": "GET",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "q": {"type": "string", "description": "Regex pattern to search"},
+                    "glob": {"type": "string", "description": "File glob filter, e.g. *.py"},
+                    "n": {"type": "integer", "description": "Max results (default 20)"}
+                },
+                "required": ["q"]
+            }
+        },
+        {
+            "name": "rag_search",
+            "label_key": "agent.tool.rag_search",
+            "desc": "Semantic search over the indexed corpus: describe what you are looking for in natural language and get the most relevant chunks. Use this to find the right file, then read_file to see it in full.",
+            "icon": "\U0001F9E9",
+            "transport": "http",
+            "endpoint": "/proxy/8088/search",
+            "method": "GET",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "q": {"type": "string", "description": "Natural language query"},
+                    "n": {"type": "integer", "description": "Number of results (default 5)"}
+                },
+                "required": ["q"]
+            }
+        },
+        {
+            "name": "write_file",
+            "label_key": "agent.tool.write_file",
+            "desc": "Create or overwrite a file with the given text content, inside an allowed root. Writes the WHOLE file (send the complete new content, not a diff). Use this to save code, notes or documents into the folder. Only available when writing is enabled for the folder.",
+            "icon": "✍️",
+            "transport": "http",
+            "endpoint": "/proxy/8088/fs/write",
+            "method": "POST",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "File path relative to an allowed root (parent folders are created as needed)"},
+                    "content": {"type": "string", "description": "The full text content to write into the file"}
+                },
+                "required": ["path", "content"]
+            }
+        },
+        {
+            "name": "web_search",
+            "label_key": "agent.tool.web_search",
+            "desc": "Search the live web and get back titles, URLs and snippets. Use this only for current or external information that is not in the local files. Available only when Web is enabled.",
+            "icon": "\U0001F310",
+            "transport": "http",
+            "endpoint": "/proxy/8081/search",
+            "method": "GET",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "q": {"type": "string", "description": "Search query"},
+                    "n": {"type": "integer", "description": "Number of results (default 5)"}
+                },
+                "required": ["q"]
+            }
+        }
+    ],
+    "agent_custom_tools": [
+        {
+            "name": "open_url_in_firefox",
+            "label_key": "agent.tool.open_url_in_firefox",
+            "icon": "\U0001F98A",
+            "transport": "http",
+            "endpoint": "/proxy/8088/agent/tool/run",
+            "method": "POST",
+            "schema": {
+                "type": "object",
+                "properties": {"url": {"type": "string", "description": "URL to open"}},
+                "required": ["url"]
+            },
+            "cmd_template": ["firefox", "{url}"],
+            "arg_patterns": {"url": "^https?://[\\w./?=&#:@%-]+$"},
+            "capture_stdout": False,
+            "timeout_s": 5,
+            "enabled": False
+        },
+        {
+            "name": "open_document_libreoffice",
+            "label_key": "agent.tool.open_document_libreoffice",
+            "icon": "\U0001F4DD",
+            "transport": "http",
+            "endpoint": "/proxy/8088/agent/tool/run",
+            "method": "POST",
+            "schema": {
+                "type": "object",
+                "properties": {"path": {"type": "string", "description": "Document path relative to an allowed root"}},
+                "required": ["path"]
+            },
+            "cmd_template": ["soffice", "{path}"],
+            "arg_patterns": {},
+            "capture_stdout": False,
+            "timeout_s": 5,
+            "enabled": False
+        },
+        {
+            "name": "compose_email_thunderbird",
+            "label_key": "agent.tool.compose_email_thunderbird",
+            "icon": "\U0001F4E7",
+            "transport": "http",
+            "endpoint": "/proxy/8088/agent/tool/run",
+            "method": "POST",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "to": {"type": "string", "description": "Recipient email"},
+                    "subject": {"type": "string", "description": "Email subject"},
+                    "body": {"type": "string", "description": "Email body"}
+                },
+                "required": ["to", "subject"]
+            },
+            "cmd_template": ["thunderbird", "-compose", "to='{to}',subject='{subject}',body='{body}'"],
+            "arg_patterns": {"to": "^[\\w.@+-]+$", "subject": "^[^\\r\\n]{1,200}$"},
+            "capture_stdout": False,
+            "timeout_s": 5,
+            "enabled": False
+        }
+    ]
+}
+
+# Only these keys are per-machine and get written back to disk; the catalog and
+# limits always come from DEFAULT_AGENT_CFG, so updating them in code is enough
+# and no stale on-disk copy can shadow them.
+_AGENT_PERSIST_KEYS = ("agent_roots", "agent_allow_writes")
+
+def _read_agent_file():
+    """Raw per-machine state from selmo-agent-config.json; {} if absent or broken."""
     try:
         return json.loads(AGENT_CFG_PATH.read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -606,6 +794,18 @@ def _load_agent_cfg():
     except Exception as e:
         print(f"  [rag] agent-config parse error ({e})")
         return {}
+
+def _load_agent_cfg():
+    """Effective config: code defaults (tool catalog + limits) overlaid with the
+    on-disk per-machine state. Always carries the full catalog, even with no file
+    present, so the agent has working tools out of the box."""
+    eff  = {k: (list(v) if isinstance(v, list) else v)
+            for k, v in DEFAULT_AGENT_CFG.items()}
+    disk = _read_agent_file()
+    for k in _AGENT_PERSIST_KEYS:
+        if k in disk:
+            eff[k] = disk[k]
+    return eff
 
 def _resolve_agent_path(cfg, rel_or_abs):
     """Resolve a path against agent_roots; raise PermissionError if it escapes."""
@@ -922,15 +1122,18 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 length  = int(self.headers.get("Content-Length", 0) or 0)
                 payload = json.loads(self.rfile.read(length) or b"{}")
-                acfg = _load_agent_cfg()
-                for k in ("agent_roots", "agent_allow_writes"):
+                # Persist ONLY the per-machine keys; the tool catalog lives in code
+                # (DEFAULT_AGENT_CFG) and is never written back, so it can't go stale.
+                disk = _read_agent_file()
+                for k in _AGENT_PERSIST_KEYS:
                     if k in payload:
-                        acfg[k] = payload[k]
-                AGENT_CFG_PATH.write_text(json.dumps(acfg, ensure_ascii=False, indent=2),
+                        disk[k] = payload[k]
+                out = {k: disk[k] for k in _AGENT_PERSIST_KEYS if k in disk}
+                AGENT_CFG_PATH.write_text(json.dumps(out, ensure_ascii=False, indent=2),
                                           encoding="utf-8")
                 self._json({"ok": True,
-                            "agent_roots": acfg.get("agent_roots", []),
-                            "agent_allow_writes": bool(acfg.get("agent_allow_writes", False))})
+                            "agent_roots": out.get("agent_roots", []),
+                            "agent_allow_writes": bool(out.get("agent_allow_writes", False))})
             except Exception as e:
                 self._json({"ok": False, "error": str(e)})
         elif parsed.path == "/fs/write":
