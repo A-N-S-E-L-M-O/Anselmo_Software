@@ -215,9 +215,17 @@ async function agentLoop(userMsg, chatHistory, targetDiv, cfg) {
         throw e;
       }
       if (!r.ok) {
-        // The most common cause is a model/server without tool support
-        // (no --jinja, or a chat template that declares no tools).
         const detail = await r.text().catch(() => '');
+        // Context overflow FIRST — it also comes back as HTTP 400, so without this
+        // it was misreported as "no tool support". Surface it honestly and keep any
+        // partial text. (This is the hook we'll later use for context compaction.)
+        if (/exceed|context size|n_ctx|kv cache|larger than the context|slot with enough/i.test(detail)) {
+          return lastContent
+            ? (lastContent + '\n\n_' + t('agent.context_full') + '_')
+            : t('agent.context_full');
+        }
+        // The most common remaining cause is a model/server without tool support
+        // (no --jinja, or a chat template that declares no tools).
         if (r.status === 400 || r.status === 500 || /tool|jinja|template/i.test(detail)) {
           return t('agent.no_tool_support');
         }
