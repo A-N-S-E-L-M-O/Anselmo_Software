@@ -1,5 +1,54 @@
 # A.N.S.E.L.M.O — release notes
 
+## v1.001 (beta) — 2026-07-17
+
+A small patch on top of 1.0. It fixes Agent mode in the packaged build and makes
+the Stop button behave while the agent is reasoning.
+
+**Agent mode, now working in the distributed build.** With the Agent toggle on,
+the model gets direct access to a folder you choose. It can list and read the
+files inside, search across them for what you need, and — only if you tick the
+write permission — create or change files, working through several steps to finish
+a task instead of replying in one shot. Web search, when you switch it on, becomes
+a tool the agent can call, so it reaches past your machine only when you let it.
+You pick the folder, that folder is the boundary, and writing stays off until you
+grant it. Agent mode asks a lot of the model: it lights up only on one that can
+call tools reliably (the reference is Qwen3.6-35B-A3B — see `docs\MODELS.md`) and
+stays greyed with an explanation on one that can't.
+
+Why 1.0 needed this: the bundle deliberately never ships your personal agent
+settings, because they hold an absolute folder path and a write flag that must
+start empty on someone else's PC. The catch was that the list of tools the agent
+could use lived in that same file, so a fresh unzip left the model with nothing to
+call and the folder picker with no real effect. The tool catalog now lives in the
+code itself. A freshly unzipped Selmo has a working agent straight away, and the
+settings file keeps only the folder you pick and whether writing is allowed.
+
+**Stop works while the agent reasons.** Pressing Stop during an agent run used to
+cancel only the call in flight. Between steps, or while a tool was running, the
+loop would quietly begin the next step anyway — easy to hit with reasoning on,
+where each step runs long. Stop now ends the whole loop cleanly, and you can start
+a new turn right after.
+
+A small thing you'll notice: the Selmo avatar spins like a washing-machine drum
+while it thinks. In agent mode that spin could keep going after you pressed Stop,
+because the turn never truly ended. It now settles the moment the agent stops.
+
+### Install
+
+Same as 1.0. Unzip anywhere (avoid OneDrive/Dropbox folders), drop a `.gguf` into
+`models\`, and double-click `Selmo.cmd`. Full guide in `QUICKSTART.md`; models,
+including the embedders for folder search, in `docs\MODELS.md`.
+
+### Upgrading from 1.0
+
+Unzip over your existing folder or into a fresh one — your `models\` and settings
+are untouched. Hard-refresh the browser once with **Ctrl+F5** so the updated
+client loads. If you had already chosen an agent folder it stays put; the agent
+simply has its tools back.
+
+Windows, tested on Firefox.
+
 ## v1.0 — 2026-07-13
 
 The first stable release. A.N.S.E.L.M.O — Selmo, to friends — is a local-first AI
