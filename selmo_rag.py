@@ -821,6 +821,22 @@ def _resolve_agent_path(cfg, rel_or_abs):
             return candidate
     raise PermissionError(f'Path not in any allowed root: {rel_or_abs!r}')
 
+# DIAGNOSTIC (temporary): trace every agent fs/read so we can see whether successive
+# reads ADVANCE through a large file (start/end move, returned windows change) or get
+# stuck re-reading the same first window. Best-effort, never raises. Remove once the
+# read behaviour is understood.
+_READ_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "selmo-agent-read.log")
+
+def _log_agent_read(rel, start_p, end_p, total_lines, total_chars, returned, truncated):
+    try:
+        with open(_READ_LOG, "a", encoding="utf-8") as fh:
+            fh.write(time.strftime("%Y-%m-%d %H:%M:%S")
+                     + f"  read path={rel!r} start={start_p or '-'} end={end_p or '-'}"
+                     + f" total_lines={total_lines} total_chars={total_chars}"
+                     + f" returned={returned} truncated={truncated}\n")
+    except Exception:
+        pass
+
 # ── HTTP handler (mirrors selmo_web.py) ───────────────────────────────────────
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
@@ -917,16 +933,36 @@ class Handler(BaseHTTPRequestHandler):
                         text = _binary_extract_hint(ext)
                 else:
                     text = Path(real).read_text(encoding="utf-8", errors="replace")
+                full_chars = len(text)
+                full_lines = text.count("\n") + 1
                 start_p = qs.get("start", [""])[0]
                 end_p   = qs.get("end",   [""])[0]
+                max_out = acfg.get("agent_max_tool_output", 16384)
                 if start_p or end_p:
+                    # Explicit line range: honour it in FULL, never clip. The model
+                    # chose the bite size; clipping mid-range silently drops lines and
+                    # creates coverage gaps. An oversized range is the model's call - a
+                    # real overflow is caught gracefully client-side (context-full).
                     lines = text.splitlines(keepends=True)
                     s = max(0, int(start_p) - 1) if start_p else 0
                     e = int(end_p) if end_p else len(lines)
-                    text = "".join(lines[s:e])
-                max_out = acfg.get("agent_max_tool_output", 16384)
-                self._json({"path": rel, "text": text[:max_out],
-                            "truncated": len(text) > max_out})
+                    out = "".join(lines[s:e])
+                    _log_agent_read(rel, start_p, end_p, full_lines, full_chars, len(out), False)
+                    self._json({"path": rel, "text": out,
+                                "start": s + 1, "end": min(e, len(lines)),
+                                "total_lines": full_lines, "truncated": False})
+                else:
+                    # No range: could be a huge file, so cap this first read and tell
+                    # the model how big it is so it continues with start/end ranges.
+                    out = text[:max_out]
+                    truncated = len(text) > max_out
+                    resp = {"path": rel, "text": out,
+                            "total_lines": full_lines, "truncated": truncated}
+                    if truncated:
+                        resp["hint"] = (f"large file: {full_lines} lines. Read the rest "
+                                        f"in ranges using start/end (e.g. start=1 end=150).")
+                    _log_agent_read(rel, start_p, end_p, full_lines, full_chars, len(out), truncated)
+                    self._json(resp)
             except PermissionError as e:
                 self._json({"error": str(e)})
             except Exception as e:

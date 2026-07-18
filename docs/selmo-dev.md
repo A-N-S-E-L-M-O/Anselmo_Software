@@ -1,5 +1,5 @@
 # Selmo — Development documentation
-*Updated session 36 · 2026-07-17 · v1.002*
+*Updated session 36 · 2026-07-17 · v1.003*
 
 > **Read first:** the **Lessons learned** section near the end of this file, and **`selmo-bug-report.md`**.
 > **Project language:** English only — see `selmo-manifesto.md`. Conversation with Fabio can be any language; every file artifact is English.
@@ -354,6 +354,8 @@ A single ~2,765-line, ~139 KB `chat.html` is the worst case for the mount/Edit-t
 ---
 
 ## Changelog (condensed, reverse chronological)
+
+- **v1.003** - Agent reads a large file WITHOUT gaps: the requested line range is now honoured in full. Root cause of the agent thrashing on a big document (the 271KB / 2246-line novel): `read_file` clipped every response to `agent_max_tool_output` (16384 chars) EVEN when the model asked for an explicit line range - so a range wider than ~140 lines was silently truncated, the model advanced past lines it had never received, and coverage came out full of holes (it also burned steps and never reached the end). Fix removes BOTH cap layers for a ranged read - the server `/fs/read` handler AND the twin clip in the client `execTool` - so `start`/`end` returns exactly those lines, untruncated; the model chooses its own bite size (Fabio's call: don't limit the chunk, let the model decide). The cap is kept ONLY for a range-less first read (potentially the whole file), which now also returns `total_lines` + a hint so the model switches to ranges. An oversized range is the model's choice and a genuine overflow is caught gracefully by the v1.002 context-full path. Verified from a new read trace: ranged reads now return the full range (`truncated=False`, e.g. lines 1700-2246 -> 81498 chars) and cover the file end to end in one pass, and the resulting whole-book analysis is complete and accurate. Also added, TEMPORARY diagnostic: `selmo-agent-read.log` records every `fs/read` (path, start/end, totals, returned, truncated) so we can see whether reads advance - to be removed once the behaviour is settled. Files: `selmo_rag.py`, `selmo-agent.js`; needs a bridge restart (server) + Ctrl+Shift+R (client).
 
 - **v1.002** - Agent: honest "context full" message instead of a misleading "no tool support". When a step's request exceeds the model's context window, llama-server returns HTTP 400 - which `agentLoop`'s `!r.ok` handler lumped together with the genuine no-tool-support case, so a context overflow (very visible when the agent reads a large file across several steps, e.g. a 271KB novel) wrongly told the user to "load a compatible model with --jinja". The handler now checks the overflow signature FIRST (`exceed` / `context size` / `n_ctx` / `kv cache` / ...) and returns a localized `agent.context_full` message, preserving any partial text; only then does it fall through to the tool-support check and the generic throw. New i18n key `agent.context_full` (en/it/fr). This is deliberately the hook we will later attach context compaction to. Client-only: `selmo-agent.js`, `selmo-i18n.js`; Ctrl+Shift+R, no tray/bridge restart.
 

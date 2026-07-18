@@ -112,6 +112,11 @@ async function execTool(toolDef, args) {
   }
   const r = await fetch(url, opts);
   const text = await r.text();
+  // read_file sizes itself server-side (a line range is honoured in full; only a
+  // range-less read is capped), so don't re-clip it here — clipping would corrupt
+  // the JSON and drop lines the model explicitly asked for. Other tools keep the
+  // safety cap.
+  if (toolDef.name === 'read_file') return text;
   return text.slice(0, maxOut);
 }
 
