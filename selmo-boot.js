@@ -214,6 +214,49 @@ renderSessionList();
 //   'ready'    -> normal palette, no overlay
 // checkServer polls /v1/models and auto-recovers the moment a model appears.
 let _modelReadyShown=false, _overlayDismissed=false, _checkTries=0, _reloading=false;
+// Tray "Exit" (or a crash) kills the front door itself, not just the LLM: every
+// proxied fetch on this origin starts failing at once, including CTRL/status.
+// A few consecutive misses of THAT (not just /v1/models) means the whole app is
+// gone, not just the model -- show a plain "server not running" overlay instead
+// of retrying forever against a process that no longer exists.
+let _ctrlDownTries=0, _serverGoneShown=false;
+function _showServerGoneOverlay(){
+  if(_serverGoneShown)return;
+  _serverGoneShown=true;
+  _hideReviveBanner();
+  const oldBanner=document.getElementById('selmo-fatal-banner'); if(oldBanner)oldBanner.remove();
+  const ov=document.createElement('div');
+  ov.id='selmo-server-gone';
+  ov.style.cssText=[
+    'position:fixed','inset:0','z-index:10000',
+    'background:#04070f','color:#dfe7f5',
+    'display:flex','align-items:center','justify-content:center',
+    'text-align:center','font-size:16px','line-height:1.5','padding:24px'
+  ].join(';');
+  ov.textContent=(typeof t==='function'?t('server.notrunning'):'Server not running. Selmo has been closed.');
+  document.body.appendChild(ov);
+}
+// Push channel: the tray (Exit) and POST /control/exit both call _announce_exit()
+// server-side BEFORE tearing anything down, which wakes this stream and writes
+// one "closing" line while the front door is still alive to relay it -- the
+// overlay above appears within a beat of the click, no poll/timeout needed.
+// onerror also catches an ungraceful death (crash, Task Manager) where no
+// message could be sent: once the stream has been open at least once, losing
+// it is itself the signal. The _ctrlDownTries poll loop in checkServer stays
+// as a fallback for browsers where EventSource misbehaves.
+(function _startExitWatcher(){
+  if(typeof EventSource==='undefined')return;
+  let sse=null, gotOpen=false;
+  try{ sse=new EventSource(CTRL+'/events'); }catch(e){ return; }
+  sse.onopen=function(){ gotOpen=true; };
+  sse.onmessage=function(e){
+    if(e.data==='closing'){ sse.close(); _showServerGoneOverlay(); }
+  };
+  sse.onerror=function(){
+    if(gotOpen){ sse.close(); _showServerGoneOverlay(); }
+    // else: still trying the first connection (app may still be booting) -- EventSource retries on its own
+  };
+})();
 function setModelState(s){
   const b=document.body, ov=document.getElementById('model-loading');
   if(s==='loading'){
@@ -286,7 +329,7 @@ async function reviveModel(){
 // a refresh when it is already loaded)
 setTimeout(function(){ if(!_modelReadyShown && !_overlayDismissed && !document.body.classList.contains('unloaded')) setModelState('loading'); },500);
 (function checkServer(){
-  fetch(`${API}/v1/models`,{cache:'no-store'})
+  fetch(`${API}/v1/models`,{cache:'no-store',signal:AbortSignal.timeout(2000)})
     .then(r=> r.ok ? r.json() : Promise.reject(r.status))
     .then(d=>{
       const id=d&&d.data&&d.data[0]&&d.data[0].id;
@@ -315,7 +358,8 @@ setTimeout(function(){ if(!_modelReadyShown && !_overlayDismissed && !document.b
       // /v1/models failed -> ask the tray WHY: if the LLM was swapped out for
       // image generation it's not a real model load (no thumbs); otherwise it's
       // still starting (thumbs) or genuinely off (grey "no model").
-      fetch(CTRL+'/status',{cache:'no-store'}).then(r=> r.ok?r.json():null).then(st=>{
+      fetch(CTRL+'/status',{cache:'no-store',signal:AbortSignal.timeout(2000)}).then(r=> r.ok?r.json():null).then(st=>{
+        _ctrlDownTries=0;   // CTRL answered -- front door is alive, whatever the LLM is doing
         if(st && st.swapped_for_image){
           setModelState('imaging');
         }else if(_reloading){
@@ -334,8 +378,13 @@ setTimeout(function(){ if(!_modelReadyShown && !_overlayDismissed && !document.b
           setModelState('loading');
         }
         setTimeout(checkServer,2000);
-      }).catch(()=>{   // control API unreachable: previous behaviour
+      }).catch(()=>{   // control API unreachable too -> the whole front door is down
         document.getElementById('conn').style.background='var(--red)';
+        _ctrlDownTries++;
+        if(_ctrlDownTries>=3){
+          _showServerGoneOverlay();   // Selmo was closed from the tray (or crashed) -- stop retrying
+          return;
+        }
         if(_reloading){ setModelState('loading'); }
         else if(_checkTries>=7){ setModelState('unloaded'); }
         else if(!_modelReadyShown && !_overlayDismissed){ document.getElementById('hdr-model').textContent='loading...'; setModelState('loading'); }

@@ -94,6 +94,17 @@ _fatal_services: list[dict] = []  # {label, crash_log, attempts} per dead servic
 _fatal_lock      = threading.Lock()
 _MAX_SERVICE_RESTARTS = 2         # 2 restarts = 3 total attempts before giving up
 
+# Exit push (SSE) -- lets the browser learn the app is closing the instant it
+# happens, instead of polling and waiting out a timeout. Each open GET /events
+# request from a browser tab parks a handler thread on _exit_event; _announce_exit()
+# (called from both the tray "Exit" and POST /control/exit) sets the event, every
+# parked thread wakes and writes one "closing" SSE line, then the caller kills the
+# processes. The front door (selmo_https_proxy._proxy) already streams responses
+# chunk-by-chunk with no buffering, so this reaches the browser in well under a second.
+_sse_lock   = threading.Lock()
+_sse_writers: list = []           # wfile handles of connected /events clients
+_exit_event = threading.Event()
+
 
 # ============================================================
 #  Single-instance guard  (named Win32 mutex)
@@ -914,6 +925,32 @@ class _CtrlHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
+    def _events(self):
+        """SSE stream (GET /events). Parks this connection open and idle; the
+        moment _announce_exit() fires (tray Exit or POST /control/exit) every
+        parked client gets one 'closing' line and the connection ends. Periodic
+        comment pings keep the front door's proxy (and any LAN hop) from
+        deciding the connection is dead while nothing is happening."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        with _sse_lock:
+            _sse_writers.append(self.wfile)
+        try:
+            while not _exit_event.wait(timeout=15):
+                self.wfile.write(b": hb\n\n")
+                self.wfile.flush()
+            self.wfile.write(b"data: closing\n\n")
+            self.wfile.flush()
+        except Exception:
+            pass
+        finally:
+            with _sse_lock:
+                if self.wfile in _sse_writers:
+                    _sse_writers.remove(self.wfile)
+
     def _status(self):
         return {
             "loaded":            _current["loaded"],
@@ -1051,12 +1088,14 @@ class _CtrlHandler(BaseHTTPRequestHandler):
             self.wfile.flush()
         except Exception:
             pass
-        threading.Timer(0.4, lambda: (_cleanup(), os._exit(0))).start()
+        threading.Timer(0.4, lambda: (_announce_exit(), _cleanup(), os._exit(0))).start()
 
     def do_GET(self):
         p = self.path.split("?", 1)[0]
         if p == "/status":
             self._send(200, self._status())
+        elif p == "/events":
+            self._events()
         elif p == "/models":
             self._send(200, self._models())
         elif p == "/image/models":
@@ -1282,6 +1321,18 @@ def _start_all_services(voice: str = "im_nicola"):
 #  Cleanup
 # ============================================================
 
+def _announce_exit():
+    """Wake every parked GET /events client so the browser learns the app is
+    closing right now, instead of finding out from a failed poll a while later.
+    Must run BEFORE _cleanup() kills the front door -- that's what relays the
+    SSE bytes from here to the browser."""
+    _exit_event.set()
+    with _sse_lock:
+        n = len(_sse_writers)
+    if n:
+        time.sleep(0.3)   # let the parked threads wake, write, and flush
+
+
 def _cleanup():
     global _shutting_down
     _shutting_down = True
@@ -1373,6 +1424,7 @@ def _view_log(icon, item):
 
 
 def _do_exit(icon, item):
+    _announce_exit()
     _cleanup()
     os._exit(0)   # icon.stop() can hang on Windows; _cleanup() already killed children
 
