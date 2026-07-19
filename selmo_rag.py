@@ -572,9 +572,24 @@ def search(query, k, cfg, mode="docs"):
         })
     return out
 
+# Cap on how many files the /browse format scan will inspect. Both the RAG
+# corpus picker and the agent-root picker default to the drive root (C:\) the
+# first time there is no corpus_dir yet to derive a smarter starting folder
+# from (a fresh install, or a portable bundle nobody has indexed anything on
+# yet) -- an unbounded os.walk("C:\\") on a real Windows disk (Defender
+# real-time scanning intercepting every file access makes it worse) can run
+# for minutes, during which the picker just sits on "reading..." forever with
+# nothing to click. Reported as "impossible to select the agent folder" on a
+# fresh Selmo portable install; the same drive-root walk is why. subdirs (what
+# the picker actually needs to let you navigate) always comes back instantly
+# from a single scandir; only the file-format count is bounded/best-effort.
+_BROWSE_SCAN_CAP = 20000
+
 def browse(dirpath, cfg):
     """List a folder's top-level subfolders + the indexable formats present in
-    its whole tree, so the client can render subfolder + format checkboxes."""
+    its tree, so the client can render subfolder + format checkboxes. The
+    format scan is bounded (see _BROWSE_SCAN_CAP) so a huge/root folder still
+    returns promptly -- subdirs (all the picker needs to navigate) are exact."""
     dirpath = (dirpath or "").strip()
     if not dirpath or not os.path.isdir(dirpath):
         return {"ok": False, "error": "not a folder", "dir": dirpath,
@@ -587,14 +602,21 @@ def browse(dirpath, cfg):
         return {"ok": False, "error": str(e), "dir": dirpath,
                 "subdirs": [], "formats": []}
     exts = {}
+    scanned = 0
+    truncated = False
     for root, dirs, names in os.walk(dirpath):
         dirs[:] = [d for d in dirs if not d.startswith(".")]
         for n in names:
             e = Path(n).suffix.lower()
             if e in KNOWN_EXTS:
                 exts[e] = exts.get(e, 0) + 1
+            scanned += 1
+        if scanned >= _BROWSE_SCAN_CAP:
+            truncated = True
+            break
     formats = [{"ext": e, "count": exts[e]} for e in sorted(exts)]
-    return {"ok": True, "dir": dirpath, "subdirs": subdirs, "formats": formats}
+    return {"ok": True, "dir": dirpath, "subdirs": subdirs, "formats": formats,
+            "formats_truncated": truncated}
 
 # ── Agent helpers ─────────────────────────────────────────────────────────────
 # The agent tool catalog and limits are DEFINED IN CODE so a fresh or portable

@@ -87,6 +87,7 @@ var I18N = {
   'rag.pick.reading'  : { en: 'Reading folder...',   it: 'Leggo la cartella...', fr: "Lecture du dossier..." },
   'rag.pick.enterpath': { en: 'Enter a folder path.',it: 'Inserisci un percorso cartella.', fr: 'Entrez le chemin d\'un dossier.' },
   'rag.pick.invalid'  : { en: 'Invalid folder',      it: 'Cartella non valida', fr: 'Dossier invalide' },
+  'picker.local_only' : { en: 'Folder selection is only available on the PC itself, not from a phone or another device.', it: 'La selezione della cartella è disponibile solo sul PC, non da telefono o altri dispositivi.', fr: "La sélection de dossier n'est disponible que sur le PC lui-même, pas depuis un téléphone ou un autre appareil." },
   'rag.pick.subs'     : { en: 'Subfolders to include', it: 'Sottocartelle da includere', fr: 'Sous-dossiers à inclure' },
   'rag.pick.formats'  : { en: 'File formats',        it: 'Formati file',       fr: "Formats de fichiers" },
   'rag.pick.nosubs'   : { en: 'No subfolders.',      it: 'Nessuna sottocartella.', fr: 'Aucun sous-dossier.' },

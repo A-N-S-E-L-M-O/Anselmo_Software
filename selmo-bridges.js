@@ -112,14 +112,31 @@ function openRagPicker(){
   inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();ragBrowse();} });
   if(cur) ragBrowse();
 }
+// Parse a picker response WITHOUT ever throwing on a non-JSON body. The front
+// door replies to /browse and the /*/config routes with a plain-text 403 when
+// they're hit from a phone/other device (SEC-6, desktop-only). Calling .json()
+// on that plain text threw "JSON.parse: unexpected character at line 1" and the
+// raw parser message leaked into the picker. This maps a 403 to a clean,
+// localized "only on the PC" line and any other non-JSON body to its text.
+async function _pickerJson(resp){
+  if(resp.status===403){
+    return {ok:false,_forbidden:true,
+      error:(typeof t==='function'?t('picker.local_only'):'Only available on the PC itself.')};
+  }
+  let txt='';
+  try{ txt=await resp.text(); }catch(e){ return {ok:false,error:e.message}; }
+  try{ return JSON.parse(txt); }
+  catch(e){ return {ok:false,error:(txt||'').trim().slice(0,140)||'invalid response'}; }
+}
 async function ragBrowse(){
   const root=document.getElementById('ragp-root').value.trim();
   const body=document.getElementById('ragp-body');
   if(!root){ body.innerHTML='<div class="rag-hint">'+t('rag.pick.enterpath')+'</div>'; return; }
   body.innerHTML='<div class="rag-hint">'+t('rag.pick.reading')+'</div>';
   let d;
-  try{ d=await(await fetch(`${RAG}/browse?`+new URLSearchParams({dir:root}))).json(); }
+  try{ d=await _pickerJson(await fetch(`${RAG}/browse?`+new URLSearchParams({dir:root}),{signal:AbortSignal.timeout(15000)})); }
   catch(e){ body.innerHTML='<div class="rag-hint">'+t('rag.error',{msg:e.message})+'</div>'; return; }
+  if(d._forbidden){ body.innerHTML='<div class="rag-hint">'+d.error+'</div>'; return; }
   if(!d.ok){ body.innerHTML='<div class="rag-hint">'+t('rag.pick.invalid')+(d.error?' ('+d.error+')':'')+'.</div>'; return; }
   const curExcl=(ragStatus&&ragStatus.exclude_dirs)||[];
   const curFmts=(ragStatus&&ragStatus.formats)||[];
@@ -149,7 +166,8 @@ async function ragDoIndex(){
   const ptxt=m.bub.querySelector('.rag-prog-txt');
   if(m.av)m.av.classList.add('thinking'); // spin the drum while indexing too
   try{
-    await fetch(`${RAG}/config`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({corpus_dir:root,exclude_dirs:excl,formats:fmts})});
+    const _cfg=await _pickerJson(await fetch(`${RAG}/config`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({corpus_dir:root,exclude_dirs:excl,formats:fmts})}));
+    if(_cfg._forbidden){ if(m.av)m.av.classList.remove('thinking'); m.bub.innerHTML='<div class="rag-hint">'+_cfg.error+'</div>'; return; }
     await(await fetch(`${RAG}/reindex`,{method:'POST'})).json();
     await new Promise(resolve=>{
       const iv=setInterval(async()=>{
@@ -463,8 +481,9 @@ async function agentBrowse(){
   const body=document.getElementById('agp-body');
   body.innerHTML='<div class="rag-hint">'+t('rag.pick.reading')+'</div>';
   let d;
-  try{ d=await(await fetch(`${RAG}/browse?`+new URLSearchParams({dir:root}))).json(); }
+  try{ d=await _pickerJson(await fetch(`${RAG}/browse?`+new URLSearchParams({dir:root}),{signal:AbortSignal.timeout(15000)})); }
   catch(e){ body.innerHTML='<div class="rag-hint">'+t('rag.error',{msg:e.message})+'</div>'; return; }
+  if(d._forbidden){ body.innerHTML='<div class="rag-hint">'+d.error+'</div>'; return; }
   if(!d.ok){ body.innerHTML='<div class="rag-hint">'+t('rag.pick.invalid')+(d.error?' ('+d.error+')':'')+'</div>'; return; }
   const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
   let html='<div class="agp-item agp-up" data-nav="up">⬆ ..</div>';
@@ -493,10 +512,10 @@ async function agentSaveRoots(){
   const allowWrites=!!(wEl&&wEl.checked);
   const ov=document.getElementById('agent-overlay'); if(ov) ov.remove();
   try{
-    const r=await fetch(`${RAG}/agent/config`,{method:'POST',
+    const d=await _pickerJson(await fetch(`${RAG}/agent/config`,{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({agent_roots:roots,agent_allow_writes:allowWrites})});
-    const d=await r.json();
+      body:JSON.stringify({agent_roots:roots,agent_allow_writes:allowWrites})}));
+    if(d._forbidden){ addMsg('assistant','⚠ '+d.error); return; }
     if(!d.ok) throw new Error(d.error||'save failed');
     agentStatus.agent_roots=roots;
     agentStatus.agent_allow_writes=allowWrites;

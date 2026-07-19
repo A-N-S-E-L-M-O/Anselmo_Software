@@ -55,6 +55,20 @@ HTTPS_PORT = 8443
 # 8085 is the optional LibreHardwareMonitor web server; harmless to allow.
 ALLOWED_PORTS = {8081, 8082, 8083, 8084, 8085, 8086, 8087, 8088, 8089}
 
+# (method, path) pairs that grant filesystem access -- desktop-only regardless
+# of the phone toggle. GET /browse enumerates any path on the RAG bridge's
+# host (not bounded by agent_roots/corpus_dir: picking the root is what it's
+# for); POST /agent/config sets agent_roots + agent_allow_writes; POST /config
+# sets corpus_dir (it also carries the harmless docs/code mode switch, but the
+# two aren't separated at this layer, so the whole endpoint is gated). Note
+# these are checked against `self.command` (GET/POST) + the path with the
+# query string already stripped. See SECURITY-REVIEW.md SEC-3.
+_LOCAL_ONLY_ROUTES = {
+    ("GET",  "/proxy/8088/browse"),
+    ("POST", "/proxy/8088/agent/config"),
+    ("POST", "/proxy/8088/config"),
+}
+
 # --- Phone access (LAN exposure) gate --------------------------------------
 # The front door binds 0.0.0.0 so a phone on the same Wi-Fi reaches 8443. On a
 # PUBLIC network that also exposes Selmo to strangers, so the LAN gate defaults
@@ -151,6 +165,15 @@ def _ensure_cert(ip: str) -> bool:
 mimetypes.add_type("text/javascript", ".js")
 mimetypes.add_type("application/json", ".json")
 
+# The browser closed the tab, hit reload, or otherwise dropped the connection
+# while we were mid-write. Routine, not an error -- SEC-3 aside there is nothing
+# to recover and nobody to report it to, so every write path swallows exactly
+# this family instead of letting Python print a full traceback per occurrence.
+# Got much more common once /proxy/8087/events (the tray-exit SSE notice) started
+# holding one open connection per tab for as long as the tab lives, not just for
+# the length of one chat request.
+_CLIENT_GONE = (ConnectionAbortedError, ConnectionResetError, BrokenPipeError)
+
 
 class FrontDoor(BaseHTTPRequestHandler):
     # HTTP/1.0 (the default) on purpose: proxied responses are streamed with
@@ -222,7 +245,10 @@ class FrontDoor(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         if self.command != "HEAD":
-            self.wfile.write(data)
+            try:
+                self.wfile.write(data)
+            except _CLIENT_GONE:
+                pass
 
     # -- proxy -----------------------------------------------------------------
     def _proxy(self, url):
@@ -246,40 +272,53 @@ class FrontDoor(BaseHTTPRequestHandler):
                         break
                     self.wfile.write(chunk)
                     self.wfile.flush()
+        except _CLIENT_GONE:
+            # The browser dropped the connection mid-stream (tab closed/reloaded).
+            # Nothing left to write to and nobody to report it to.
+            pass
         except urllib.error.HTTPError as e:
             data = e.read()
-            self.send_response(e.code)
-            for k, v in e.headers.items():
-                if k.lower() in ("transfer-encoding", "connection", "content-length"):
-                    continue
-                self.send_header(k, v)
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
+            try:
+                self.send_response(e.code)
+                for k, v in e.headers.items():
+                    if k.lower() in ("transfer-encoding", "connection", "content-length"):
+                        continue
+                    self.send_header(k, v)
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            except _CLIENT_GONE:
+                pass
         except Exception as e:
             # Backend down (e.g. LLM unloaded by the image swap) -> 502.
             self._text(502, str(e))
 
     def _text(self, code, msg):
         body = msg.encode("utf-8", "replace")
-        self.send_response(code)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.end_headers()
-        if self.command != "HEAD":
-            self.wfile.write(body)
+        try:
+            self.send_response(code)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(body)
+        except _CLIENT_GONE:
+            pass
 
     def _json(self, obj):
         body = json.dumps(obj).encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.end_headers()
-        if self.command != "HEAD":
-            self.wfile.write(body)
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(body)
+        except _CLIENT_GONE:
+            pass
 
     # -- phone-access gate -----------------------------------------------------
     def _is_local(self):
@@ -310,6 +349,18 @@ class FrontDoor(BaseHTTPRequestHandler):
                 self._text(403, "forbidden")
                 return
             self._phone_control(raw)
+            return
+        # Config-surface routes are desktop-only ALWAYS, independent of the
+        # phone-access toggle. Unlike everyday phone use (chat, image gen, an
+        # agent tool call on an already-configured root -- all bounded), these
+        # are the actual privilege-escalation moments: /browse enumerates ANY
+        # path on disk (not bounded by agent_roots -- picking the root is what
+        # it's for), and POST /agent/config or /config are what point
+        # agent_roots / corpus_dir at a path in the first place. A LAN peer
+        # with none of these gated could point the agent at C:\ with writes on
+        # and never touch the PC. See SECURITY-REVIEW.md SEC-3.
+        if (self.command, raw) in _LOCAL_ONLY_ROUTES and not self._is_local():
+            self._text(403, "This operation is only allowed from the PC itself.")
             return
         # LAN gate: when phone access is off, only the PC itself may connect
         if not self._is_local() and not PHONE_ENABLED:

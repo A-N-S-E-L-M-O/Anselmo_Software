@@ -62,6 +62,31 @@ SEC-2 this is only reachable via the front door, but the read itself was the bug
 **Fix.** `fetch_text` now rejects any scheme that isn't `http`/`https` before
 fetching. Verified: `file://`, `ftp://`, `FILE://` → empty; `http/https` → allowed.
 
+## SEC-6 · Agent/RAG folder-picker surface reachable over the LAN — [FIXED]
+
+**Severity: HIGH.** Found while testing the agent folder picker on the portable
+bundle. `GET /browse` (shared by the RAG corpus picker and the agent-root
+picker) enumerates **any** path on the host filesystem — it is not bounded by
+`agent_roots`/`corpus_dir`, since picking the root is exactly what it is for.
+`POST /agent/config` sets `agent_roots` + `agent_allow_writes` with no
+confirmation step; `POST /config` sets `corpus_dir`. None of these were
+exempted from the general phone-access toggle, so with phone access ON (the
+default on a private network) any LAN peer could enumerate the whole disk and
+point the agent — writes included — at an arbitrary path through the
+unauthenticated front door. Worse than the rest of SEC-3's residual risk: this
+grants filesystem access, not just app usage.
+
+**Fix.** `selmo_https_proxy.py` gates `GET /proxy/8088/browse`,
+`POST /proxy/8088/agent/config` and `POST /proxy/8088/config` to loopback
+**always** (`_LOCAL_ONLY_ROUTES`, checked before the phone-access gate) —
+independent of the phone toggle, mirroring the existing `/phone/*` pattern.
+Agent tool use from the phone on an already-configured root (bounded by
+`_resolve_agent_path`) is unaffected; RAG's docs/code mode switch (shares the
+`/config` endpoint with `corpus_dir`) is now also desktop-only, a minor
+convenience loss accepted rather than split the endpoint. **Does not resolve
+the rest of SEC-3** — model control, chat and image gen stay reachable over
+the LAN when phone access is on; that trade-off is still Fabio's call below.
+
 ---
 
 ## Still OPEN — Fabio's call (no safe silent fix)
