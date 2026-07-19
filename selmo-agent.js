@@ -156,6 +156,21 @@ function agentReasonPanel(text) {
   return panel;
 }
 
+// Estimate token count of messages (~4 chars per token). Used by the context
+// guard to stop the agent loop before an OOM / context-overflow crash.
+function _agentEstimateTokens(msgs) {
+  let chars = 0;
+  for (const m of msgs) {
+    if (typeof m.content === 'string') chars += m.content.length;
+    else if (Array.isArray(m.content)) {
+      for (const c of m.content) { if (typeof c.text === 'string') chars += c.text.length; }
+    }
+    if (m.tool_calls) chars += JSON.stringify(m.tool_calls).length;
+    if (typeof m.name === 'string') chars += m.name.length;
+  }
+  return Math.ceil(chars / 4);
+}
+
 async function agentLoop(userMsg, chatHistory, targetDiv, cfg) {
   const schemas = buildToolSchemas(cfg);
   window._agentSchemas = schemas;
@@ -194,6 +209,21 @@ async function agentLoop(userMsg, chatHistory, targetDiv, cfg) {
       step++;
       if (stepEl) stepEl.textContent = t('agent.step', { n: step, max: maxSteps });
 
+      // Context guard: if accumulated messages+toolHistory exceed 50% of N_CTX,
+      // wrap up now rather than risk a VRAM OOM crash on the next generation call.
+      const _nCtx = (typeof N_CTX !== 'undefined' && N_CTX > 0) ? N_CTX : 32768;
+      if (_agentEstimateTokens([...messages, ...toolHistory]) > _nCtx * 0.5) {
+        const _warnEl = document.createElement('div');
+        _warnEl.className = 'agent-trace';
+        _warnEl.innerHTML = '<span class="agent-trace-icon">⚠️</span>'
+          + '<span class="agent-trace-label">' + escHtml(t('agent.context_approaching')) + '</span>';
+        targetDiv.appendChild(_warnEl);
+        if (typeof scrollBot === 'function') scrollBot();
+        return lastContent
+          ? lastContent + '\n\n_' + t('agent.context_approaching') + '_'
+          : t('agent.context_approaching');
+      }
+
       // thinkKwargs() adds chat_template_kwargs.enable_thinking for kwarg models
       // (Qwen3) so the THINK button controls the agent's reasoning too. Instr models
       // already carry the reasoning instruction via the system prompt in messages.
@@ -217,6 +247,11 @@ async function agentLoop(userMsg, chatHistory, targetDiv, cfg) {
       } catch (e) {
         // Stop button aborted the in-flight generation — end cleanly, keep partial text.
         if (e && (e.name === 'AbortError' || !gen)) return lastContent || t('agent.stopped');
+        // fetch() throws TypeError on network failure (server down, VRAM OOM crash, etc.).
+        if (e && e.name === 'TypeError') {
+          const _sd = t('agent.server_down');
+          return lastContent ? lastContent + '\n\n_' + _sd + '_' : _sd;
+        }
         throw e;
       }
       if (!r.ok) {

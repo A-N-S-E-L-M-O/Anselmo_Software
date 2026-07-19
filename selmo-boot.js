@@ -124,6 +124,46 @@ checkWebBridge();
 setInterval(checkWebBridge, 30000);
 checkRagBridge();
 setInterval(checkRagBridge, 10000); // poll often so the chip catches the embedder booting + reindex
+
+// ── Watchdog fatal-service banner ──────────────────────────────────────────
+// Polls GET /proxy/8087/services (the tray control API) on boot and every
+// 30 s.  If a service died permanently the tray populates the "fatal" array;
+// we show a dismissable red banner and stop polling.
+(function(){
+  var _fatalSeen = false;
+  function _checkFatalServices(){
+    if(_fatalSeen) return;
+    fetch('/proxy/8087/services',{signal:AbortSignal.timeout(4000)})
+      .then(function(r){return r.ok?r.json():null;})
+      .then(function(d){
+        if(!d||!Array.isArray(d.fatal)||d.fatal.length===0) return;
+        _fatalSeen=true;
+        var msg = (typeof t==='function'?t('service.fatal')
+                   :'A background service crashed and could not be restarted. Reload Selmo to try again.');
+        var bar=document.createElement('div');
+        bar.id='selmo-fatal-banner';
+        bar.style.cssText=[
+          'position:fixed','top:0','left:0','right:0','z-index:9999',
+          'background:#c0392b','color:#fff','font-size:13px',
+          'padding:8px 40px 8px 14px','line-height:1.4',
+          'box-shadow:0 2px 6px rgba(0,0,0,.4)'
+        ].join(';');
+        bar.textContent=msg;
+        var x=document.createElement('button');
+        x.textContent='×';
+        x.title='Dismiss';
+        x.style.cssText='position:absolute;top:4px;right:8px;background:none;border:none;color:#fff;font-size:18px;cursor:pointer;line-height:1;padding:0 4px;';
+        x.addEventListener('click',function(){bar.remove();});
+        bar.appendChild(x);
+        document.body.insertBefore(bar,document.body.firstChild);
+      })
+      .catch(function(){});
+  }
+  _checkFatalServices();
+  setInterval(_checkFatalServices, 30000);
+})();
+// ───────────────────────────────────────────────────────────────────────────
+
 function checkAgentBridge(){
   fetch(RAG+'/agent/config',{signal:AbortSignal.timeout(5000)})
     .then(r=>r.ok?r.json():null)

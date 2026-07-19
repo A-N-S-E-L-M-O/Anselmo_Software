@@ -26,6 +26,7 @@ import atexit
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import threading
@@ -86,6 +87,12 @@ _ctrl_lock  = threading.Lock()   # serialises load/unload across tray + control 
 
 _tray_icon   = None   # pystray.Icon, set before icon.run()
 _mutex_handle = None  # Win32 mutex for single-instance guard
+
+# Watchdog state — services that crashed past the restart limit
+_shutting_down   = False          # set True in _cleanup() so watchdogs don't restart
+_fatal_services: list[dict] = []  # {label, crash_log, attempts} per dead service
+_fatal_lock      = threading.Lock()
+_MAX_SERVICE_RESTARTS = 2         # 2 restarts = 3 total attempts before giving up
 
 
 # ============================================================
@@ -1056,6 +1063,9 @@ class _CtrlHandler(BaseHTTPRequestHandler):
             self._send(200, self._image_models())
         elif p == "/llm/reload":
             self._reload()
+        elif p == "/services":
+            with _fatal_lock:
+                self._send(200, {"fatal": list(_fatal_services)})
         else:
             self._send(404, {"error": "not found"})
 
@@ -1149,18 +1159,69 @@ def _action_switch(model: dict, ini_data: dict, srv_override=None, csize_overrid
 #  Background Python services
 # ============================================================
 
-def _start_service(label: str, args: list):
-    cmd = [str(PYTHONW)] + args
-    print(f"  -> {label}", flush=True)
+def _start_service(label: str, args: list) -> subprocess.Popen:
+    """Spawn one bridge and redirect its stdout+stderr to a named log file.
+    The log is opened fresh each call (on restart the previous one was already
+    archived as a crash log).  Returns the Popen; caller owns it."""
+    log_name = Path(args[0]).stem.replace("_", "-") + ".service.log"
+    log_fh   = open(BASE / log_name, "w", encoding="utf-8", errors="replace")
     p = subprocess.Popen(
-        cmd,
+        [str(PYTHONW)] + args,
         creationflags=NO_WINDOW,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=log_fh,
+        stderr=log_fh,
     )
+    log_fh.close()   # parent closes its copy; child keeps its inherited fd
     _assign_to_job(p)
-    _services.append(p)
     return p
+
+
+def _watchdog(label: str, args: list, proc: subprocess.Popen):
+    """Monitor a bridge and auto-restart it up to _MAX_SERVICE_RESTARTS times.
+    On each crash the log is archived as a timestamped post-mortem file.
+    After MAX+1 total failures the entry is added to _fatal_services so the UI
+    can show an irrecoverable-error banner via GET /proxy/8087/services."""
+    log_stem  = Path(args[0]).stem.replace("_", "-")
+    log_path  = BASE / (log_stem + ".service.log")
+    restarts  = 0
+
+    while True:
+        proc.wait()                   # block until the process exits for any reason
+        if _shutting_down:
+            break                     # tray is tearing down — suppress restarts
+
+        rc = proc.returncode
+        ts         = time.strftime("%Y%m%d-%H%M%S")
+        crash_name = f"{log_stem}-crash-{ts}.log"
+        try:
+            if log_path.exists():
+                shutil.copy2(str(log_path), str(BASE / crash_name))
+        except Exception:
+            crash_name = "(log unavailable)"
+        print(f"  [watchdog] {label} crashed (rc={rc}) — post-mortem: {crash_name}", flush=True)
+
+        if restarts >= _MAX_SERVICE_RESTARTS:
+            print(f"  [watchdog] {label} failed {restarts + 1}x — permanent failure", flush=True)
+            with _fatal_lock:
+                _fatal_services.append({
+                    "label":     label,
+                    "crash_log": crash_name,
+                    "attempts":  restarts + 1,
+                })
+            break
+
+        restarts += 1
+        time.sleep(2)
+        print(f"  [watchdog] restarting {label} (attempt {restarts}/{_MAX_SERVICE_RESTARTS}) …", flush=True)
+        proc = _start_service(label, args)
+
+
+def _start_watched_service(label: str, args: list):
+    """Start a bridge, register it for cleanup, and launch a crash watchdog."""
+    print(f"  -> {label}", flush=True)
+    p = _start_service(label, args)
+    _services.append(p)
+    threading.Thread(target=_watchdog, args=(label, args, p), daemon=True).start()
 
 
 def _start_lhm():
@@ -1205,14 +1266,14 @@ def _start_lhm():
 
 
 def _start_all_services(voice: str = "im_nicola"):
-    _start_service("GPU Monitor   [port 8082]", [str(BASE / "selmo_gpu_monitor.py")])
-    _start_service("Web Bridge    [port 8081]", [str(BASE / "selmo_web.py")])
-    _start_service("Whisper STT   [port 8083]", [str(BASE / "selmo_whisper.py")])
-    _start_service("TTS Kokoro    [port 8084]",
-                   [str(BASE / "selmo_tts.py"), "--voice", voice])
-    _start_service("Image SD.cpp  [port 8086]", [str(BASE / "selmo_image.py")])
-    _start_service("RAG Bridge    [port 8088]", [str(BASE / "selmo_rag.py")])
-    _start_service("Front door    [8080+8443]", [str(BASE / "selmo_https_proxy.py")])
+    _start_watched_service("GPU Monitor   [port 8082]", [str(BASE / "selmo_gpu_monitor.py")])
+    _start_watched_service("Web Bridge    [port 8081]", [str(BASE / "selmo_web.py")])
+    _start_watched_service("Whisper STT   [port 8083]", [str(BASE / "selmo_whisper.py")])
+    _start_watched_service("TTS Kokoro    [port 8084]",
+                           [str(BASE / "selmo_tts.py"), "--voice", voice])
+    _start_watched_service("Image SD.cpp  [port 8086]", [str(BASE / "selmo_image.py")])
+    _start_watched_service("RAG Bridge    [port 8088]", [str(BASE / "selmo_rag.py")])
+    _start_watched_service("Front door    [8080+8443]", [str(BASE / "selmo_https_proxy.py")])
     _start_control_server()
     _start_lhm()
 
@@ -1222,6 +1283,8 @@ def _start_all_services(voice: str = "im_nicola"):
 # ============================================================
 
 def _cleanup():
+    global _shutting_down
+    _shutting_down = True
     all_procs = list(_services)
     with _llama_lock:
         if _llama_proc:

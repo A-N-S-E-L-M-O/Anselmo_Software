@@ -607,7 +607,7 @@ def browse(dirpath, cfg):
 DEFAULT_AGENT_CFG = {
     "agent_roots": [],
     "agent_allow_writes": False,
-    "agent_max_steps": 50,
+    "agent_max_steps": 12,
     "agent_timeout_s": 120,
     "agent_max_tool_output": 16384,
     "agent_max_write_bytes": 5242880,
@@ -783,7 +783,7 @@ DEFAULT_AGENT_CFG = {
 # Only these keys are per-machine and get written back to disk; the catalog and
 # limits always come from DEFAULT_AGENT_CFG, so updating them in code is enough
 # and no stale on-disk copy can shadow them.
-_AGENT_PERSIST_KEYS = ("agent_roots", "agent_allow_writes")
+_AGENT_PERSIST_KEYS = ("agent_roots", "agent_allow_writes", "agent_max_steps")
 
 def _read_agent_file():
     """Raw per-machine state from selmo-agent-config.json; {} if absent or broken."""
@@ -939,18 +939,22 @@ class Handler(BaseHTTPRequestHandler):
                 end_p   = qs.get("end",   [""])[0]
                 max_out = acfg.get("agent_max_tool_output", 16384)
                 if start_p or end_p:
-                    # Explicit line range: honour it in FULL, never clip. The model
-                    # chose the bite size; clipping mid-range silently drops lines and
-                    # creates coverage gaps. An oversized range is the model's call - a
-                    # real overflow is caught gracefully client-side (context-full).
+                    # Explicit line range. Clip to max_out so a greedy model asking
+                    # for a huge range doesn't inflate the tool history and crash
+                    # llama-server with VRAM OOM. Append a marker so the model knows
+                    # content was cut and can continue with a narrower range.
                     lines = text.splitlines(keepends=True)
                     s = max(0, int(start_p) - 1) if start_p else 0
                     e = int(end_p) if end_p else len(lines)
                     out = "".join(lines[s:e])
-                    _log_agent_read(rel, start_p, end_p, full_lines, full_chars, len(out), False)
+                    truncated = len(out) > max_out
+                    if truncated:
+                        out = out[:max_out]
+                        out += f"\n[...truncated at {max_out // 1024}KB — use a smaller start/end range]"
+                    _log_agent_read(rel, start_p, end_p, full_lines, full_chars, len(out), truncated)
                     self._json({"path": rel, "text": out,
                                 "start": s + 1, "end": min(e, len(lines)),
-                                "total_lines": full_lines, "truncated": False})
+                                "total_lines": full_lines, "truncated": truncated})
                 else:
                     # No range: could be a huge file, so cap this first read and tell
                     # the model how big it is so it continues with start/end ranges.
