@@ -1,5 +1,17 @@
 # A.N.S.E.L.M.O — release notes
 
+## v1.007 — 2026-07-22
+
+This build sharpens two things you'll feel in use: long web research with the agent, and how many languages Selmo can speak.
+
+**Deep research now finishes instead of stalling.** Before, a broad "search the web from several angles" task could fill the model's memory and stop with nothing on screen. Now the agent uses the whole context window, and as it nears the limit it stops gathering and writes the answer from what it found, so you still get a result. It also gained a way to open a page in full rather than only the short search snippet: it searches to find sources, then reads the promising ones the same way it reads a local file. This needs web search switched on.
+
+**Voice speaks more languages.** Read-aloud now covers Japanese, Chinese, Korean, Hindi, French, Spanish and Brazilian Portuguese alongside Italian and English, choosing the voice from the language of the text automatically. German falls back to the default voice.
+
+### Upgrading
+
+Unzip over your existing folder; your `models\` and settings are untouched. Hard-refresh the browser once with **Ctrl+F5** so the updated client loads.
+
 ## v1.001 (beta) — 2026-07-17
 
 A small patch on top of 1.0. It fixes Agent mode in the packaged build and makes
