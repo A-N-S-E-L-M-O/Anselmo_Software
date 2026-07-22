@@ -20,7 +20,7 @@ function buildToolSchemas(cfg) {
     // on — without it the agent has no way out of the local machine.
     .filter(t => enabled.has(t.name)
       && (t.name !== 'write_file' || allowWrites)
-      && (t.name !== 'web_search' || webOn));
+      && ((t.name !== 'web_search' && t.name !== 'fetch_page') || webOn));
   const customs  = (cfg.agent_custom_tools  || []).filter(t => enabled.has(t.name) && t.enabled !== false);
   return [...builtins, ...customs].map(tool => ({
     type: 'function',
@@ -74,7 +74,9 @@ function agentSystemPrompt(cfg) {
     '- Do not ask the user for anything you can obtain yourself by listing, reading or searching the folder.\n' +
     '- Work concisely: chain the tools you need, then give the result.';
   if (canWrite) s += '\n- You can create or overwrite files in the folder with write_file (send the COMPLETE file content, not a diff).';
-  if (canWeb)   s += '\n- You can search the live web with web_search for external or current information.';
+  if (canWeb)   s += '\n- You can reach the live web with two tools, mirroring how you work on local files: web_search finds pages (titles, URLs, snippets) and fetch_page opens ONE url and returns its full readable text. Search to locate, then fetch_page the promising results to read them in depth before drawing conclusions.';
+  s += '\n- On a long task, work in passes: gather, then write what matters directly into your running answer as you go. Do not assume earlier tool outputs will still be visible later, so capture any fact you need before moving on.';
+  if (canWrite && canWeb) s += ' For a large research job, append your findings to a working file with write_file as you proceed, then assemble the final answer from that file.';
   s += '\n\nReply in the user\'s language.';
   return s;
 }
@@ -171,6 +173,66 @@ function _agentEstimateTokens(msgs) {
   return Math.ceil(chars / 4);
 }
 
+// Final synthesis pass. Called when the context is nearly full. The naive version
+// (re-send the whole tool history and ask for a summary) just overflowed again —
+// the history IS what filled the window. So instead we FLATTEN everything gathered
+// (assistant notes + tool results) into one plain-text block, trim it to a safe
+// char budget, drop the tool-call turns entirely, and turn reasoning OFF. That
+// guarantees the synthesis call fits with plenty of room to actually write, and it
+// sidesteps any chat-template quirk with orphaned tool turns.
+async function agentFinalize(messages, toolHistory) {
+  const _nCtx = (typeof N_CTX !== 'undefined' && N_CTX > 0) ? N_CTX : 32768;
+
+  let gathered = '';
+  for (const m of toolHistory) {
+    if (m.role === 'tool' && typeof m.content === 'string') {
+      gathered += '\n[' + (m.name || 'tool') + '] ' + m.content;
+    } else if (m.role === 'assistant' && typeof m.content === 'string' && m.content.trim()) {
+      gathered += '\n[notes] ' + m.content;
+    }
+  }
+  // ~2 chars-per-N_CTX budget ≈ half the window in tokens, leaving the rest for
+  // the answer. Keep the TAIL (most recent findings) if we have to cut.
+  const budget = _nCtx * 2;
+  if (gathered.length > budget) gathered = '…(earlier material trimmed)…\n' + gathered.slice(-budget);
+
+  const sysMsg   = (messages[0] && messages[0].role === 'system') ? messages[0] : null;
+  const userMsgs = messages.filter(m => m.role === 'user');
+  const taskMsg  = userMsgs[userMsgs.length - 1];   // the current request, not old history
+  const finalMsgs = [];
+  if (sysMsg)  finalMsgs.push(sysMsg);
+  if (taskMsg) finalMsgs.push(taskMsg);
+  finalMsgs.push({ role: 'user', content:
+    'Stop searching now. Using ONLY the material gathered below, write the final answer to my request above — complete, organized, and citing the source URLs / file paths you relied on.\n\n=== GATHERED MATERIAL ===' + gathered });
+
+  // Reasoning off for the synthesis: it does not need extended thinking and that
+  // frees the whole remaining budget for the written answer.
+  const _think = (typeof thinkKwargs === 'function' ? thinkKwargs() : {});
+  if (_think && _think.chat_template_kwargs) {
+    _think.chat_template_kwargs = Object.assign({}, _think.chat_template_kwargs, { enable_thinking: false });
+  }
+  const body = Object.assign({
+    model: (typeof MODEL_FULL !== 'undefined' ? MODEL_FULL : 'local'),
+    messages: finalMsgs,
+    stream: false,
+    temperature: 0.2
+  }, _think);
+  try {
+    const r = await fetch('/proxy/8089/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: (typeof abort !== 'undefined' && abort) ? abort.signal : undefined
+    });
+    if (!r.ok) return t('agent.context_full');
+    const data = await r.json();
+    return data.choices?.[0]?.message?.content || t('agent.context_full');
+  } catch (e) {
+    if (e && (e.name === 'AbortError')) return t('agent.stopped');
+    return t('agent.context_full');
+  }
+}
+
 async function agentLoop(userMsg, chatHistory, targetDiv, cfg) {
   const schemas = buildToolSchemas(cfg);
   window._agentSchemas = schemas;
@@ -209,19 +271,23 @@ async function agentLoop(userMsg, chatHistory, targetDiv, cfg) {
       step++;
       if (stepEl) stepEl.textContent = t('agent.step', { n: step, max: maxSteps });
 
-      // Context guard: if accumulated messages+toolHistory exceed 50% of N_CTX,
-      // wrap up now rather than risk a VRAM OOM crash on the next generation call.
+      // Context budget: use (almost) the whole window — the KV cache is allocated
+      // for the full --ctx-size at load, so filling it does NOT grow VRAM; a real
+      // overflow just comes back as HTTP 400 and is caught below. So instead of the
+      // old 50% abort (which often returned empty text), when we approach the real
+      // ceiling we make ONE final, tool-less call that asks the model to synthesize
+      // its answer from everything gathered so far. Same mechanism for web and local
+      // work — no source-specific branch.
       const _nCtx = (typeof N_CTX !== 'undefined' && N_CTX > 0) ? N_CTX : 32768;
-      if (_agentEstimateTokens([...messages, ...toolHistory]) > _nCtx * 0.5) {
+      const _finalizeFrac = (cfg && cfg.agent_ctx_finalize_frac) || 0.85;
+      if (_agentEstimateTokens([...messages, ...toolHistory]) > _nCtx * _finalizeFrac) {
         const _warnEl = document.createElement('div');
         _warnEl.className = 'agent-trace';
-        _warnEl.innerHTML = '<span class="agent-trace-icon">⚠️</span>'
-          + '<span class="agent-trace-label">' + escHtml(t('agent.context_approaching')) + '</span>';
+        _warnEl.innerHTML = '<span class="agent-trace-icon">🧵</span>'
+          + '<span class="agent-trace-label">' + escHtml(t('agent.finalizing')) + '</span>';
         targetDiv.appendChild(_warnEl);
         if (typeof scrollBot === 'function') scrollBot();
-        return lastContent
-          ? lastContent + '\n\n_' + t('agent.context_approaching') + '_'
-          : t('agent.context_approaching');
+        return await agentFinalize(messages, toolHistory);
       }
 
       // thinkKwargs() adds chat_template_kwargs.enable_thinking for kwarg models

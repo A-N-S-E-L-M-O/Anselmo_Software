@@ -629,12 +629,12 @@ def browse(dirpath, cfg):
 DEFAULT_AGENT_CFG = {
     "agent_roots": [],
     "agent_allow_writes": False,
-    "agent_max_steps": 12,
+    "agent_max_steps": 24,
     "agent_timeout_s": 120,
     "agent_max_tool_output": 16384,
     "agent_max_write_bytes": 5242880,
     "agent_tools_enabled": ["list_dir", "read_file", "search_text",
-                            "rag_search", "write_file", "web_search"],
+                            "rag_search", "write_file", "web_search", "fetch_page"],
     "agent_builtin_tools": [
         {
             "name": "list_dir",
@@ -737,6 +737,22 @@ DEFAULT_AGENT_CFG = {
                     "n": {"type": "integer", "description": "Number of results (default 5)"}
                 },
                 "required": ["q"]
+            }
+        },
+        {
+            "name": "fetch_page",
+            "label_key": "agent.tool.fetch_page",
+            "desc": "Fetch the readable text of a single web page by URL and get it back as plain text. Use this after web_search to open a promising result and read it in full, the same way read_file opens a local file. Available only when Web is enabled.",
+            "icon": "\U0001F4C4",
+            "transport": "http",
+            "endpoint": "/proxy/8081/fetch",
+            "method": "GET",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "The full http(s) URL of the page to read"}
+                },
+                "required": ["url"]
             }
         }
     ],
