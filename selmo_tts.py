@@ -87,7 +87,8 @@ except Exception as e:
 LANG_MAP = {
     'it': 'it', 'en': 'en-us', 'fr': 'fr-fr',
     'de': 'de', 'es': 'es', 'pt': 'pt-br',
-    'ja': 'ja', 'zh-cn': 'zh', 'ko': 'ko',
+    'ja': 'ja', 'zh-cn': 'zh', 'zh': 'zh', 'zh-tw': 'zh',
+    'ko': 'ko', 'hi': 'hi',
 }
 
 def detect_lang(text):
@@ -102,14 +103,23 @@ def detect_lang(text):
 # is in a different language than the user's chosen --voice, so their pick (and
 # its gender) is respected for its own language.
 VOICE_BY_LANG = {
-    "it":    {"f": "if_sara",  "m": "im_nicola"},
-    "en-us": {"f": "af_sarah", "m": "am_michael"},
+    "it":    {"f": "if_sara",    "m": "im_nicola"},
+    "en-us": {"f": "af_sarah",   "m": "am_michael"},
+    "en-gb": {"f": "bf_emma",    "m": "bm_george"},
+    "fr-fr": {"f": "ff_siwis",   "m": "fm_gaston"},
+    "es":    {"f": "ef_dora",    "m": "em_alex"},
+    "pt-br": {"f": "pf_dora",    "m": "pm_alex"},
+    "ja":    {"f": "jf_alpha",   "m": "jm_kumo"},
+    "zh":    {"f": "zf_xiaobei", "m": "zm_yunjian"},
+    "hi":    {"f": "hf_alpha",   "m": "hm_omega"},
+    "ko":    {"f": "kf_bella",   "m": "km_michael"},
+    # "de": no native Kokoro voices in v1.0; falls back to args.voice
 }
 
 # Kokoro voice names encode language (1st char) + gender (2nd char): e.g.
 # im_nicola = Italian male, af_sarah = American-English female.
 _VOICE_LANG = {"i": "it", "a": "en-us", "b": "en-us", "f": "fr-fr",
-               "e": "es", "p": "pt-br", "j": "ja", "z": "zh", "h": "hi"}
+               "e": "es", "p": "pt-br", "j": "ja", "z": "zh", "h": "hi", "k": "ko"}
 
 def _voice_lang(v):
     return _VOICE_LANG.get((v or "")[:1].lower(), "")

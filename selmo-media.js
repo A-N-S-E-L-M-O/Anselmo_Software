@@ -239,17 +239,31 @@ function stopTts(){
 // speed); for the Web Speech fallback we do a light client-side detect here.
 // Italian also gets a ~10% speed bump. (Fixes English being read with it-IT.)
 function _detectLang(text){
-  var t=' '+String(text||'').toLowerCase().replace(/[^a-zàèéìòù\s]/g,' ')+' ';
+  var t=String(text||'');
+  // Unicode script detection — highly reliable for non-Latin scripts
+  if(/[\u3040-\u30ff]/.test(t))return 'ja';            // hiragana/katakana → Japanese
+  if(/[\u4e00-\u9fff\u3400-\u4dbf]/.test(t))return 'zh'; // CJK ideographs → Chinese
+  if(/[\uac00-\ud7af]/.test(t))return 'ko';             // hangul → Korean
+  if(/[\u0900-\u097f]/.test(t))return 'hi';             // devanagari → Hindi
+  // Latin-script heuristic (keyword frequency)
+  var tl=' '+t.toLowerCase().replace(/[^a-zàâäèéêëîïôùûüçœæ\s]/g,' ')+' ';
   var IT=[' il ',' la ',' che ',' di ',' un ',' per ',' non ',' sono ',' con ',' questo ',' anche ',' più ',' come ',' ma ',' una '];
   var EN=[' the ',' and ',' of ',' to ',' is ',' you ',' that ',' it ',' for ',' with ',' this ',' are ',' not ',' what ',' can ',' but '];
-  function sc(a){var n=0,i,idx;for(i=0;i<a.length;i++){idx=0;while((idx=t.indexOf(a[i],idx))!==-1){n++;idx++;}}return n;}
-  var it=sc(IT),en=sc(EN);
-  if(it===0&&en===0)return (typeof SELMO_LANG!=='undefined'&&SELMO_LANG)?SELMO_LANG:'en';
-  return it>en?'it':'en';
+  var FR=[' le ',' les ',' des ',' est ',' une ',' dans ',' je ',' pas ',' pour ',' vous ',' avec ',' sur ',' qui ',' être ',' aussi '];
+  var DE=[' der ',' die ',' das ',' und ',' ist ',' ich ',' du ',' sie ',' wir ',' von ',' ein ',' eine ',' nicht ',' auf ',' für '];
+  var ES=[' el ',' los ',' las ',' que ',' con ',' por ',' para ',' como ',' pero ',' más ',' ser ',' del ',' hay ',' sin ',' sobre '];
+  var PT=[' que ',' não ',' para ',' uma ',' como ',' por ',' mas ',' seu ',' dos ',' mais ',' isso ',' você ',' nossa ',' num '];
+  function sc(a){var n=0,i,idx;for(i=0;i<a.length;i++){idx=0;while((idx=tl.indexOf(a[i],idx))!==-1){n++;idx++;}}return n;}
+  var scores={it:sc(IT),en:sc(EN),fr:sc(FR),de:sc(DE),es:sc(ES),pt:sc(PT)};
+  var best='',bv=0,k;
+  for(k in scores){if(scores[k]>bv){bv=scores[k];best=k;}}
+  if(bv===0)return (typeof SELMO_LANG!=='undefined'&&SELMO_LANG)?SELMO_LANG:'en';
+  return best;
 }
 function _ttsProfile(l){
   l=l||'en';
-  var web={it:'it-IT',en:'en-US',fr:'fr-FR',de:'de-DE',es:'es-ES',pt:'pt-BR'}[l]||'en-US';
+  var web={it:'it-IT',en:'en-US',fr:'fr-FR',de:'de-DE',es:'es-ES',pt:'pt-BR',
+           ja:'ja-JP',zh:'zh-CN',hi:'hi-IN',ko:'ko-KR'}[l]||'en-US';
   var rate=(l==='it')?1.10:1.0;                      // +10% for Italian
   return {web:web,rate:rate};
 }
@@ -280,10 +294,12 @@ function _speakWeb(text,_fire){
 // from the first sentence so the voice can't flip mid-answer, and ``` code
 // fences are skipped (a whole code block would otherwise be read out).
 function _ttsKokoroLang(text){
-  return {it:'it',en:'en-us',fr:'fr-fr',de:'de',es:'es',pt:'pt-br'}[_detectLang(text)]||'en-us';
+  return {it:'it',en:'en-us',fr:'fr-fr',de:'de',es:'es',pt:'pt-br',
+          ja:'ja',zh:'zh',hi:'hi',ko:'ko'}[_detectLang(text)]||'en-us';
 }
 function _ttsShortLang(){
-  return {it:'it','en-us':'en','fr-fr':'fr',de:'de',es:'es','pt-br':'pt'}[_ttsLang]||(_ttsLang?'en':null);
+  return {it:'it','en-us':'en','fr-fr':'fr',de:'de',es:'es','pt-br':'pt',
+          ja:'ja',zh:'zh',hi:'hi',ko:'ko'}[_ttsLang]||(_ttsLang?'en':null);
 }
 // Append raw streamed markdown to the speakable buffer, dropping ``` fenced
 // blocks. Keeps up to 2 trailing chars back in case a ``` marker is split
